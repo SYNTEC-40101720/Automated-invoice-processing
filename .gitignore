@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+.python-version
+
+# PyInstaller
+build/
+dist/
+*.spec
+*.egg
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Project specific
+# 发票处理输出目录（运行时自动生成）
+发票输出/
+需人工处理/
+税号异常/
+*_trans.*.pdf
+*.log
+
+# TRAE 内部文件（保留 skills 和 specs，忽略 documents 临时规划）
+.trae/documents/
