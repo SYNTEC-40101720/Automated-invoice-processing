@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 
 import pdfplumber
-from PyPDF2 import PdfMerger
+from pypdf import PdfReader, PdfWriter
 
 from ..config import TARGET_TAX_ID
 
@@ -19,28 +19,65 @@ class InvoiceProcessor:
 
     def __init__(self):
         self._text_cache = {}
+        self._raw_text_cache = {}
         self._cache_lock = threading.Lock()
 
-    def extract_pdf_text(self, pdf_path):
-        """提取PDF文件文本内容（带缓存）"""
+    @staticmethod
+    def _extract_buyer_tax_id(text):
+        """提取购买方税号（统一社会信用代码，固定 18 位）
+
+        发票文本含购买方与销售方两个「纳税人识别号」字段，购买方在前。
+        策略: 在「销售方」关键字之前的文本中匹配第一个税号，避免误取销售方税号。
+        长度固定 18 位，避免吞掉紧随其后的密码区数字。
+        """
+        if not text:
+            return None
+        # 截断到「销售方」之前，保留购买方信息块
+        buyer_text = re.split(r'销\s*售\s*方', text, maxsplit=1)[0]
+        m = re.search(r'(?:纳税人识别号|统一社会信用代码)[:：]\s*([A-Z0-9]{18})', buyer_text)
+        return m.group(1) if m else None
+
+    def _extract_raw_text(self, pdf_path):
+        """提取PDF原始文本（保留空白，供需要空格分隔的场景使用，带缓存）"""
         with self._cache_lock:
-            if pdf_path in self._text_cache:
-                return self._text_cache[pdf_path]
+            if pdf_path in self._raw_text_cache:
+                return self._raw_text_cache[pdf_path]
         try:
             with pdfplumber.open(pdf_path) as pdf:
                 text = '\n'.join([page.extract_text() or '' for page in pdf.pages])
-                result = re.sub(r'\s+', '', text)
                 with self._cache_lock:
-                    self._text_cache[pdf_path] = result
-                return result
+                    self._raw_text_cache[pdf_path] = text
+                return text
         except Exception:
             logging.warning("PDF 文本提取失败: %s", pdf_path, exc_info=True)
             return None
+
+    def extract_pdf_text(self, pdf_path):
+        """提取PDF文件文本内容（去空白，带缓存）"""
+        with self._cache_lock:
+            if pdf_path in self._text_cache:
+                return self._text_cache[pdf_path]
+        raw = self._extract_raw_text(pdf_path)
+        if raw is None:
+            return None
+        result = re.sub(r'\s+', '', raw)
+        with self._cache_lock:
+            self._text_cache[pdf_path] = result
+        return result
+
+    def _copy_cache_entry(self, src_path, dest_path):
+        """复制缓存条目（文件 copy2 后调用，避免对新路径重新解析 PDF）"""
+        with self._cache_lock:
+            if src_path in self._text_cache:
+                self._text_cache[dest_path] = self._text_cache[src_path]
+            if src_path in self._raw_text_cache:
+                self._raw_text_cache[dest_path] = self._raw_text_cache[src_path]
 
     def clear_cache(self):
         """清除文本缓存"""
         with self._cache_lock:
             self._text_cache.clear()
+            self._raw_text_cache.clear()
 
     def process_zhejiang_invoice(self, source_path, output_dir):
         """处理浙江/宁波通用电子发票"""
@@ -109,6 +146,7 @@ class InvoiceProcessor:
                 new_filename = f"待搜索-{clean_amount}行程单.pdf"
                 dest_path = os.path.join(output_dir, new_filename)
                 shutil.copy2(source_path, dest_path)
+                self._copy_cache_entry(source_path, dest_path)
                 return dest_path
             else:
                 return None
@@ -123,11 +161,12 @@ class InvoiceProcessor:
         支持两种票据格式:
         - 传统票据: 12位票据代码 + 8位票据号码 + 金额
         - 数电发票: * + 20位发票号码 + 金额
-        注意: 此类汇总单字段间靠空格分隔，需保留空白，故不使用 extract_pdf_text 的去空白结果。
+        注意: 此类汇总单字段间靠空格分隔，需保留空白，故使用 _extract_raw_text 而非去空白的 extract_pdf_text。
         """
         try:
-            with pdfplumber.open(source_path) as pdf:
-                text = '\n'.join([page.extract_text() or '' for page in pdf.pages])
+            text = self._extract_raw_text(source_path)
+            if not text:
+                return None
             # 在 "票据信息" 锚点后, 优先匹配传统票据(12位代码 + 8位号码 + 金额)
             m = re.search(r'票据信息.*?(\d{12})\s+(\d{8})\s+([\d.]+)', text, re.DOTALL)
             if m:
@@ -144,6 +183,7 @@ class InvoiceProcessor:
             new_filename = f"{invoice_no}-{amount}行程单.pdf"
             dest_path = os.path.join(output_dir, new_filename)
             shutil.copy2(source_path, dest_path)
+            self._copy_cache_entry(source_path, dest_path)
             return dest_path
         except Exception:
             logging.warning("通行费汇总单处理失败: %s", source_path, exc_info=True)
@@ -180,6 +220,7 @@ class InvoiceProcessor:
                 new_filename += ".pdf"
             dest_path = os.path.join(output_dir, new_filename)
             shutil.copy2(source_path, dest_path)
+            self._copy_cache_entry(source_path, dest_path)
             return dest_path
         except Exception:
             logging.warning("输出文件生成失败: %s", source_path, exc_info=True)
@@ -200,15 +241,24 @@ class InvoiceProcessor:
                     amount_map[amount] = invoice_part
         return amount_map
 
-    def check_tax_ids_in_output_dir(self, output_dir):
-        """检查所有文件的税号（主目录 + 需人工处理子目录）
+    def post_process(self, output_dir):
+        """合并后处理：金额映射 + 待搜索替换 + 税号检查 + PDF合并（单次文本遍历）
 
-        主目录中的异常文件移动到 税号异常/ 子目录；
-        需人工处理/ 中的异常文件复制到 税号异常/（保留原文件便于人工处理）。
+        将原 check_tax_ids_in_output_dir 与 merge_pdfs 的两次目录扫描合并为一次：
+        对每个 PDF 提取一次文本（命中缓存），同时完成税号检查与合并分类。
+
+        返回: {'amount_map': dict, 'tax_issues': list[str], 'merged': str|None}
         """
+        # ① 金额映射（仅文件名解析，快）
+        amount_map = self.create_amount_mapping(output_dir)
+        # ② 待搜索替换（仅重命名/移动，快）
+        self.replace_placeholder_files(output_dir, amount_map)
+        # ③④ 单次遍历：税号检查 + 合并分类
+        tax_issues = []
+        special_invoices = []
+        normal_files = []
         异常_dir = os.path.join(output_dir, '税号异常')
         folder_created = False
-        # 扫描主目录（异常文件移动）
         for filename in os.listdir(output_dir):
             if not filename.lower().endswith('.pdf'):
                 continue
@@ -216,12 +266,10 @@ class InvoiceProcessor:
             if not os.path.isfile(file_path):
                 continue
             text = self.extract_pdf_text(file_path)
-            if not text:
-                continue
-            tax_id_match = re.search(r'(?:纳税人识别号|统一社会信用代码)[:：]\s*([A-Z0-9]{15,20})', text)
-            if tax_id_match:
-                tax_id = tax_id_match.group(1)
-                if tax_id != TARGET_TAX_ID:
+            # 税号检查（命中优化1的缓存，无额外解析开销）
+            if text:
+                tax_id = self._extract_buyer_tax_id(text)
+                if tax_id and tax_id != TARGET_TAX_ID:
                     if not folder_created:
                         os.makedirs(异常_dir, exist_ok=True)
                         folder_created = True
@@ -232,7 +280,13 @@ class InvoiceProcessor:
                         dest_path = os.path.join(异常_dir, f'{name}_{counter}{ext}')
                         counter += 1
                     shutil.move(file_path, dest_path)
-                    yield f'税号异常: {filename} -> {tax_id}，已移动到税号异常文件夹'
+                    tax_issues.append(f'税号异常: {filename} -> {tax_id}，已移动到税号异常文件夹')
+                    continue  # 异常文件不参与合并
+            # 合并分类
+            if ('专用发票' in filename or '高铁票' in filename) or (text and ('专用' in text or '增值税专用发票' in text)):
+                special_invoices.append(filename)
+            else:
+                normal_files.append(filename)
         # 扫描 需人工处理/ 子目录（异常文件复制，保留原文件）
         manual_dir = os.path.join(output_dir, '需人工处理')
         if os.path.isdir(manual_dir):
@@ -259,7 +313,10 @@ class InvoiceProcessor:
                             dest_path = os.path.join(异常_dir, f'{name}_{counter}{ext}')
                             counter += 1
                         shutil.copy2(file_path, dest_path)
-                        yield f'税号异常: {filename} -> {tax_id}，已复制到税号异常文件夹（原文件保留在需人工处理）'
+                        tax_issues.append(f'税号异常: {filename} -> {tax_id}，已复制到税号异常文件夹（原文件保留在需人工处理）')
+        # 合并
+        merged = self._merge_classified_pdfs(output_dir, special_invoices, normal_files)
+        return {'amount_map': amount_map, 'tax_issues': tax_issues, 'merged': merged}
 
     def replace_placeholder_files(self, folder_path, amount_map):
         """替换待搜索文件（匹配失败的移动到 需人工处理/ 子目录）"""
@@ -323,34 +380,46 @@ class InvoiceProcessor:
             os.makedirs(output_dir, exist_ok=True)
             return output_dir
 
-    def merge_pdfs(self, output_dir):
-        """合并PDF文件"""
+    def _merge_classified_pdfs(self, output_dir, special_invoices, normal_files):
+        """合并已分类的PDF文件（使用 PdfWriter，特殊发票奇数页补空白页）
+
+        修复原 merge_pdfs 的 Bug：原实现通过二次 append 整个文件来补奇数页，
+        导致内容重复、体积翻倍；现改为 add_blank_page 补单页空白。
+        """
         try:
-            merger = PdfMerger()
-            special_invoices = []
-            normal_files = []
-            for filename in os.listdir(output_dir):
-                if filename.endswith('.pdf'):
-                    file_path = os.path.join(output_dir, filename)
-                    if not os.path.isfile(file_path):
-                        continue
-                    text = self.extract_pdf_text(file_path)
-                    if ('专用发票' in filename or '高铁票' in filename) or (text and ('专用' in text or '增值税专用发票' in text)):
-                        special_invoices.append(filename)
-                    else:
-                        normal_files.append(filename)
+            writer = PdfWriter()
             for filename in special_invoices:
                 file_path = os.path.join(output_dir, filename)
-                merger.append(file_path)
-                if len(merger.pages) % 2 == 1:
-                    merger.append(file_path)
+                with open(file_path, 'rb') as f:
+                    writer.append(PdfReader(f))
+                if len(writer.pages) % 2 == 1:
+                    writer.add_blank_page()
             for filename in normal_files:
                 file_path = os.path.join(output_dir, filename)
-                merger.append(file_path)
+                with open(file_path, 'rb') as f:
+                    writer.append(PdfReader(f))
             merged_path = os.path.join(output_dir, '合并结果.pdf')
-            merger.write(merged_path)
-            merger.close()
+            with open(merged_path, 'wb') as f:
+                writer.write(f)
+            writer.close()
             return merged_path
         except Exception:
             logging.error("PDF 合并失败: %s", output_dir, exc_info=True)
             return None
+
+    def merge_pdfs(self, output_dir):
+        """合并PDF文件（向后兼容包装：自行分类后委托 _merge_classified_pdfs）"""
+        special_invoices = []
+        normal_files = []
+        for filename in os.listdir(output_dir):
+            if not filename.lower().endswith('.pdf'):
+                continue
+            file_path = os.path.join(output_dir, filename)
+            if not os.path.isfile(file_path):
+                continue
+            text = self.extract_pdf_text(file_path)
+            if ('专用发票' in filename or '高铁票' in filename) or (text and ('专用' in text or '增值税专用发票' in text)):
+                special_invoices.append(filename)
+            else:
+                normal_files.append(filename)
+        return self._merge_classified_pdfs(output_dir, special_invoices, normal_files)

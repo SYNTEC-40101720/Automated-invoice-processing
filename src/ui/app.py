@@ -551,17 +551,15 @@ class InvoiceApp:
                 future_to_file = {executor.submit(self._process_single_file, f): f
                                   for f in pdf_files}
 
+                # UI 节流：进度条按文件数分桶更新，避免大批量文件时事件队列积压
+                progress_step = max(1, total_files // 100)
+
                 for i, future in enumerate(as_completed(future_to_file), 1):
                     if not self.is_processing:
                         self._log("处理已中止", 'warning')
                         break
 
                     filename, result, log_type, message = future.result()
-                    progress = (i / total_files) * 90
-
-                    self.root.after(0, lambda p=progress: self.progress.config(value=p))
-                    self.root.after(0, lambda p=progress: self.progress_percent.config(
-                        text=f"{int(p)}%"))
 
                     self._log(message, log_type)
 
@@ -570,8 +568,16 @@ class InvoiceApp:
                     else:
                         failure_count += 1
 
+                    # 成功/失败计数每文件更新（开销小，用户关注实时数字）
                     self.root.after(0, lambda s=success_count: self._update_stat('success', s))
                     self.root.after(0, lambda f=failure_count: self._update_stat('failure', f))
+
+                    # 进度条节流：仅按分桶或最后一个文件时更新
+                    if i % progress_step == 0 or i == total_files:
+                        progress = (i / total_files) * 90
+                        self.root.after(0, lambda p=progress: self.progress.config(value=p))
+                        self.root.after(0, lambda p=progress: self.progress_percent.config(
+                            text=f"{int(p)}%"))
 
             if not self.is_processing:
                 self._log("处理已中止，部分文件可能未完成", 'warning')
@@ -584,18 +590,16 @@ class InvoiceApp:
             self.log_widget.separator()
             self._log(f'统计: 总{total_files} | 成功 {success_count} | 失败 {failure_count}', 'info')
 
-            # 后处理阶段
+            # 后处理阶段（单次调用合并金额映射+替换+税号检查+PDF合并）
             self.root.after(0, lambda: self._set_status("执行后处理...", 'processing'))
             self._log('执行后处理...', 'info')
 
-            amount_map = self.processor.create_amount_mapping(self.output_dir)
-            self._log(f'金额映射: {len(amount_map)} 条')
+            result = self.processor.post_process(self.output_dir)
+            tax_issues = result['tax_issues']
+            merged = result['merged']
 
-            self.processor.replace_placeholder_files(self.output_dir, amount_map)
+            self._log(f'金额映射: {len(result["amount_map"])} 条')
             self._log('待搜索文件替换完成', 'success')
-
-            self._log('执行税号检查...', 'info')
-            tax_issues = list(self.processor.check_tax_ids_in_output_dir(self.output_dir))
 
             for issue in tax_issues:
                 self._log(issue, 'warning')
@@ -606,7 +610,6 @@ class InvoiceApp:
                 foreground=MDColors.WARNING if tax_issues else MDColors.SUCCESS
             ))
 
-            merged = self.processor.merge_pdfs(self.output_dir)
             if merged:
                 self._log(f'PDF合并完成', 'success')
             else:
