@@ -543,6 +543,7 @@ class InvoiceApp:
 
             success_count = 0
             failure_count = 0
+            start_time = datetime.now()
 
             max_workers = MAX_WORKERS
             self._log(f'使用 {max_workers} 线程并发处理')
@@ -620,6 +621,8 @@ class InvoiceApp:
             self.root.after(0, lambda: self.progress.config(value=100))
             self.root.after(0, lambda: self.progress_percent.config(text="100%"))
             self.log_widget.separator()
+            elapsed = (datetime.now() - start_time).total_seconds()
+            self._log(f'总耗时: {elapsed:.2f} 秒（{max_workers} 线程，{total_files} 文件）', 'info')
             self._log('所有处理已完成！', 'success')
             self.root.after(0, lambda: self._set_status(
                 f"处理完成 - 成功 {success_count}/{total_files}" +
