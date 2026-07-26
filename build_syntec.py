@@ -15,6 +15,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+# 强制 UTF-8 输出，避免 emoji 在 GBK 终端报错
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 ROOT = Path(__file__).resolve().parent
 APP_NAME = "SYNTEC-电子票据处理系统"
 VERSION_FILE = ROOT / "version_info.txt"
@@ -122,6 +125,7 @@ def main():
         "--noupx",               # 🔴 域控禁止 UPX 压缩
         "--clean",
         "--add-data", f"logo.ico{os.pathsep}.",   # 运行时窗口图标（复制到 bundle 根目录）
+        "--collect-all", "PySide6",                # 收集所有 Qt 插件（含图片格式、样式等）
         str(MAIN_SCRIPT),
     ]
 
