@@ -1,6 +1,6 @@
 [project]
 name = "invoice-processor"
-version = "6.1.0"
+version = "6.2.0"
 description = "SYNTEC 电子票据处理系统"
 requires-python = ">=3.10"
 dependencies = [
