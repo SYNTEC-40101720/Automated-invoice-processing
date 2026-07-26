@@ -120,10 +120,11 @@ def main():
         "--onedir",
         "--windowed",
         "--name", APP_NAME,
+        "--icon", str(ROOT / "logo.ico"),         # 🔴 exe 内嵌图标（资源管理器 + 任务栏）
         "--version-file", str(VERSION_FILE),
         "--noupx",               # 🔴 域控禁止 UPX 压缩
         "--clean",
-        "--add-data", f"logo.ico{os.pathsep}.",
+        "--add-data", f"logo.ico{os.pathsep}.",   # 运行时窗口图标（复制到 bundle 根目录）
         str(MAIN_SCRIPT),
     ]
 
