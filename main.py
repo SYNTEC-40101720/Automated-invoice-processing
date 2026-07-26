@@ -19,12 +19,8 @@ def main():
     )
 
     root = Tk()
-    # 设置 Windows 逐显示器 DPI 感知（PROCESS_PER_MONITOR_DPI_AWARE = 2）
-    try:
-        from ctypes import windll
-        windll.shcore.SetProcessDpiAwareness(2)
-    except Exception:
-        pass
+    # 注: 不使用 ctypes 调用 Windows API（SYNTEC 域控环境禁止）。
+    # Tkinter 在 Python 3.8+ 已默认启用系统 DPI 感知，由 sv_ttk 主题保证显示清晰。
     InvoiceApp(root)
     root.mainloop()
 
