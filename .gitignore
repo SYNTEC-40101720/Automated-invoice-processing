@@ -42,6 +42,13 @@ Thumbs.db
 税号异常/
 *_trans.*.pdf
 *.log
+logs/
+# 用户私人配置（首次运行自动生成，不入库）
+config.ini
+# 英文路径打包副本（仅用于规避中文路径问题，不入库）
+invoice_build/
+# logo.png 是源文件，logo.ico 由其生成；保留两者
+!logo.ico
 
 # TRAE 内部文件（保留 skills 和 specs，忽略 documents 临时规划）
 .trae/documents/

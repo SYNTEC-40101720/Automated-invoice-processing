@@ -116,3 +116,87 @@ def test_general_invoice_fallback_pattern():
     # 孤立的20位数字（无金额前缀）→ 不匹配
     assert not re.search(r'(?:金额|合计|价税|小写).{0,30}(?<!\d)(\d{20})(?!\d)',
                          '密码区 12345678901234567890')
+
+
+# ═══════════════════════════════════════════════════════════
+# 金额标准化
+# ═══════════════════════════════════════════════════════════
+
+@pytest.mark.parametrize("raw,expected", [
+    ("771.8", "771.80"),       # 一位小数 → 两位
+    ("771.80", "771.80"),      # 已标准
+    ("771", "771.00"),         # 整数 → 两位
+    ("1234.5678", "1234.57"),  # 多位小数 → 四舍五入
+    ("0.5", "0.50"),
+    ("1,234.5", "1,234.5"),    # 含逗号，float 解析失败 → 原样返回
+    ("abc", "abc"),            # 非数值 → 原样返回
+    ("", ""),                  # 空串 → 原样返回
+])
+def test_normalize_amount(raw, expected):
+    assert InvoiceProcessor._normalize_amount(raw) == expected
+
+
+# ═══════════════════════════════════════════════════════════
+# 重复文件去重
+# ═══════════════════════════════════════════════════════════
+
+def test_claim_output_name_first_call_succeeds():
+    """首次占位应成功"""
+    proc = InvoiceProcessor()
+    assert proc._claim_output_name("INV001-771.80.pdf", "source1.pdf") is True
+
+
+def test_claim_output_name_duplicate_skipped():
+    """重复文件名应被跳过"""
+    proc = InvoiceProcessor()
+    assert proc._claim_output_name("INV001-771.80.pdf", "source1.pdf") is True
+    assert proc._claim_output_name("INV001-771.80.pdf", "source2.pdf") is False
+
+
+def test_claim_output_name_different_files_succeed():
+    """不同文件名应分别成功"""
+    proc = InvoiceProcessor()
+    assert proc._claim_output_name("INV001-771.80.pdf", "source1.pdf") is True
+    assert proc._claim_output_name("INV002-100.00.pdf", "source2.pdf") is True
+
+
+def test_reset_dedup_clears_state():
+    """reset_dedup 应清空去重记录"""
+    proc = InvoiceProcessor()
+    proc._claim_output_name("INV001-771.80.pdf", "source1.pdf")
+    proc.reset_dedup()
+    # 清空后，相同文件名应能再次占位
+    assert proc._claim_output_name("INV001-771.80.pdf", "source2.pdf") is True
+
+
+def test_generate_output_file_dedup(tmp_path):
+    """_generate_output_file 应对重复源文件只生成一份输出"""
+    proc = InvoiceProcessor()
+    # 创建两个内容相同的源文件
+    src1 = tmp_path / "src1.pdf"
+    src2 = tmp_path / "src2.pdf"
+    src1.write_bytes(b"fake pdf content")
+    src2.write_bytes(b"fake pdf content")
+    out_dir = tmp_path / "output"
+    out_dir.mkdir()
+
+    # 同一发票号+金额（不同格式）应只生成一个输出文件
+    proc._generate_output_file(str(src1), str(out_dir), "INV001", "771.8", "ZJ")
+    proc._generate_output_file(str(src2), str(out_dir), "INV001", "771.80", "ZJ")
+
+    # 应只有一个标准化文件名 771.80
+    pdfs = [f.name for f in out_dir.iterdir() if f.suffix == '.pdf']
+    assert pdfs == ["INV001-771.80.pdf"]
+
+
+def test_generate_output_file_amount_normalization(tmp_path):
+    """_generate_output_file 应将金额标准化为两位小数"""
+    proc = InvoiceProcessor()
+    src = tmp_path / "src.pdf"
+    src.write_bytes(b"fake pdf content")
+    out_dir = tmp_path / "output"
+    out_dir.mkdir()
+
+    proc._generate_output_file(str(src), str(out_dir), "INV001", "100.5", "ZJ")
+    pdfs = [f.name for f in out_dir.iterdir() if f.suffix == '.pdf']
+    assert pdfs == ["INV001-100.50.pdf"]

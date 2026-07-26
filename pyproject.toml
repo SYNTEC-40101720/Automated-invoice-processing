@@ -1,12 +1,12 @@
 [project]
 name = "invoice-processor"
-version = "6.0.0"
+version = "6.1.0"
 description = "SYNTEC 电子票据处理系统"
 requires-python = ">=3.10"
 dependencies = [
     "pdfplumber>=0.11.0",
     "pypdf>=4.0",
-    "sv_ttk>=2.0.0",
+    "PySide6>=6.6.0",
 ]
 
 [project.scripts]
