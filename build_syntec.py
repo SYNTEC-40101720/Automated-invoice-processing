@@ -2,8 +2,7 @@
 SYNTEC 域控规范打包脚本
 
 用法：
-    python build_syntec.py          # 标准打包 + 验证
-    python build_syntec.py --clean  # 清理后重新打包
+    python build_syntec.py          # 自动清理 + 打包 + 合规验证
 
 输出：
     dist/SYNTEC-电子票据处理系统/
@@ -103,13 +102,11 @@ def verify() -> None:
 
 
 def main():
-    clean = "--clean" in sys.argv
-
-    if clean:
-        for d in (BUILD_DIR, DIST_DIR):
-            if d.exists():
-                shutil.rmtree(d)
-                print(f"🧹 已清理 {d.name}/")
+    # 默认清理旧构建产物，保证每次打包干净一致
+    for d in (BUILD_DIR, DIST_DIR):
+        if d.exists():
+            shutil.rmtree(d)
+            print(f"🧹 已清理 {d.name}/")
 
     if not VERSION_FILE.exists():
         sys.exit(f"❌ 缺少 {VERSION_FILE.name}")
