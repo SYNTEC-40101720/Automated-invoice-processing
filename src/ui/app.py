@@ -34,12 +34,14 @@ class InvoiceApp:
         # 应用主题
         sv_ttk.set_theme("light")
 
-        self.processor = InvoiceProcessor()
-        self.output_dir = None
+        self.log_queue: queue.Queue[tuple[str, str]] = queue.Queue()
+        # 注入日志回调：核心层日志 → GUI 日志队列
+        self.processor = InvoiceProcessor(log_callback=lambda msg, level: self.log_queue.put((msg, level)))
+        self.output_dir: str | None = None
         self.source_dir = os.getcwd()
-        self.log_queue = queue.Queue()
         self.is_processing = False
         self._stats = {'total': 0, 'success': 0, 'failure': 0, 'tax_issues': 0}
+        self._idle_polls = 0  # 日志轮询空闲计数器
 
         # 初始化字体
         self._init_fonts()
@@ -646,14 +648,17 @@ class InvoiceApp:
         self.log_queue.put((message, level))
 
     def _poll_log_queue(self):
-        """轮询日志队列"""
+        """轮询日志队列（空闲时自动降低频率）"""
         try:
             while True:
                 message, level = self.log_queue.get_nowait()
                 self.log_widget.log(message, level)
+                self._idle_polls = 0
         except queue.Empty:
-            pass
-        self.root.after(100, self._poll_log_queue)
+            self._idle_polls += 1
+        # 空闲超过 30 次 → 500ms；否则 100ms
+        interval = 500 if self._idle_polls > 30 else 100
+        self.root.after(interval, self._poll_log_queue)
 
     def _set_status(self, text, state='ready'):
         """设置底部状态栏"""

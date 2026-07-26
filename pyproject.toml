@@ -1,0 +1,22 @@
+[project]
+name = "invoice-processor"
+version = "6.0.0"
+description = "SYNTEC 电子票据处理系统"
+requires-python = ">=3.10"
+dependencies = [
+    "pdfplumber>=0.11.0",
+    "pypdf>=4.0",
+    "sv_ttk>=2.0.0",
+]
+
+[project.scripts]
+invoice-processor = "main:main"
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
