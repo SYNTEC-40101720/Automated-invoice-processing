@@ -24,6 +24,14 @@ def _resource_path(relative: str) -> str:
     return os.path.join(base, relative)
 
 
+def _find_icon_path() -> str | None:
+    """查找开发模式和 PyInstaller onedir/onefile 模式下的图标。"""
+    candidates = [_resource_path("logo.ico")]
+    if getattr(sys, "frozen", False):
+        candidates.append(os.path.join(os.path.dirname(sys.executable), "logo.ico"))
+    return next((path for path in candidates if os.path.exists(path)), None)
+
+
 def main():
     # 初始化日志：固定位置 + 轮转（GUI 模式下 stderr 不可见，落盘便于问题排查）
     setup_logging()
@@ -40,11 +48,14 @@ def main():
     app.setApplicationName("SYNTEC 电子票据处理系统")
 
     # 设置应用图标（任务栏 + 窗口标题栏）
-    icon_path = _resource_path('logo.ico')
-    if os.path.exists(icon_path):
-        app.setWindowIcon(QIcon(icon_path))
+    icon_path = _find_icon_path()
+    if icon_path:
+        app_icon = QIcon(icon_path)
+        app.setWindowIcon(app_icon)
 
     window = InvoiceApp()
+    if icon_path:
+        window.setWindowIcon(app_icon)
     window.show()
 
     sys.exit(app.exec())

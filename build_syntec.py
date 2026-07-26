@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 # 强制 UTF-8 输出，避免 emoji 在 GBK 终端报错
-sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
 
 ROOT = Path(__file__).resolve().parent
 APP_NAME = "SYNTEC-电子票据处理系统"
