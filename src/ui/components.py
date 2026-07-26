@@ -71,7 +71,7 @@ class SidebarLogo(QWidget):
 
         p.setFont(QFont(FONT_MONO, SIZE_TINY))
         p.setPen(QColor(Palette.ON_INK_SUBTLE))
-        p.drawText(QRectF(0, h - 42, w, 20), Qt.AlignHCenter, "v6.1")
+        p.drawText(QRectF(0, h - 42, w, 20), Qt.AlignHCenter, "v6.2")
 
         p.end()
 

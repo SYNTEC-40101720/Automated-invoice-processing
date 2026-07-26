@@ -5,6 +5,7 @@
 import os
 import sys
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
@@ -27,7 +28,14 @@ def main():
     # 初始化日志：固定位置 + 轮转（GUI 模式下 stderr 不可见，落盘便于问题排查）
     setup_logging()
 
-    # Qt6 默认开启 HighDPI 缩放，无需手动设置 AA_EnableHighDpiScaling
+    # ── High‑DPI 适配（必须在 QApplication 创建之前设置）──
+    # Qt6 默认启用 AA_EnableHighDpiScaling，无需手动设置。
+    # 显式指定缩放因子舍入策略：PassThrough 允许分数缩放（125%/150%/175%），
+    # Qt6 内部使用浮点坐标渲染，避免整数舍入造成的模糊或 1px 偏移。
+    QApplication.setHighDpiScaleFactorRoundingPolicy(
+        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+    )
+
     app = QApplication(sys.argv)
     app.setApplicationName("SYNTEC 电子票据处理系统")
 

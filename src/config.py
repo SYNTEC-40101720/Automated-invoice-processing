@@ -20,13 +20,14 @@ FONT_DISPLAY = 'Bahnschrift'           # 品牌/数字 - 几何浓缩感
 FONT_UI = 'Microsoft YaHei UI'         # 中文正文
 FONT_MONO = 'Cascadia Code'            # 等宽 / 日志 / 统计数字
 
-# 字号梯度
-SIZE_DISPLAY = 22
-SIZE_H1 = 16
-SIZE_H2 = 13
-SIZE_BODY = 12
-SIZE_SMALL = 11
-SIZE_TINY = 10
+# 字号梯度（参考 Microsoft Fluent 2 / Ant Design 字体阶梯，适配中文显示）
+# 中文笔画密集，同等 px 下辨识度低于拉丁字母，故比主流设计系统上浮 1px
+SIZE_DISPLAY = 24                       # 品牌主标题
+SIZE_H1 = 18                            # 页面大标题
+SIZE_H2 = 16                            # 卡片标题 / 区块标题
+SIZE_BODY = 14                          # 正文 / 按钮 / 输入框
+SIZE_SMALL = 13                         # 辅助说明 / 状态栏
+SIZE_TINY = 12                          # 最低可读：等宽日志 / 元信息
 SIZE_STAT = 34                          # 大号统计数字
 SIZE_LOGO = 28                          # 侧栏 SYNTEC 字母
 
