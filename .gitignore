@@ -50,5 +50,10 @@ invoice_build/
 # logo.png 是源文件，logo.ico 由其生成；保留两者
 !logo.ico
 
+# 测试数据产物（含真实发票号/金额等敏感信息，严禁入库）
+tests/data/
+# 本地发票收件箱（运行时输入目录，含真实票据）
+发票收件箱/
+
 # TRAE 内部文件（保留 skills 和 specs，忽略 documents 临时规划）
 .trae/documents/
