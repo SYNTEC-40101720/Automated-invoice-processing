@@ -12,8 +12,8 @@ TARGET_TAX_ID = get_target_tax_id()
 MAX_WORKERS = get_max_workers()
 
 # ── UI 配置（常量，不外部化）──
-WINDOW_GEOMETRY = (960, 920)
-WINDOW_MIN_SIZE = (760, 760)
+WINDOW_GEOMETRY = (960, 820)
+WINDOW_MIN_SIZE = (760, 700)
 
 # 字体族（带 fallback，PySide6 会按顺序匹配已安装字体）
 FONT_DISPLAY = 'Bahnschrift'           # 品牌/数字 - 几何浓缩感

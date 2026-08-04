@@ -4,7 +4,9 @@
 import math
 from datetime import datetime
 
-from PySide6.QtCore import QRectF, QSize, Qt, QTimer
+from PySide6.QtCore import (
+    Property, QEasingCurve, QPropertyAnimation, QRectF, QSize, Qt, QTimer, Signal,
+)
 from PySide6.QtGui import (
     QBrush, QColor, QFont, QLinearGradient, QPainter, QPaintEvent,
     QPen, QTextCharFormat, QTextCursor,
@@ -364,3 +366,82 @@ class LogView(QFrame):
         """将当前日志导出到文件（纯文本，含时间戳）"""
         with open(path, 'w', encoding='utf-8') as f:
             f.write(self.text.toPlainText())
+
+
+# ─────────────────────────────────────────────────────
+# 滑动开关 —— 自绘轨道 + 滑块，点击切换（emit toggled）
+# ─────────────────────────────────────────────────────
+class ToggleSwitch(QWidget):
+    """滑动开关（轨道 + 滑块 + 位移动画）
+
+    用法：
+        sw = ToggleSwitch(checked=False)
+        sw.toggled.connect(on_toggled)      # 用户点击时触发
+        sw.setChecked(True)                 # 程序化设置（不触发信号）
+    """
+
+    toggled = Signal(bool)
+
+    WIDTH, HEIGHT = 52, 28
+    KNOB_MARGIN = 3
+    KNOB_SIZE = HEIGHT - 2 * KNOB_MARGIN
+
+    def __init__(self, checked: bool = False, parent=None):
+        super().__init__(parent)
+        self._checked = bool(checked)
+        self._knob = 1.0 if self._checked else 0.0  # 0.0=左(关) 1.0=右(开)
+        self.setFixedSize(self.WIDTH, self.HEIGHT)
+        self.setCursor(Qt.PointingHandCursor)
+
+        self._anim = QPropertyAnimation(self, b"knob", self)
+        self._anim.setDuration(150)
+        self._anim.setEasingCurve(QEasingCurve.InOutCubic)
+
+    # 滑块位置属性（驱动动画）
+    def _get_knob(self) -> float:
+        return self._knob
+
+    def _set_knob(self, value: float) -> None:
+        self._knob = value
+        self.update()
+
+    knob = Property(float, _get_knob, _set_knob)
+
+    def isChecked(self) -> bool:
+        return self._checked
+
+    def setChecked(self, checked: bool, animate: bool = True) -> None:
+        """程序化设置状态（不触发 toggled 信号）"""
+        self._checked = bool(checked)
+        target = 1.0 if self._checked else 0.0
+        if animate:
+            self._anim.stop()
+            self._anim.setStartValue(self._knob)
+            self._anim.setEndValue(target)
+            self._anim.start()
+        else:
+            self._knob = target
+            self.update()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton and self.rect().contains(event.position().toPoint()):
+            self.setChecked(not self._checked, animate=True)
+            self.toggled.emit(self._checked)
+        super().mouseReleaseEvent(event)
+
+    def paintEvent(self, _e: QPaintEvent) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing, True)
+        rect = QRectF(0, 0, self.WIDTH, self.HEIGHT)
+        # 轨道：开=绿色，关=灰
+        track = QColor(Palette.SUCCESS) if self._checked else QColor(Palette.TEXT_SUBTLE)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QBrush(track))
+        p.drawRoundedRect(rect, rect.height() / 2, rect.height() / 2)
+        # 滑块
+        x = self.KNOB_MARGIN + self._knob * (
+            self.WIDTH - self.KNOB_SIZE - 2 * self.KNOB_MARGIN
+        )
+        p.setBrush(QBrush(QColor('#FFFFFF')))
+        p.drawEllipse(QRectF(x, self.KNOB_MARGIN, self.KNOB_SIZE, self.KNOB_SIZE))
+        p.end()

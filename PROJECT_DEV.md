@@ -180,3 +180,75 @@ python -c "from src.core.processor import InvoiceProcessor; ..."
 测试文件：
 - `tests/test_processor.py`：核心逻辑单元测试（33 个）
 - `tests/test_integration.py`：集成测试，覆盖新功能（20 个）
+- `tests/test_email_pull.py`：邮箱拉取模块单元测试（9 个，不联网）
+
+---
+
+## 10. 邮箱自动拉取（v6.3）
+
+### 功能
+- 从邮箱（默认 QQ 邮箱 `imap.qq.com:993`）拉取发票附件到本地「发票收件箱」目录
+- 过滤：发件方白名单（12306/滴滴/网约车/华住/通行费）或主题含「发票/行程单/报销」
+- 附件：下载 PDF/ZIP，ZIP 自动解压只留 PDF；按 `message_id` 去重（`processed_messages.json`）
+- UI：新增「拉取邮箱发票」按钮；`poll_minutes` 可配置定时轮询；收件箱目录被 `QFileSystemWatcher` 监听，新 PDF 自动触发处理
+- 处理完成后源文件自动归档到 `收件箱/已处理`，避免重复处理
+
+### 配置（config.ini `[email]` 段）
+以上配置均可在程序「设置」对话框（业务配置 + 邮箱自动拉取）直接填写，含「测试连接」按钮；
+保存后自动写入 config.ini 并即时生效（收件箱监听目录、轮询间隔实时更新，无需重启）。
+```ini
+[email]
+enabled = true                 # 启用开关
+imap_host = imap.qq.com
+imap_port = 993
+username = 你的邮箱@qq.com
+auth_code = IMAP授权码          # QQ邮箱设置→账户→开启IMAP后生成，非登录密码
+inbox_dir = 发票收件箱          # 相对程序目录或绝对路径
+days_back = 30                 # 只拉最近 N 天
+poll_minutes = 0               # 自动轮询分钟数，0 = 关闭（仅手动拉取）
+```
+
+### 实现位置
+- `src/core/email_pull.py`：IMAP 拉取纯逻辑（不依赖 Qt），入口 `pull_invoices()`
+- `src/config_manager.py`：`get_email_*` / `set_email_config` / `get_inbox_dir`
+- `src/ui/app.py`：`_pull_invoices` / `_on_pull_done` / `_on_inbox_changed` / `_archive_inbox_files`
+
+### 注意
+- 拉取默认不修改邮件状态（`BODY.PEEK` 读取），如需标记已读用 `mark_seen`
+- 授权码属敏感信息，写在 config.ini（已被 .gitignore 排除），勿提交仓库
+- 发票收件箱目录内不要手动放非发票 PDF（会一并处理）
+
+---
+
+## 11. 发票审核（v6.3：本地规则预检 + AI 语义审核）
+
+### 功能
+处理完成后（post_process 之后）执行**双层审核**，结果只写日志提示（warning），**不阻断处理流程**。**审核重点是金额错误，行程只做简易核对（避免填错），不做复杂的时间/城市推理**：
+- **第一层 · 本地规则预检**（总是执行，确定性、零成本）：同号发票金额不一致 / 疑似重复文件（文件名规则）、行程单合计 ≠ 发票价税合计、住宿税率合理性（3%/6%/9% 等）、单日交通费超 500 元差标
+- **第二层 · AI 语义审核**（`[ai] enabled` 开关控制，DeepSeek）：重点查金额/票据异常（发票号、价税合计、税额、税率、行程合计一致性、金额异常高），行程仅做简单核对（日期矛盾、同日同路线重复、行程单与发票不配套）
+- **审核报告回填**：本地 + AI 问题合并写入 `费用汇总.xlsx` 的「审核报告」工作表（来源/文件/类型/问题/建议）
+
+### 配置（config.ini `[ai]` 段，也可在「设置」对话框填写）
+```ini
+[ai]
+enabled = true
+api_key = sk-xxxx            # https://platform.deepseek.com 申请
+api_base = https://api.deepseek.com
+model = DeepSeek-V4-Flash
+timeout = 60
+```
+
+### 实现位置
+- `src/core/local_audit.py`：`check_filenames` / `check_rows`（纯规则，可单测）/ `run_local_audit`
+- `src/core/ai_audit.py`：`build_prompt` / `parse_findings`（宽容解析 JSON）/ `audit_records`（urllib 调用，无新增依赖）/ `write_audit_report`（回填 Excel）
+- `src/core/excel_summary.py`：`_parse_didi_trip_details` 增强——行程行提取 `time / city / route / mileage`；高铁票提取发车时间；审核与汇总共用同一套解析
+- `src/ui/app.py`：`_run_ai_audit`；`_process_files` 中本地预检总是执行、AI 按开关执行，结果合并写回 Excel
+- `src/ui/settings_dialog.py`：AI 设置区（启用勾选 / API Key 密码框 / 接口地址 / 模型），整个对话框已包进 QScrollArea
+- `src/ui/components.py`：`ToggleSwitch` 滑动开关（自绘轨道+滑块+动画）；主窗口操作栏「AI 审核」开关点击即时写入 config.ini
+
+### 注意
+- API Key / 邮箱授权码属敏感信息，写入 config.ini（不入库），UI 用密码框显示
+- 审核数据来自 `excel_summary._parse_invoice`，含每文件行明细（日期/时间/城市/路线/类别/金额/税额）
+- 网络调用在 worker 线程执行，失败仅告警不影响处理结果
+
+

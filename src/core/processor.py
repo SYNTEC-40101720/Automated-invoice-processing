@@ -11,6 +11,7 @@ import pdfplumber
 from pypdf import PdfReader, PdfWriter
 
 from .. import config as _cfg
+from .excel_summary import generate_expense_summary as _generate_excel
 
 
 # ═══════════════════════════════════════════════════════════
@@ -535,7 +536,16 @@ class InvoiceProcessor:
             progress_callback=_on_merge_progress,
         )
         _report(1.00)
-        return {'amount_map': amount_map, 'tax_issues': tax_issues, 'merged': merged}
+        # ⑥ 生成费用汇总 Excel（无进度回调，快速操作）
+        result = self.generate_expense_summary(output_dir)
+        return {'amount_map': amount_map, 'tax_issues': tax_issues, 'merged': merged, 'excel': result}
+
+    def generate_expense_summary(self, output_dir: str) -> str | None:
+        """生成费用汇总 Excel（委托 excel_summary 模块）
+
+        遍历输出目录中的 PDF，提取日期、类别、金额，按日期归集生成 Excel。
+        """
+        return _generate_excel(output_dir, self)
 
     def replace_placeholder_files(self, folder_path, amount_map):
         """替换待搜索文件（匹配失败的移动到 需人工处理/ 子目录）"""
