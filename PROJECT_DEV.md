@@ -234,7 +234,7 @@ poll_minutes = 0               # 自动轮询分钟数，0 = 关闭（仅手动�
 enabled = true
 api_key = sk-xxxx            # https://platform.deepseek.com 申请
 api_base = https://api.deepseek.com
-model = DeepSeek-V4-Flash
+model = deepseek-v4-flash
 timeout = 60
 ```
 

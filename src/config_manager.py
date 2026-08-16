@@ -33,7 +33,7 @@ _DEFAULTS = {
         'enabled': 'false',
         'api_key': '',
         'api_base': 'https://api.deepseek.com',
-        'model': 'DeepSeek-V4-Flash',
+        'model': 'deepseek-v4-flash',
         'timeout': '60',
     },
 }
@@ -72,7 +72,7 @@ api_key =
 # API 接口地址（OpenAI 兼容）
 api_base = https://api.deepseek.com
 # 模型名
-model = DeepSeek-V4-Flash
+model = deepseek-v4-flash
 # 请求超时（秒）
 timeout = 60
 """
@@ -260,7 +260,7 @@ def get_ai_api_base() -> str:
 
 
 def get_ai_model() -> str:
-    return get_ai_config()['model'].strip() or 'DeepSeek-V4-Flash'
+    return get_ai_config()['model'].strip() or 'deepseek-v4-flash'
 
 
 def get_ai_timeout() -> int:

@@ -14,7 +14,7 @@ import urllib.request
 logger = logging.getLogger(__name__)
 
 DEFAULT_API_BASE = 'https://api.deepseek.com'
-DEFAULT_MODEL = 'DeepSeek-V4-Flash'
+DEFAULT_MODEL = 'deepseek-v4-flash'
 
 _SYSTEM_PROMPT = (
     '你是一名严谨的财务发票审核员。下面是某次出差产生的发票与行程数据（JSON），'

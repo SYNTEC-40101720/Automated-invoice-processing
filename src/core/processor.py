@@ -1,84 +1,80 @@
+"""发票处理核心
+
+`InvoiceProcessor` 是外观（facade）/ 编排者，组合以下独立组件：
+    - PdfTextExtractor   : PDF 文本提取与缓存（纯 I/O，零业务）
+    - InvoiceOutputWriter: 输出文件命名 / 去重 / 复制 / 税号异常归集
+    - PdfMerger          : PDF 合并与分类
+    - invoice_types      : 发票类型注册表与各类型处理逻辑
+
+公共 API 与历史版本一致（含被测试 / UI 直接依赖的方法），内部实现委托给上述组件。
+职责划分清晰后，本类只负责：构造组件、薄委托、以及 post_process 的编排。
+"""
 import os
 import re
 import shutil
-import hashlib
-import threading
-import logging
 from datetime import datetime
 from collections.abc import Callable
 
-import pdfplumber
-from pypdf import PdfReader, PdfWriter
-
 from .. import config as _cfg
+from .pdf_text import PdfTextExtractor
+from .invoice_output import (
+    InvoiceOutputWriter,
+    _PREFIX_SUFFIX,
+    _normalize_amount,
+)
+from .invoice_types import (
+    register_type,
+    _TYPE_REGISTRY,
+    determine_processor_type,
+    process_zhejiang_invoice,
+    process_jiangsu_toll,
+    process_jiangsu_invoice,
+    process_highspeed_rail,
+    process_didi_trip,
+    process_toll_summary,
+    process_general_invoice,
+)
+from .pdf_merge import PdfMerger, classify_invoice
 from .excel_summary import generate_expense_summary as _generate_excel
 
 
 # ═══════════════════════════════════════════════════════════
-# 发票处理核心算法类
+# 发票处理核心：外观 / 编排者
 # ═══════════════════════════════════════════════════════════
 
-# 各发票类型生成输出文件时的后缀映射
-_PREFIX_SUFFIX: dict[str, str] = {
-    "JS": "行程单.pdf",
-    "H": "高铁票.pdf",
-}
-
-# 缓存 sentinel：标记"正在解析中"，避免并发重复解析
-_PARSE_PENDING = object()
-
-# 发票类型注册表：[(keywords, method_name), ...]
-# 顺序敏感 —— 越具体越靠前，通用 fallback 放最后
-_TYPE_REGISTRY: list[tuple[tuple[str, ...], str]] = []
-
-
-def register_type(*keywords: str):
-    """装饰器：注册发票类型处理器及其匹配关键字
-
-    用法：
-        @register_type('浙江通用（电子）发票', '宁波通用（电子）发票')
-        def process_zhejiang_invoice(self, source_path, output_dir): ...
-    """
-    def deco(fn):
-        _TYPE_REGISTRY.append((keywords, fn.__name__))
-        return fn
-    return deco
-
-
 class InvoiceProcessor:
-    """发票处理核心算法类"""
+    """发票处理核心：组合提取 / 输出 / 合并能力并编排后处理流程"""
 
     def __init__(self, log_callback: Callable[[str, str], None] | None = None):
-        self._text_cache: dict[str, str] = {}
-        self._raw_text_cache: dict[str, str] = {}
-        self._cache_lock = threading.Lock()
+        self._extractor = PdfTextExtractor(log_callback)
+        self._writer = InvoiceOutputWriter(self._extractor)
+        self._merger = PdfMerger(self._extractor)
         self._log_callback = log_callback
-        # 输出文件去重：记录已生成的标准化文件名，避免重复源文件产生重复输出
-        self._generated_names: set[str] = set()
-        # 内容哈希去重：text_md5 → 首次出现的源文件名
-        self._content_hashes: dict[str, str] = {}
-        self._dedup_lock = threading.Lock()
 
-    # ── 内部日志辅助 ──────────────────────────────────────
+    # ── 日志 / 缓存（委托提取器） ──────────────────────
     def _log_core(self, msg: str, level: str = 'warning') -> None:
-        """统一日志出口：写 logging + 回调外部（UI）
+        self._extractor._log_core(msg, level)
 
-        注意：不使用 exc_info=True，因为在无活跃异常时会打印 `NoneType: None`。
-        错误信息已包含在 msg 中；需要堆栈时由调用方在 except 块内显式记录。
-        """
-        log_level = {'info': logging.INFO, 'success': logging.INFO,
-                     'warning': logging.WARNING, 'error': logging.ERROR}.get(level, logging.WARNING)
-        logging.log(log_level, msg)
-        if self._log_callback:
-            self._log_callback(msg, level)
+    def clear_cache(self) -> None:
+        self._extractor.clear_cache()
 
     def reset_dedup(self) -> None:
-        """清空输出去重记录（每次开始新一轮处理前调用）"""
-        with self._dedup_lock:
-            self._generated_names.clear()
-            self._content_hashes.clear()
+        self._writer.reset_dedup()
 
-    # ── 税号提取 ──────────────────────────────────────────
+    # ── 文本提取（委托提取器） ────────────────────────
+    def _extract_raw_text(self, pdf_path: str) -> tuple[str | None, str | None]:
+        return self._extractor._extract_raw_text(pdf_path)
+
+    def extract_pdf_text_with_error(self, pdf_path: str) -> tuple[str | None, str | None]:
+        return self._extractor.extract_pdf_text_with_error(pdf_path)
+
+    def extract_pdf_text(self, pdf_path: str) -> str | None:
+        return self._extractor.extract_pdf_text(pdf_path)
+
+    def _copy_cache_entry(self, src_path: str, dest_path: str) -> None:
+        self._extractor._copy_cache_entry(src_path, dest_path)
+
+    # ── 纯函数静态方法（无状态，可独立测试） ──────────
     @staticmethod
     def _extract_buyer_tax_id(text: str | None) -> str | None:
         """提取购买方税号（统一社会信用代码，固定 18 位）
@@ -93,331 +89,209 @@ class InvoiceProcessor:
         m = re.search(r'(?:纳税人识别号|统一社会信用代码)[:：]\s*([A-Z0-9]{18})', buyer_text)
         return m.group(1) if m else None
 
-    def _extract_raw_text(self, pdf_path: str) -> tuple[str | None, str | None]:
-        """提取 PDF 原始文本（保留空白，带缓存 + sentinel 防并发重复解析）
+    _normalize_amount = staticmethod(_normalize_amount)
 
-        返回 (text, error_type)：
-            - 成功：(text, None)
-            - 失败：(None, error_type)，error_type ∈ {'encrypted','corrupted','empty','unknown'}
-        """
-        with self._cache_lock:
-            val = self._raw_text_cache.get(pdf_path)
-            if val is not None:
-                if val is _PARSE_PENDING:
-                    return None, None  # 正在解析中（其他线程会填充）
-                # 缓存值是 (text, error_type) 元组
-                return val if isinstance(val, tuple) else (val, None)
-            # 标记为解析中，阻止其他线程重复解析
-            self._raw_text_cache[pdf_path] = _PARSE_PENDING
-        try:
-            with pdfplumber.open(pdf_path) as pdf:
-                # 检测加密 PDF
-                if hasattr(pdf, 'is_encrypted') and pdf.is_encrypted:
-                    self._log_core(f"PDF 已加密，无法提取: {pdf_path}", level='warning')
-                    with self._cache_lock:
-                        self._raw_text_cache[pdf_path] = (None, 'encrypted')
-                    return None, 'encrypted'
-                pages_text = [page.extract_text() or '' for page in pdf.pages]
-                text = '\n'.join(pages_text)
-                # 检测扫描件（无文本内容）
-                if not text.strip():
-                    self._log_core(f"PDF 无文本内容（可能是扫描件）: {pdf_path}", level='warning')
-                    with self._cache_lock:
-                        self._raw_text_cache[pdf_path] = (None, 'empty')
-                    return None, 'empty'
-                with self._cache_lock:
-                    self._raw_text_cache[pdf_path] = (text, None)
-                return text, None
-        except Exception as e:
-            err_str = str(e).lower()
-            if 'encrypt' in err_str or 'password' in err_str:
-                error_type = 'encrypted'
-            elif 'syntax' in err_str or 'parse' in err_str or 'eof' in err_str:
-                error_type = 'corrupted'
-            else:
-                error_type = 'unknown'
-            self._log_core(f"PDF 文本提取失败 [{error_type}]: {pdf_path} - {e}", level='warning')
-            with self._cache_lock:
-                self._raw_text_cache[pdf_path] = (None, error_type)
-            return None, error_type
+    _classify_invoice = staticmethod(classify_invoice)
 
-    def extract_pdf_text_with_error(self, pdf_path: str) -> tuple[str | None, str | None]:
-        """提取 PDF 文本内容（去空白，带缓存），并返回错误类型
-
-        返回 (text, error_type)，error_type 为 None 表示成功。
-        """
-        with self._cache_lock:
-            if pdf_path in self._text_cache:
-                cached = self._text_cache[pdf_path]
-                # 缓存值可能是 (text, error_type) 元组或旧格式 str
-                if isinstance(cached, tuple):
-                    return cached
-                return cached, None
-        raw, error_type = self._extract_raw_text(pdf_path)
-        if raw is None:
-            with self._cache_lock:
-                self._text_cache[pdf_path] = (None, error_type)
-            return None, error_type
-        result = re.sub(r'\s+', '', raw)
-        with self._cache_lock:
-            self._text_cache[pdf_path] = (result, None)
-        return result, None
-
-    def extract_pdf_text(self, pdf_path: str) -> str | None:
-        """提取 PDF 文件文本内容（去空白，带缓存）
-
-        向后兼容接口：只返回文本，不返回错误类型。
-        """
-        text, _ = self.extract_pdf_text_with_error(pdf_path)
-        return text
-
-    def _copy_cache_entry(self, src_path: str, dest_path: str) -> None:
-        """复制缓存条目（文件 copy2 后调用，避免对新路径重新解析 PDF）"""
-        with self._cache_lock:
-            if src_path in self._text_cache:
-                self._text_cache[dest_path] = self._text_cache[src_path]
-            if src_path in self._raw_text_cache:
-                src_val = self._raw_text_cache[src_path]
-                if src_val is not _PARSE_PENDING:
-                    self._raw_text_cache[dest_path] = src_val
-
-    def clear_cache(self) -> None:
-        """清除文本缓存"""
-        with self._cache_lock:
-            self._text_cache.clear()
-            self._raw_text_cache.clear()
-
-    @register_type('浙江通用（电子）发票', '宁波通用（电子）发票')
-    def process_zhejiang_invoice(self, source_path, output_dir):
-        """处理浙江/宁波通用电子发票"""
-        return self._process_invoice(
-            source_path, output_dir,
-            r'发票号码[:：]\s*(\d+)',
-            r'（小写）\s+([\d.]+)',
-            "ZJ"
-        )
-
-    @register_type('江苏省车辆通行费票据（电子）')
-    def process_jiangsu_toll(self, source_path, output_dir):
-        """处理江苏通行费票据"""
-        return self._process_invoice(
-            source_path, output_dir,
-            r'票据号码[：:]\s*(\d{10})',
-            r'（小写）\s*([\d.]+\d{2})',
-            "JST"
-        )
-
-    @register_type('江苏省车辆通行费电子票据行程单')
-    def process_jiangsu_invoice(self, source_path, output_dir):
-        """处理江苏车辆通行费电子票据行程单"""
-        return self._process_invoice(
-            source_path, output_dir,
-            r'发票号码\s+(\d+)',
-            r'累计金额\(元\)\s+([\d.]+)',
-            "JS"
-        )
-
-    @register_type('中国铁路', '二等座', '一等座')
-    def process_highspeed_rail(self, source_path, output_dir):
-        """处理高铁票"""
-        return self._process_invoice(
-            source_path, output_dir,
-            r'(?:电子发票号码|发票号码)[\s:：]*([A-Z0-9]{20})',
-            r'(?:金额|￥)\s*([\d,.]+)',
-            "H",
-            lambda x: x.replace(',', '')
-        )
-
-    @register_type('滴滴出行-行程单', '—行程单')
-    def process_didi_trip(self, source_path, output_dir):
-        """处理滴滴行程单"""
-        try:
-            text = self.extract_pdf_text(source_path)
-            amount_match = re.search(r'合计([\d.,]+)元', text)
-            if amount_match:
-                clean_amount = "{:.2f}".format(float(amount_match.group(1).replace(',', '')))
-                new_filename = f"待搜索-{clean_amount}行程单.pdf"
-                dest_path = os.path.join(output_dir, new_filename)
-                if not self._claim_output_name(new_filename, source_path):
-                    return dest_path  # 重复，跳过
-                shutil.copy2(source_path, dest_path)
-                self._copy_cache_entry(source_path, dest_path)
-                return dest_path
-            else:
-                return None
-        except Exception:
-            self._log_core(f"滴滴行程单处理失败: {source_path}", level='warning')
-            return None
-
-    @register_type('收费公路通行费电子票据汇总单')
-    def process_toll_summary(self, source_path, output_dir):
-        """处理收费公路通行费电子票据汇总单（按行程索引）
-
-        提取第一张票据的号码和含税金额，命名为 {票据号码}-{金额}行程单.pdf
-        支持两种票据格式:
-        - 传统票据: 12位票据代码 + 8位票据号码 + 金额
-        - 数电发票: * + 20位发票号码 + 金额
-        注意: 此类汇总单字段间靠空格分隔，需保留空白，故使用 _extract_raw_text 而非去空白的 extract_pdf_text。
-        """
-        try:
-            text, _ = self._extract_raw_text(source_path)
-            if not text:
-                return None
-            # 在 "票据信息" 锚点后, 优先匹配传统票据(12位代码 + 8位号码 + 金额)
-            m = re.search(r'票据信息.*?(\d{12})\s+(\d{8})\s+([\d.]+)', text, re.DOTALL)
-            if m:
-                invoice_no = m.group(2)
-                amount = m.group(3)
-            else:
-                # 数电发票格式: * + 20位号码 + 金额
-                m = re.search(r'票据信息.*?\*\s*(\d{20})\s+([\d.]+)', text, re.DOTALL)
-                if m:
-                    invoice_no = m.group(1)
-                    amount = m.group(2)
-                else:
-                    return None
-            new_filename = f"{invoice_no}-{self._normalize_amount(amount)}行程单.pdf"
-            dest_path = os.path.join(output_dir, new_filename)
-            if not self._claim_output_name(new_filename, source_path):
-                return dest_path  # 重复，跳过
-            shutil.copy2(source_path, dest_path)
-            self._copy_cache_entry(source_path, dest_path)
-            return dest_path
-        except Exception:
-            self._log_core(f"通行费汇总单处理失败: {source_path}", level='warning')
-            return None
-
-    @register_type('电子发票', '电 子 发 票', '发票号码', '票据号码')
-    def process_general_invoice(self, source_path, output_dir):
-        """处理通用电子发票（fallback）"""
-        try:
-            text = self.extract_pdf_text(source_path)
-            if not text:
-                return None
-            pattern1 = re.search(r'(?:发票号码|发\s*票\s*号\s*码)[\s:：]*(\d{8,20})', text)
-            # fallback: 在金额关键字附近匹配 20 位连续数字，降低误匹配概率
-            pattern2 = re.search(r'(?:金额|合计|价税|小写).{0,30}(?<!\d)(\d{20})(?!\d)', text)
-            invoice_match = pattern1 if pattern1 else pattern2
-            amount_match = re.search(r'[（(]\s*小写\s*[）)]\s*[:：]?\s*[¥￥]?\s*([\d.]+)', text)
-            if not (invoice_match and amount_match):
-                return None
-            return self._generate_output_file(
-                source_path, output_dir,
-                invoice_match.group(1), amount_match.group(1), "F"
-            )
-        except Exception:
-            self._log_core(f"通用发票处理失败: {source_path}", level='warning')
-            return None
-
-    def _process_invoice(self, source_path, output_dir, invoice_pattern, amount_pattern, prefix, amount_processor=None):
-        """发票处理通用方法"""
-        try:
-            text = self.extract_pdf_text(source_path)
-            if not text:
-                return None
-            invoice_match = re.search(invoice_pattern, text)
-            amount_match = re.search(amount_pattern, text)
-            if not (invoice_match and amount_match):
-                return None
-            invoice_no = invoice_match.group(1)
-            amount = amount_match.group(1)
-            if amount_processor:
-                amount = amount_processor(amount)
-            return self._generate_output_file(source_path, output_dir, invoice_no, amount, prefix)
-        except Exception:
-            self._log_core(f"发票处理失败: {source_path}", level='warning')
-            return None
-
-    @staticmethod
-    def _normalize_amount(amount: str) -> str:
-        r"""金额标准化为两位小数字符串
-
-        保证 create_amount_mapping 正则 ^(\d+\.\d{2}) 能匹配，
-        同时避免同一发票因 771.8 / 771.80 产生两个文件。
-        非数值金额（理论上不会出现）原样返回。
-        """
-        try:
-            return "{:.2f}".format(float(amount))
-        except (ValueError, TypeError):
-            return amount
-
+    # ── 输出写入（委托写入器） ────────────────────────
     def _claim_output_name(self, filename: str, source_path: str) -> bool:
-        """线程安全地占位一个输出文件名
-
-        返回 True 表示首次占位成功（应继续复制），
-        返回 False 表示已存在同名输出（应跳过，但源文件保留不动）。
-        """
-        with self._dedup_lock:
-            if filename in self._generated_names:
-                self._log_core(
-                    f"重复文件已跳过（源文件保留）: {os.path.basename(source_path)} → 输出 {filename}",
-                    level='warning',
-                )
-                return False
-            self._generated_names.add(filename)
-            return True
+        return self._writer._claim_output_name(filename, source_path)
 
     def _check_content_duplicate(self, text: str, source_path: str) -> bool:
-        """检查 PDF 文本内容是否重复（基于 MD5 哈希）
-
-        返回 True 表示内容重复（应跳过），False 表示首次出现。
-        源文件保留不动，仅记录日志。
-        """
-        content_hash = hashlib.md5(text.encode('utf-8')).hexdigest()
-        with self._dedup_lock:
-            if content_hash in self._content_hashes:
-                self._log_core(
-                    f"内容重复已跳过（源文件保留）: {os.path.basename(source_path)}"
-                    f"（与 {self._content_hashes[content_hash]} 内容相同）",
-                    level='warning',
-                )
-                return True
-            self._content_hashes[content_hash] = os.path.basename(source_path)
-            return False
+        return self._writer._check_content_duplicate(text, source_path)
 
     def _generate_output_file(self, source_path: str, output_dir: str,
                               invoice_no: str, amount: str, prefix: str) -> str | None:
-        """生成输出文件（invoice_no/amount 为已提取的字符串）
-
-        - 金额标准化为两位小数
-        - 同名输出文件去重（基于标准化文件名，线程安全）
-        """
-        try:
-            suffix = _PREFIX_SUFFIX.get(prefix, ".pdf")
-            normalized_amount = self._normalize_amount(amount)
-            new_filename = f"{invoice_no}-{normalized_amount}{suffix}"
-            dest_path = os.path.join(output_dir, new_filename)
-
-            # 线程安全去重：同名文件只生成一次
-            if not self._claim_output_name(new_filename, source_path):
-                return dest_path  # 返回目标路径，但不再复制
-
-            shutil.copy2(source_path, dest_path)
-            self._copy_cache_entry(source_path, dest_path)
-            return dest_path
-        except Exception:
-            self._log_core(f"输出文件生成失败: {source_path}", level='warning')
-            return None
+        return self._writer._generate_output_file(source_path, output_dir, invoice_no, amount, prefix)
 
     def _collect_tax_issue(self, file_path: str, filename: str, tax_issue_dir: str,
-                           *, copy_only: bool = False, folder_created: bool = False) -> tuple[str, bool]:
-        """将税号异常文件移动或复制到异常目录，重名追加序号
+                           *, copy_only: bool = False) -> str:
+        return self._writer._collect_tax_issue(file_path, filename, tax_issue_dir, copy_only=copy_only)
 
-        返回 (dest_path, folder_created)。
-        copy_only=True 时使用 copy2 保留原文件，否则用 move。
+    def _process_invoice(self, source_path: str, output_dir: str,
+                         invoice_pattern: str, amount_pattern: str,
+                         prefix: str, amount_processor: Callable[[str], str] | None = None) -> str | None:
+        return self._writer._process_invoice(
+            self, source_path, output_dir, invoice_pattern, amount_pattern, prefix, amount_processor
+        )
+
+    # ── 发票类型分发（委托 invoice_types） ────────────
+    def determine_processor_type(self, text: str) -> Callable | None:
+        """根据文本内容确定发票类型
+
+        返回首个命中的处理方法（proc 上的方法对象，保持对象身份以便 == 比较）。
         """
-        os.makedirs(tax_issue_dir, exist_ok=True)
-        dest_path = os.path.join(tax_issue_dir, filename)
-        counter = 1
-        while os.path.exists(dest_path):
-            name, ext = os.path.splitext(filename)
-            dest_path = os.path.join(tax_issue_dir, f'{name}_{counter}{ext}')
-            counter += 1
-        if copy_only:
-            shutil.copy2(file_path, dest_path)
-        else:
-            shutil.move(file_path, dest_path)
-        return dest_path, True  # folder_created 始终为 True（os.makedirs 保证）
+        return determine_processor_type(self, text)
+
+    # ── 各类型发票处理（薄委托方法，保持方法对象身份） ──
+    # 逻辑实现见 invoice_types 模块；此处仅转发，确保
+    # determine_processor_type 返回的 handler == proc.process_X。
+    def process_zhejiang_invoice(self, source_path: str, output_dir: str) -> str | None:
+        return process_zhejiang_invoice(self, source_path, output_dir)
+
+    def process_jiangsu_toll(self, source_path: str, output_dir: str) -> str | None:
+        return process_jiangsu_toll(self, source_path, output_dir)
+
+    def process_jiangsu_invoice(self, source_path: str, output_dir: str) -> str | None:
+        return process_jiangsu_invoice(self, source_path, output_dir)
+
+    def process_highspeed_rail(self, source_path: str, output_dir: str) -> str | None:
+        return process_highspeed_rail(self, source_path, output_dir)
+
+    def process_didi_trip(self, source_path: str, output_dir: str) -> str | None:
+        return process_didi_trip(self, source_path, output_dir)
+
+    def process_toll_summary(self, source_path: str, output_dir: str) -> str | None:
+        return process_toll_summary(self, source_path, output_dir)
+
+    def process_general_invoice(self, source_path: str, output_dir: str) -> str | None:
+        return process_general_invoice(self, source_path, output_dir)
+
+    # ── 后处理：金额映射 / 占位替换 / 税号检查 / 合并 / 汇总 ──
+    def post_process(self, output_dir: str,
+                     progress_callback: Callable[[float], None] | None = None) -> dict:
+        """后处理：金额映射 + 待搜索替换 + 税号检查 + 发票分类 + PDF 合并 + 费用汇总
+
+        进度契约（供 UI 进度条使用，post_process 保证满足）：
+            - 首条进度必为 0.0，末条进度必为 1.0；
+            - 进度值单调不减，且始终落在 [0.0, 1.0]。
+        各阶段的比例分配见 _phase_* 方法。
+
+        返回: {'amount_map': dict, 'tax_issues': list[str],
+               'merged': str|None, 'excel': str|None}
+        """
+        def _report(ratio: float) -> None:
+            if progress_callback is not None:
+                try:
+                    progress_callback(ratio)
+                except Exception:
+                    pass  # 回调失败不影响主流程
+
+        _report(0.00)
+        # ① 金额映射（仅文件名解析，快）
+        amount_map = self._phase_amount_mapping(output_dir)
+        _report(0.05)
+        # ② 待搜索替换（仅重命名/移动，快）
+        self._phase_replace_placeholders(output_dir, amount_map)
+        _report(0.10)
+        # ③④ 单次遍历：税号检查 + 发票分类
+        tax_issues, special_invoices, normal_files = self._phase_scan_and_classify(
+            output_dir, _report
+        )
+        # ⑤ 扫描 需人工处理/ 子目录中的税号异常
+        tax_issues += self._phase_scan_manual_dir(output_dir, _report)
+        # ⑥ 合并分类后的 PDF（内部进度 0.75~1.00）
+        merged = self._phase_merge(output_dir, special_invoices, normal_files, _report)
+        _report(1.00)
+        # ⑦ 生成费用汇总 Excel（无进度回调，快速操作）
+        excel = self.generate_expense_summary(output_dir)
+        return {'amount_map': amount_map, 'tax_issues': tax_issues,
+                'merged': merged, 'excel': excel}
+
+    # ── 后处理各阶段（Composed Method：每阶段单一职责，便于阅读与单测） ──
+    def _phase_amount_mapping(self, output_dir: str) -> dict[str, str]:
+        """阶段①：仅解析文件名，构建 金额→发票号 映射表"""
+        return self.create_amount_mapping(output_dir)
+
+    def _phase_replace_placeholders(self, output_dir: str, amount_map: dict[str, str]) -> None:
+        """阶段②：将「待搜索-金额.pdf」按映射表补全发票号，失败则移入 需人工处理/"""
+        self.replace_placeholder_files(output_dir, amount_map)
+
+    def _phase_scan_and_classify(self, output_dir: str,
+                                 report: Callable[[float], None]
+                                 ) -> tuple[list[str], list[str], list[str]]:
+        """阶段③④：单次遍历输出目录，完成税号检查与发票分类
+
+        返回 (tax_issues, special_invoices, normal_files)。
+        进度从 0.10 线性增长至 0.70（按文件数）。
+        """
+        tax_issues: list[str] = []
+        special_invoices: list[str] = []
+        normal_files: list[str] = []
+        tax_issue_dir = os.path.join(output_dir, '税号异常')
+
+        # 先列出所有 PDF 用于按文件数报告进度
+        all_pdfs = [f for f in os.listdir(output_dir)
+                    if f.lower().endswith('.pdf') and os.path.isfile(os.path.join(output_dir, f))]
+        total_pdfs = len(all_pdfs)
+        # 税号检查+分类阶段占 0.10 → 0.70
+        for idx, filename in enumerate(all_pdfs):
+            file_path = os.path.join(output_dir, filename)
+            text = self.extract_pdf_text(file_path)
+            # 税号检查（命中缓存，无额外解析开销）
+            if text:
+                tax_id = self._extract_buyer_tax_id(text)
+                if tax_id and tax_id != _cfg.TARGET_TAX_ID:
+                    self._collect_tax_issue(file_path, filename, tax_issue_dir)
+                    tax_issues.append(
+                        f'税号异常: {filename} -> {tax_id}，已移动到税号异常文件夹'
+                    )
+                    continue  # 异常文件不参与合并
+            # 合并分类（统一走 _classify_invoice，避免规则漂移）
+            if self._classify_invoice(filename, text) == 'special':
+                special_invoices.append(filename)
+            else:
+                normal_files.append(filename)
+            # 按文件数线性报告（0.10 → 0.70）
+            if total_pdfs > 0:
+                report(0.10 + 0.60 * (idx + 1) / total_pdfs)
+        report(0.70)
+        return tax_issues, special_invoices, normal_files
+
+    def _phase_scan_manual_dir(self, output_dir: str,
+                               report: Callable[[float], None]) -> list[str]:
+        """阶段⑤：扫描 需人工处理/ 子目录，复制其中的税号异常文件
+
+        返回新增的 tax_issues 条目。阶段结束回调 0.75。
+        """
+        tax_issues: list[str] = []
+        manual_dir = os.path.join(output_dir, '需人工处理')
+        if os.path.isdir(manual_dir):
+            for filename in os.listdir(manual_dir):
+                if not filename.lower().endswith('.pdf'):
+                    continue
+                file_path = os.path.join(manual_dir, filename)
+                if not os.path.isfile(file_path):
+                    continue
+                text = self.extract_pdf_text(file_path)
+                if not text:
+                    continue
+                tax_id_match = re.search(r'(?:纳税人识别号|统一社会信用代码)[:：]\s*([A-Z0-9]{15,20})', text)
+                if tax_id_match:
+                    tax_id = tax_id_match.group(1)
+                    if tax_id != _cfg.TARGET_TAX_ID:
+                        self._collect_tax_issue(
+                            file_path, filename,
+                            os.path.join(output_dir, '税号异常'),
+                            copy_only=True,
+                        )
+                        tax_issues.append(
+                            f'税号异常: {filename} -> {tax_id}，已复制到税号异常文件夹（原文件保留在需人工处理）'
+                        )
+        report(0.75)
+        return tax_issues
+
+    def _phase_merge(self, output_dir: str, special_invoices: list[str],
+                     normal_files: list[str],
+                     report: Callable[[float], None]) -> str | None:
+        """阶段⑥：合并分类后的 PDF
+
+        内部进度 0.0~1.0 映射到后处理进度 0.75~1.00。
+        """
+        def _on_merge_progress(ratio: float) -> None:
+            # 合并内部进度 0.0~1.0 → 后处理进度 0.75~1.00
+            report(0.75 + 0.25 * ratio)
+        return self._merge_classified_pdfs(
+            output_dir, special_invoices, normal_files,
+            progress_callback=_on_merge_progress,
+        )
+
+    def generate_expense_summary(self, output_dir: str) -> str | None:
+        """生成费用汇总 Excel（委托 excel_summary 模块）
+
+        遍历输出目录中的 PDF，提取日期、类别、金额，按日期归集生成 Excel。
+        """
+        return _generate_excel(output_dir, self)
 
     def create_amount_mapping(self, folder_path: str) -> dict[str, str]:
         """创建金额映射表"""
@@ -434,120 +308,7 @@ class InvoiceProcessor:
                     amount_map[amount] = invoice_part
         return amount_map
 
-    def post_process(self, output_dir: str, progress_callback: Callable[[float], None] | None = None) -> dict:
-        """后处理：金额映射 + 待搜索替换 + 税号检查 + PDF 合并（单次文本遍历）
-
-        Args:
-            output_dir: 输出目录
-            progress_callback: 后处理进度回调，参数为 0.0~1.0 的进度比例
-                - 0.00: 开始
-                - 0.05: 金额映射完成
-                - 0.10: 待搜索替换完成
-                - 0.10~0.70: 税号检查+分类（按文件数线性）
-                - 0.75: 人工处理扫描完成
-                - 0.75~0.95: PDF 合并（按文件数线性）
-                - 1.00: 全部完成
-
-        返回: {'amount_map': dict, 'tax_issues': list[str], 'merged': str|None}
-        """
-        def _report(ratio: float) -> None:
-            if progress_callback is not None:
-                try:
-                    progress_callback(ratio)
-                except Exception:
-                    pass  # 回调失败不影响主流程
-
-        _report(0.00)
-        # ① 金额映射（仅文件名解析，快）
-        amount_map = self.create_amount_mapping(output_dir)
-        _report(0.05)
-        # ② 待搜索替换（仅重命名/移动，快）
-        self.replace_placeholder_files(output_dir, amount_map)
-        _report(0.10)
-        # ③④ 单次遍历：税号检查 + 合并分类
-        tax_issues: list[str] = []
-        special_invoices: list[str] = []
-        normal_files: list[str] = []
-        tax_issue_dir = os.path.join(output_dir, '税号异常')
-        folder_created = False
-
-        # 先列出所有 PDF 用于按文件数报告进度
-        all_pdfs = [f for f in os.listdir(output_dir)
-                    if f.lower().endswith('.pdf') and os.path.isfile(os.path.join(output_dir, f))]
-        total_pdfs = len(all_pdfs)
-        # 税号检查+分类阶段占 0.10 → 0.70
-        for idx, filename in enumerate(all_pdfs):
-            file_path = os.path.join(output_dir, filename)
-            text = self.extract_pdf_text(file_path)
-            # 税号检查（命中缓存，无额外解析开销）
-            if text:
-                tax_id = self._extract_buyer_tax_id(text)
-                if tax_id and tax_id != _cfg.TARGET_TAX_ID:
-                    _, folder_created = self._collect_tax_issue(
-                        file_path, filename, tax_issue_dir, folder_created=folder_created,
-                    )
-                    tax_issues.append(
-                        f'税号异常: {filename} -> {tax_id}，已移动到税号异常文件夹'
-                    )
-                    continue  # 异常文件不参与合并
-            # 合并分类
-            if ('专用发票' in filename or '高铁票' in filename) or \
-               (text and ('专用' in text or '增值税专用发票' in text)):
-                special_invoices.append(filename)
-            else:
-                normal_files.append(filename)
-            # 按文件数线性报告（0.10 → 0.70）
-            if total_pdfs > 0:
-                _report(0.10 + 0.60 * (idx + 1) / total_pdfs)
-        _report(0.70)
-
-        # 扫描 需人工处理/ 子目录（异常文件复制，保留原文件）
-        manual_dir = os.path.join(output_dir, '需人工处理')
-        if os.path.isdir(manual_dir):
-            for filename in os.listdir(manual_dir):
-                if not filename.lower().endswith('.pdf'):
-                    continue
-                file_path = os.path.join(manual_dir, filename)
-                if not os.path.isfile(file_path):
-                    continue
-                text = self.extract_pdf_text(file_path)
-                if not text:
-                    continue
-                tax_id_match = re.search(r'(?:纳税人识别号|统一社会信用代码)[:：]\s*([A-Z0-9]{15,20})', text)
-                if tax_id_match:
-                    tax_id = tax_id_match.group(1)
-                    if tax_id != _cfg.TARGET_TAX_ID:
-                        _, folder_created = self._collect_tax_issue(
-                            file_path, filename, tax_issue_dir,
-                            copy_only=True, folder_created=folder_created,
-                        )
-                        tax_issues.append(
-                            f'税号异常: {filename} -> {tax_id}，已复制到税号异常文件夹（原文件保留在需人工处理）'
-                        )
-        _report(0.75)
-
-        # ⑤ 合并（0.75 → 1.00，按文件数线性）
-        def _on_merge_progress(ratio: float) -> None:
-            # 合并内部进度 0.0~1.0 → 后处理进度 0.75~1.00
-            _report(0.75 + 0.25 * ratio)
-        _report(0.75)
-        merged = self._merge_classified_pdfs(
-            output_dir, special_invoices, normal_files,
-            progress_callback=_on_merge_progress,
-        )
-        _report(1.00)
-        # ⑥ 生成费用汇总 Excel（无进度回调，快速操作）
-        result = self.generate_expense_summary(output_dir)
-        return {'amount_map': amount_map, 'tax_issues': tax_issues, 'merged': merged, 'excel': result}
-
-    def generate_expense_summary(self, output_dir: str) -> str | None:
-        """生成费用汇总 Excel（委托 excel_summary 模块）
-
-        遍历输出目录中的 PDF，提取日期、类别、金额，按日期归集生成 Excel。
-        """
-        return _generate_excel(output_dir, self)
-
-    def replace_placeholder_files(self, folder_path, amount_map):
+    def replace_placeholder_files(self, folder_path: str, amount_map: dict[str, str]) -> None:
         """替换待搜索文件（匹配失败的移动到 需人工处理/ 子目录）"""
         manual_dir = os.path.join(folder_path, '需人工处理')
         for filename in os.listdir(folder_path):
@@ -579,18 +340,7 @@ class InvoiceProcessor:
                     counter += 1
                 shutil.move(old_path, new_path)
 
-    def determine_processor_type(self, text):
-        """根据文本内容确定发票类型（注册表模式）
-
-        遍历 _TYPE_REGISTRY，按注册顺序匹配关键字，返回首个命中的处理器。
-        新增类型只需用 @register_type 装饰对应方法，无需修改本方法。
-        """
-        for keywords, method_name in _TYPE_REGISTRY:
-            if any(kw in text for kw in keywords):
-                return getattr(self, method_name)
-        return None
-
-    def create_output_directory(self, base_dir):
+    def create_output_directory(self, base_dir: str) -> str:
         """创建输出目录"""
         timestamp_dir = datetime.now().strftime('%Y%m%d_%H%M%S')
         output_dir = os.path.join(base_dir, timestamp_dir)
@@ -602,73 +352,12 @@ class InvoiceProcessor:
             os.makedirs(output_dir, exist_ok=True)
             return output_dir
 
-    def _merge_classified_pdfs(self, output_dir, special_invoices, normal_files,
-                                progress_callback: Callable[[float], None] | None = None):
-        """合并已分类的PDF文件
+    # ── PDF 合并（委托合并器） ────────────────────────
+    def _merge_classified_pdfs(self, output_dir: str, special_invoices: list[str],
+                               normal_files: list[str],
+                               progress_callback: Callable[[float], None] | None = None) -> str | None:
+        return self._merger.merge_classified(output_dir, special_invoices, normal_files, progress_callback)
 
-        业务规则：专票/高铁票需双份（抵扣联+发票联），每个文件 append 两遍；
-        普通发票单份即可。
-
-        Args:
-            progress_callback: 合并进度回调，参数为 0.0~1.0
-        """
-        def _report(ratio: float) -> None:
-            if progress_callback is not None:
-                try:
-                    progress_callback(ratio)
-                except Exception:
-                    pass
-
-        try:
-            writer = PdfWriter()
-            # 计算总工作量：专票双份 + 普通单份
-            total_work = len(special_invoices) * 2 + len(normal_files)
-            done = 0
-
-            # 专票/高铁票：每个文件 append 两遍（双份）
-            for filename in special_invoices:
-                file_path = os.path.join(output_dir, filename)
-                with open(file_path, 'rb') as f:
-                    reader = PdfReader(f)
-                    writer.append(reader)
-                    writer.append(reader)  # 第二份
-                done += 2
-                if total_work > 0:
-                    _report(done / total_work * 0.7)  # 合并占 0~70%，写入占 30%
-
-            # 普通发票：单份
-            for filename in normal_files:
-                file_path = os.path.join(output_dir, filename)
-                with open(file_path, 'rb') as f:
-                    writer.append(PdfReader(f))
-                done += 1
-                if total_work > 0:
-                    _report(done / total_work * 0.7)
-
-            _report(0.7)  # 所有文件已追加
-            merged_path = os.path.join(output_dir, '合并结果.pdf')
-            with open(merged_path, 'wb') as f:
-                writer.write(f)
-            writer.close()
-            _report(1.0)
-            return merged_path
-        except Exception:
-            self._log_core(f"PDF 合并失败: {output_dir}", level='error')
-            return None
-
-    def merge_pdfs(self, output_dir):
-        """合并PDF文件（向后兼容包装：自行分类后委托 _merge_classified_pdfs）"""
-        special_invoices = []
-        normal_files = []
-        for filename in os.listdir(output_dir):
-            if not filename.lower().endswith('.pdf'):
-                continue
-            file_path = os.path.join(output_dir, filename)
-            if not os.path.isfile(file_path):
-                continue
-            text = self.extract_pdf_text(file_path)
-            if ('专用发票' in filename or '高铁票' in filename) or (text and ('专用' in text or '增值税专用发票' in text)):
-                special_invoices.append(filename)
-            else:
-                normal_files.append(filename)
-        return self._merge_classified_pdfs(output_dir, special_invoices, normal_files)
+    def merge_pdfs(self, output_dir: str) -> str | None:
+        """合并PDF文件（向后兼容包装：自行分类后委托合并器）"""
+        return self._merger.merge_pdfs(self, output_dir)

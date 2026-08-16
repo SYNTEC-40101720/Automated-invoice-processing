@@ -1,0 +1,7 @@
+# 测试依赖（独立于生产依赖 requirements.txt）
+# 运行测试前安装：pip install -r requirements-test.txt
+# 注意：合成发票 PDF 已以 base64 固化在 tests/test_local_audit.py 内，
+#       运行时仅解码、不生成，因此 pytest 是唯一运行时依赖。
+#       reportlab 仅用于「重新生成」内嵌 PDF（非常规测试流程），可选安装。
+pytest
+# reportlab  # 仅重新生成 tests/test_local_audit.py 内嵌合成 PDF 时需要

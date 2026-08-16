@@ -22,6 +22,8 @@ from ..config_manager import (
     set_ai_config, set_business_config, set_email_config,
 )
 from .colors import Palette
+from .components import AccentBar
+from .styles import QSS
 
 
 class SettingsDialog(QDialog):
@@ -31,12 +33,42 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("设置")
         self.setModal(True)
-        self.setMinimumWidth(480)
-        self.resize(480, 640)
+        self.setMinimumSize(680, 680)
+        self.resize(760, 820)
 
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(16, 12, 16, 12)
-        lay.setSpacing(8)
+        lay.setContentsMargins(24, 18, 24, 18)
+        lay.setSpacing(14)
+
+        # ── 顶部装饰条（与主页面签名元素一致：朱砂→琥珀→青 渐变）──
+        self.accent_bar = AccentBar()
+        self.accent_bar.set_progress(1.0)
+        lay.addWidget(self.accent_bar)
+
+        header = QFrame()
+        header.setObjectName("SettingsHeader")
+        header_lay = QHBoxLayout(header)
+        header_lay.setContentsMargins(18, 16, 18, 16)
+        header_lay.setSpacing(14)
+        header_copy = QVBoxLayout()
+        header_copy.setSpacing(3)
+        eyebrow = QLabel("WORKSPACE CONFIGURATION")
+        eyebrow.setObjectName("SettingsEyebrow")
+        title = QLabel("设置中心")
+        title.setObjectName("SettingsTitle")
+        subtitle = QLabel("管理发票识别、邮箱收件箱与智能审核服务")
+        subtitle.setObjectName("SettingsSubtitle")
+        header_copy.addWidget(eyebrow)
+        header_copy.addWidget(title)
+        header_copy.addWidget(subtitle)
+        header_lay.addLayout(header_copy, stretch=1)
+        badge = QLabel("本地配置")
+        badge.setObjectName("SettingsBadge")
+        header_lay.addWidget(badge, alignment=Qt.AlignTop)
+        lay.addWidget(header)
+
+        # 与主窗口共用同一套「墨韵」样式表，保证风格统一
+        self.setStyleSheet(QSS)
 
         # ── 滚动区（容纳全部表单，小屏可滚动）──
         scroll = QScrollArea()
@@ -44,16 +76,16 @@ class SettingsDialog(QDialog):
         scroll.setFrameShape(QFrame.NoFrame)
         container = QWidget()
         c_lay = QVBoxLayout(container)
-        c_lay.setContentsMargins(8, 4, 8, 4)
-        c_lay.setSpacing(10)
+        c_lay.setContentsMargins(4, 2, 4, 4)
+        c_lay.setSpacing(12)
 
         # ══════════ 业务配置 ══════════
-        c_lay.addWidget(self._section_title("业务配置"))
+        c_lay.addWidget(self._section_title("01  /  业务配置"))
         c_lay.addWidget(self._section_hint("修改后点击「保存」即生效，下次处理使用新配置。"))
 
         form = QFormLayout()
         form.setSpacing(10)
-        form.setLabelAlignment(Qt.AlignRight)
+        form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
         self.tax_input = QLineEdit(_cfg.TARGET_TAX_ID)
         self.tax_input.setFont(QFont(FONT_MONO, SIZE_BODY))
@@ -71,16 +103,17 @@ class SettingsDialog(QDialog):
 
         # ══════════ 邮箱自动拉取 ══════════
         c_lay.addWidget(self._section_divider())
-        c_lay.addWidget(self._section_title("邮箱自动拉取发票"))
+        c_lay.addWidget(self._section_title("02  /  邮箱自动拉取"))
 
         email = get_email_config()
-        self.email_enabled = QCheckBox("启用邮箱自动拉取（保存后收件箱目录被监听，新附件自动处理）")
+        self.email_enabled = QCheckBox("启用邮箱自动拉取")
+        self.email_enabled.setObjectName("FeatureToggle")
         self.email_enabled.setChecked(email['enabled'].lower() in ('1', 'true', 'yes', 'on'))
         c_lay.addWidget(self.email_enabled)
 
         form2 = QFormLayout()
         form2.setSpacing(10)
-        form2.setLabelAlignment(Qt.AlignRight)
+        form2.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
         self.imap_host_input = QLineEdit(email['imap_host'] or 'imap.qq.com')
         self.imap_host_input.setFont(QFont(FONT_MONO, SIZE_BODY))
@@ -139,16 +172,17 @@ class SettingsDialog(QDialog):
 
         # ══════════ AI 审核 ══════════
         c_lay.addWidget(self._section_divider())
-        c_lay.addWidget(self._section_title("AI 审核（DeepSeek）"))
+        c_lay.addWidget(self._section_title("03  /  AI 审核"))
 
         ai = get_ai_config()
-        self.ai_enabled = QCheckBox("启用 AI 审核（处理完成后自动审核发票与行程，发现提取错误/行程冲突/重复费用）")
+        self.ai_enabled = QCheckBox("启用 AI 审核")
+        self.ai_enabled.setObjectName("FeatureToggle")
         self.ai_enabled.setChecked(ai['enabled'].lower() in ('1', 'true', 'yes', 'on'))
         c_lay.addWidget(self.ai_enabled)
 
         form3 = QFormLayout()
         form3.setSpacing(10)
-        form3.setLabelAlignment(Qt.AlignRight)
+        form3.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
         self.ai_key_input = QLineEdit(get_ai_api_key())
         self.ai_key_input.setFont(QFont(FONT_MONO, SIZE_BODY))
@@ -162,7 +196,7 @@ class SettingsDialog(QDialog):
 
         self.ai_model_input = QLineEdit(get_ai_model())
         self.ai_model_input.setFont(QFont(FONT_MONO, SIZE_BODY))
-        self.ai_model_input.setPlaceholderText("DeepSeek-V4-Flash")
+        self.ai_model_input.setPlaceholderText("deepseek-v4-flash")
         form3.addRow("模型", self.ai_model_input)
 
         c_lay.addLayout(form3)
@@ -185,13 +219,48 @@ class SettingsDialog(QDialog):
         btn_box.rejected.connect(self.reject)
         lay.addWidget(btn_box)
 
+        # ── 统一控件外观（复用主页面 objectName 规则）──
+        # 所有文本输入框套用 #PathEntry（暖纸底 + 暖色边框 + 朱砂聚焦）
+        for _le in (
+            self.tax_input, self.imap_host_input, self.email_user_input,
+            self.email_auth_input, self.inbox_dir_input,
+            self.ai_key_input, self.ai_base_input, self.ai_model_input,
+        ):
+            _le.setObjectName("PathEntry")
+
+        # 「测试连接」= 次要描边按钮
+        self.test_btn.setObjectName("OutlineBtn")
+
+        # 底部按钮盒：保存=朱砂实心，取消=次要描边
+        save_btn = btn_box.button(QDialogButtonBox.Save)
+        cancel_btn = btn_box.button(QDialogButtonBox.Cancel)
+        if save_btn is not None:
+            save_btn.setObjectName("PrimaryBtn")
+            save_btn.style().unpolish(save_btn)
+            save_btn.style().polish(save_btn)
+        if cancel_btn is not None:
+            cancel_btn.setObjectName("OutlineBtn")
+            cancel_btn.style().unpolish(cancel_btn)
+            cancel_btn.style().polish(cancel_btn)
+
     # ── 通用构造 ──────────────────────────────────────
     @staticmethod
     def _section_title(text: str) -> QLabel:
+        frame = QFrame()
+        frame.setObjectName("SettingsSectionHeader")
+        row = QHBoxLayout(frame)
+        row.setContentsMargins(0, 8, 0, 2)
+        row.setSpacing(10)
+        marker = QFrame()
+        marker.setObjectName("SettingsSectionMarker")
+        marker.setFixedSize(4, 24)
+        row.addWidget(marker)
         label = QLabel(text)
+        label.setObjectName("SettingsSectionTitle")
         label.setFont(QFont(FONT_UI, SIZE_H2, QFont.Bold))
-        label.setStyleSheet(f"color: {Palette.TEXT};")
-        return label
+        row.addWidget(label)
+        row.addStretch()
+        return frame
 
     @staticmethod
     def _section_hint(text: str) -> QLabel:
@@ -285,7 +354,7 @@ class SettingsDialog(QDialog):
                 enabled='true' if ai_enabled else 'false',
                 api_key=ai_key,
                 api_base=self.ai_base_input.text().strip() or 'https://api.deepseek.com',
-                model=self.ai_model_input.text().strip() or 'DeepSeek-V4-Flash',
+                model=self.ai_model_input.text().strip() or 'deepseek-v4-flash',
             )
         except OSError as e:
             QMessageBox.critical(self, "保存失败", f"无法写入配置文件: {e}")
