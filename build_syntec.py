@@ -22,8 +22,11 @@ ROOT = Path(__file__).resolve().parent
 APP_NAME = "SYNTEC-电子票据处理系统"
 VERSION_FILE = ROOT / "version_info.txt"
 MAIN_SCRIPT = ROOT / "main.py"
+WEB_DIR = ROOT / "web"
+WEB_DIST_DIR = WEB_DIR / "dist"
 DIST_DIR = ROOT / "dist"
 BUILD_DIR = ROOT / "build"
+NPM_COMMAND = "npm.cmd" if os.name == "nt" else "npm"
 
 # 🔴 域控强制要求：路径必须纯英文
 if any(ord(c) > 127 for c in str(ROOT)):
@@ -62,7 +65,7 @@ def verify() -> None:
     if not exe.name.startswith("SYNTEC"):
         errors.append(f"❌ exe 文件名不以 SYNTEC 开头: {exe.name}")
     else:
-        print(f"✅ 文件名以 SYNTEC 开头")
+        print("✅ 文件名以 SYNTEC 开头")
 
     # 3. _internal 完整性
     required_files = ["python3.dll", "_ctypes.pyd"]
@@ -105,6 +108,13 @@ def verify() -> None:
 
 
 def main():
+    if not WEB_DIR.exists():
+        sys.exit("❌ 缺少 web/ 前端目录")
+
+    run([NPM_COMMAND, "--prefix", str(WEB_DIR), "run", "build"], "构建 Web 前端")
+    if not (WEB_DIST_DIR / "index.html").exists():
+        sys.exit("❌ Web 前端构建未生成 web/dist/index.html")
+
     # 默认清理旧构建产物，保证每次打包干净一致
     for d in (BUILD_DIR, DIST_DIR):
         if d.exists():
@@ -125,7 +135,8 @@ def main():
         "--noupx",               # 🔴 域控禁止 UPX 压缩
         "--clean",
         "--add-data", f"logo.ico{os.pathsep}.",   # 运行时窗口图标（复制到 bundle 根目录）
-        "--collect-all", "PySide6",                # 收集所有 Qt 插件（含图片格式、样式等）
+        "--add-data", f"{WEB_DIST_DIR}{os.pathsep}web/dist",
+        "--collect-all", "webview",
         str(MAIN_SCRIPT),
     ]
 

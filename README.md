@@ -1,6 +1,6 @@
-# SYNTEC 电子票据处理系统 v6.2
+# SYNTEC 电子票据处理系统 v7.0
 
-基于 Python 3 和 PySide6（Qt6）开发的 Windows 桌面应用程序，用于批量识别、重命名、校验与合并 PDF 电子发票。
+基于 Python 3 + FastAPI 的业务底层、React/Vite Web 工作台和 pywebview/WebView2 桌面壳，用于批量识别、重命名、校验与合并 PDF 电子发票。
 
 ## 功能特点
 
@@ -9,35 +9,44 @@
 - 🔍 异常税号检测，自动归集到「税号异常」子目录
 - 📑 将所有处理后的 PDF 合并为单个 PDF 文件
 - 🧵 多线程并发处理，带进度条与彩色日志面板
-- 🖱️ 支持拖拽导入文件夹和 PDF 文件
-- ⚙️ 可视化设置对话框（税号、线程数可配置）
+- 🖥️ Web 工作台支持处理概览、收件箱、审核和设置视图
+- 📡 FastAPI + WebSocket 实时推送任务进度、日志和状态
+- 📁 桌面壳提供目录选择、PDF 文件选择、日志导出和打开输出目录
+- ⚙️ 配置 API 对敏感授权码和 API Key 只返回配置状态
 
 ## 环境要求
 
 - Python 3.10+
 - Windows 操作系统
+- Node.js 18+ 与 npm（仅前端构建需要）
 - 依赖包详见 [requirements.txt](requirements.txt)
 
 ## 安装步骤
 
 1. 克隆或下载项目到本地
-2. 安装依赖包：
+2. 安装 Python 依赖包：
    ```
    pip install -r requirements.txt
    ```
-3. 运行主程序：
+3. 安装并构建 Web 工作台：
+   ```
+   npm --prefix web install
+   npm --prefix web run build
+   ```
+4. 运行桌面主程序：
    ```
    python main.py
    ```
-4. 打包成可执行文件（可选，需自行安装 PyInstaller）：
+5. 按 SYNTEC 域控规范打包（需安装 PyInstaller）：
    ```
-   pyinstaller --noconfirm --windowed --name "SYNTEC-发票处理系统" --version-file version_info.txt main.py
+   python build_syntec.py
    ```
 
 ## 项目结构
 
 ```
-├── main.py                       # 程序入口，DPI 感知设置
+├── main.py                       # Web 桌面入口（FastAPI + pywebview）
+├── build_syntec.py               # 前端构建、PyInstaller 打包和合规校验
 ├── requirements.txt              # 依赖包列表
 ├── version_info.txt              # PyInstaller Windows 版本信息资源
 ├── pyproject.toml                # 项目元数据与工具配置
@@ -46,48 +55,49 @@
 ├── PROJECT_DEV.md                # 开发文档（业务规则、架构、踩坑记录）
 ├── src/                          # 源代码包
 │   ├── __init__.py
-│   ├── config.py                 # 集中配置常量（窗口尺寸、字体等）
+│   ├── config.py                 # 业务配置常量（税号、线程数）
 │   ├── config_manager.py         # INI 配置读写（税号、线程数外部化）
 │   ├── logger_config.py          # 日志配置（固定路径 + 轮转）
-│   ├── core/                     # 业务逻辑层
+│   ├── domain/                   # 领域模型、状态机和错误码
+│   ├── application/              # 任务编排、事件总线、文件服务和审核服务
+│   ├── api/                      # FastAPI 路由、鉴权、静态资源和 WebSocket
+│   ├── desktop/                  # pywebview 启动器和原生能力桥
+│   └── core/                     # 可复用发票处理核心
 │   │   ├── __init__.py
 │   │   └── processor.py          # InvoiceProcessor 发票处理核心类
-│   └── ui/                       # 表现层与 UI 组件
-│       ├── __init__.py
-│       ├── app.py                # InvoiceApp 主窗口 + Worker 线程
-│       ├── colors.py             # 墨韵调色板
-│       ├── components.py         # 自定义组件（StatCard/LogView 等）
-│       └── settings_dialog.py    # 业务配置对话框
-└── tests/                        # 测试
-    ├── test_processor.py         # 单元测试（33 个）
-    └── test_integration.py       # 集成测试（20 个）
+├── web/                          # React/Vite 工作台
+│   ├── src/                      # 视图、API 客户端、状态和样式
+│   └── package.json              # 前端脚本与依赖
+└── tests/                        # 核心、应用层和 API 契约测试
 ```
 
 ## 模块职责
 
 | 模块 | 职责 |
 |---|---|
-| `main.py` | 程序入口，设置 DPI 感知、启动 QApplication |
-| `src/config.py` | 集中存放可配置常量（窗口尺寸、字体族、颜色） |
+| `main.py` | 桌面入口，启动本地 FastAPI 服务和 WebView2 |
+| `src/desktop/` | 随机本地端口、token、桌面桥接和退出清理 |
+| `src/api/` | HTTP/WebSocket 契约、本地 token 和 React 静态资源 |
+| `src/application/` | 任务状态、取消、日志、审核和归档编排 |
+| `src/domain/` | Job 状态机、事件和领域错误 |
+| `src/config.py` | 集中存放业务配置常量（税号、线程数） |
 | `src/config_manager.py` | INI 配置文件读写，运行时动态访问税号等 |
 | `src/logger_config.py` | 日志持久化（RotatingFileHandler，1MB 轮转，5 备份） |
 | `src/core/processor.py` | 发票处理核心算法：PDF 提取、类型路由、正则解析、重命名、税号校验、PDF 合并 |
-| `src/ui/app.py` | 主窗口布局、事件分发、并发调度、拖拽支持 |
-| `src/ui/colors.py` | 墨韵调色板色彩常量 |
-| `src/ui/components.py` | 可复用 UI 组件（StatCard、AccentBar、LogView 等） |
-| `src/ui/settings_dialog.py` | 业务配置对话框（税号、线程数设置） |
+| `web/src/` | React 工作台视图、服务端状态和实时事件 |
 
 ## 配置说明
 
-业务配置（税号、线程数）通过程序内「设置」对话框修改，保存至 `config.ini`，下次处理生效。
+业务配置（税号、线程数、邮箱和 AI 审核）通过 Web 工作台「设置」视图修改，保存至 `config.ini`，下次处理生效。授权码和 API Key 由本地安全存储负责保存，API 响应只返回是否已配置。
 
-UI 常量（窗口尺寸、字体等）见 [src/config.py](src/config.py)。
+业务配置默认值和动态读取逻辑见 [src/config.py](src/config.py) 与 [src/config_manager.py](src/config_manager.py)。
 
 ## 开发规范
 
-- 模块化设计，逻辑与界面分离
-- 业务层（`src/core/`）不依赖任何 Qt 模块
-- 跨线程通信使用 Qt 信号槽（`QueuedConnection`）
+- 模块化设计，领域层、应用层、API 和界面分离
+- `src/core/` 只承载发票处理业务，不依赖 Web 或 Qt
+- 后台任务通过应用层事件总线向 API 和 WebSocket 推送状态
+- 桌面能力只能通过 `src/desktop/native_bridge.py` 暴露
 - 代码遵循 PEP8 规范
 - 所有注释使用中文
 
@@ -109,7 +119,7 @@ pytest tests/test_integration.py -v
 | 版本 | 日期 | 说明 |
 |------|------|------|
 | v6.2 | 2026-07 | 停止按钮、日志持久化、PDF 异常分类、配置外部化、拖拽导入、内容去重、类型路由注册表、集成测试 |
-| v6.1 | 2026-07 | 域控规范支持、PySide6 迁移、墨韵主题 |
+| v6.1 | 2026-07 | 域控规范支持、桌面界面迁移、墨韵主题 |
 | v6.0 | 2026-07 | 初始版本 |
 
 详细变更见 [PROJECT_DEV.md](PROJECT_DEV.md)。

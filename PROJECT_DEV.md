@@ -10,17 +10,20 @@
 - **名称**：SYNTEC 发票处理系统
 - **用途**：批量识别、重命名、校验与合并 PDF 电子发票
 - **平台**：Windows 桌面应用
-- **入口**：`main.py` → `QApplication` → `InvoiceApp`
+- **入口**：`main.py` → 本地 FastAPI/Uvicorn → pywebview/WebView2
 
 ## 2. 技术栈
 
 | 层 | 技术 | 说明 |
 |---|---|---|
-| UI | PySide6（Qt6） | 2026-07 从 Tkinter+sv_ttk 迁移而来 |
+| 桌面 UI | pywebview + Edge WebView2 | 本地 FastAPI 服务承载 React 工作台 |
+| Web UI | React 19 + TypeScript + Vite | 处理概览、收件箱、审核、设置 |
+| API | FastAPI + Uvicorn | HTTP、WebSocket、本地静态资源 |
+| 任务状态 | EventBus + ThreadPoolExecutor | 关键事件不丢失，进度事件可合并 |
 | PDF 文本提取 | pdfplumber ≥0.11.x | 保留空白版本用 `_extract_raw_text` |
 | PDF 合并 | pypdf（**非 PyPDF2**） | PyPDF2 已停止维护，禁止使用 |
 | 并发 | ThreadPoolExecutor | 固定 8 线程（见 config.MAX_WORKERS） |
-| 打包 | PyInstaller | `--windowed` + `version_info.txt` |
+| 打包 | PyInstaller | `build_syntec.py`，`--onedir --windowed --noupx` |
 
 ## 3. 核心业务规则（**最重要，修改前必读**）
 
@@ -99,22 +102,20 @@
 
 ```
 src/
-├── config.py          # 集中配置（业务配置从 config.ini 读取，UI 配置为常量）
-├── config_manager.py  # INI 配置读写（税号、线程数外部化）
-├── logger_config.py   # 日志配置（固定位置 + 轮转）
-├── core/
-│   └── processor.py   # 业务逻辑（不依赖 Qt）
-└── ui/
-    ├── app.py         # 主窗口 + Worker 线程 + 信号槽
-    ├── colors.py      # 墨韵调色板
-    ├── components.py  # 自定义组件（StatCard/AccentBar/LogView 等）
-    └── settings_dialog.py  # 业务配置对话框（税号 + 线程数）
+├── domain/             # Job、状态机、领域事件和错误码
+├── application/       # JobService、EventBus、文件服务和审核服务
+├── api/                # FastAPI 路由、token、静态资源和 WebSocket
+├── desktop/            # pywebview 启动器和 NativeBridge
+└── core/               # 发票处理业务，不依赖 Web
+web/
+└── src/                # React 工作台和前端状态管理
 ```
 
 **约束**：
-- 业务层（`src/core/`）禁止 import 任何 Qt 模块
-- 跨线程通信必须用 Qt 信号槽（`QueuedConnection`），禁止直接操作 UI
-- 日志通过 `log_callback` 回调到 UI，不直接调用 `print`
+- 业务层（`src/core/`）禁止 import 任何 Qt、FastAPI 或 React 模块
+- 后台任务通过 `src/application/event_bus.py` 发布事件，API 不直接操作 worker
+- WebSocket 连接必须校验本地 token，HTTP API 使用 `X-Local-Token`
+- 桌面服务只监听 `127.0.0.1`，退出时必须调用 `JobService.shutdown()`
 - 业务配置（税号、线程数）通过 `config_manager` 读写 INI，运行时用 `_cfg.TARGET_TAX_ID` 动态访问
 
 ## 6. 历史踩坑点 ⚠️
@@ -130,19 +131,19 @@ src/
 | 7 | 停止按钮无效 | 只设标志位，已提交任务继续执行 | 取消未开始 future + 单文件开头检查 `is_processing` | 停止后无新文件处理 |
 | 8 | PDF 异常不分类 | 裸 `except Exception` 统一归为"解析失败" | `_extract_raw_text` 返回 `(text, error_type)` | 日志显示加密/损坏/扫描件 |
 | 9 | 内容相同不同名文件被重复处理 | 仅按文件名去重 | 新增 `_check_content_duplicate` 基于 MD5 哈希 | 内容重复有日志 |
-| 10 | 配置硬编码 | 税号写死在 config.py | `config_manager.py` 读写 INI + UI 设置入口 | 修改税号后下次处理生效 |
+| 10 | 配置硬编码 | 税号写死在 config.py | `config_manager.py` 读写 INI + Web 设置视图 | 修改税号后下次处理生效 |
 | 11 | 类型路由 if-elif 难扩展 | 新增类型要改核心方法 | `@register_type` 装饰器 + `_TYPE_REGISTRY` 注册表 | 新增类型只加装饰器 |
 
-## 7. 已实施的改进（v6.2）
+## 7. 已实施的改进（v7.0）
 
 | # | 改进 | 实现位置 | 说明 |
 |---|---|---|---|
-| 1 | 停止按钮中断任务 | `app.py:_stop_processing` | 取消未开始 future + 单文件开头检查 |
+| 1 | 停止按钮中断任务 | `src/application/job_service.py` | 设置取消事件并让正在运行的任务收敛 |
 | 2 | 日志持久化 | `logger_config.py` | RotatingFileHandler，1MB 轮转，5 备份 |
-| 3 | PDF 异常分类 | `processor.py:_extract_raw_text` | 返回 encrypted/corrupted/empty/unknown |
-| 4 | 配置外部化 | `config_manager.py` + `settings_dialog.py` | INI 读写 + UI 设置入口 |
-| 5 | 日志导出 | `components.py:LogView.export_to_file` | 导出按钮 + 文件保存对话框 |
-| 6 | 拖拽导入 | `app.py:dragEnterEvent/dropEvent` | 接受文件夹和 PDF 拖入 |
+| 3 | PDF 异常分类 | `src/core/pdf_text.py` | 返回 encrypted/corrupted/empty/unknown |
+| 4 | 配置外部化 | `config_manager.py` + API/Web 设置视图 | INI 读写和敏感值脱敏 |
+| 5 | 日志导出 | `src/desktop/native_bridge.py` + Web 工作台 | 原生保存对话框和日志导出 |
+| 6 | 目录选择与处理 | `src/desktop/native_bridge.py` + Web 处理视图 | 通过桌面桥接选择目录并启动任务 |
 | 7 | 内容哈希去重 | `processor.py:_check_content_duplicate` | MD5 哈希，线程安全 |
 | 8 | 类型路由注册表 | `processor.py:@register_type` | 装饰器注册，无需改 determine_processor_type |
 | 9 | 集成测试 | `tests/test_integration.py` | 20 个集成测试覆盖新功能 |
@@ -161,26 +162,26 @@ src/
 - [ ] `pytest tests/ -q` 全部通过
 - [ ] 业务层无 Qt 依赖
 
-## 9. 测试
+## 9. 测试与打包
 
 ```bash
-# 全部测试（单元 + 集成）
-pytest tests/ -v
+# 全部 Python 测试
+pytest tests/ -q
 
-# 仅单元测试
-pytest tests/test_processor.py -v
+# 前端类型检查和生产构建
+npm --prefix web run typecheck
+npm --prefix web run build
 
-# 仅集成测试
-pytest tests/test_integration.py -v
+# 生成并验证桌面发布包
+python build_syntec.py
 
-# 实测报销目录（需手动清理输出目录）
-python -c "from src.core.processor import InvoiceProcessor; ..."
 ```
 
 测试文件：
 - `tests/test_processor.py`：核心逻辑单元测试（33 个）
-- `tests/test_integration.py`：集成测试，覆盖新功能（20 个）
-- `tests/test_email_pull.py`：邮箱拉取模块单元测试（9 个，不联网）
+- `tests/application/`：任务服务、事件总线和文件服务测试
+- `tests/api/`：HTTP、WebSocket、设置脱敏和静态资源契约测试
+- `tests/test_integration.py`：核心处理集成测试
 
 ---
 
@@ -190,11 +191,11 @@ python -c "from src.core.processor import InvoiceProcessor; ..."
 - 从邮箱（默认 QQ 邮箱 `imap.qq.com:993`）拉取发票附件到本地「发票收件箱」目录
 - 过滤：发件方白名单（12306/滴滴/网约车/华住/通行费）或主题含「发票/行程单/报销」
 - 附件：下载 PDF/ZIP，ZIP 自动解压只留 PDF；按 `message_id` 去重（`processed_messages.json`）
-- UI：新增「拉取邮箱发票」按钮；`poll_minutes` 可配置定时轮询；收件箱目录被 `QFileSystemWatcher` 监听，新 PDF 自动触发处理
+- Web 工作台：提供「拉取邮箱发票」操作；`poll_minutes` 可配置定时轮询；收件箱任务由应用层统一调度
 - 处理完成后源文件自动归档到 `收件箱/已处理`，避免重复处理
 
 ### 配置（config.ini `[email]` 段）
-以上配置均可在程序「设置」对话框（业务配置 + 邮箱自动拉取）直接填写，含「测试连接」按钮；
+以上配置均可在 Web 工作台「设置」视图（业务配置 + 邮箱自动拉取）直接填写，含「测试连接」按钮；
 保存后自动写入 config.ini 并即时生效（收件箱监听目录、轮询间隔实时更新，无需重启）。
 ```ini
 [email]
@@ -211,7 +212,7 @@ poll_minutes = 0               # 自动轮询分钟数，0 = 关闭（仅手动�
 ### 实现位置
 - `src/core/email_pull.py`：IMAP 拉取纯逻辑（不依赖 Qt），入口 `pull_invoices()`
 - `src/config_manager.py`：`get_email_*` / `set_email_config` / `get_inbox_dir`
-- `src/ui/app.py`：`_pull_invoices` / `_on_pull_done` / `_on_inbox_changed` / `_archive_inbox_files`
+- v7 API：`src/api/routes/email.py`；Web：`web/src/features/InboxView.tsx`
 
 ### 注意
 - 拉取默认不修改邮件状态（`BODY.PEEK` 读取），如需标记已读用 `mark_seen`
@@ -228,7 +229,7 @@ poll_minutes = 0               # 自动轮询分钟数，0 = 关闭（仅手动�
 - **第二层 · AI 语义审核**（`[ai] enabled` 开关控制，DeepSeek）：重点查金额/票据异常（发票号、价税合计、税额、税率、行程合计一致性、金额异常高），行程仅做简单核对（日期矛盾、同日同路线重复、行程单与发票不配套）
 - **审核报告回填**：本地 + AI 问题合并写入 `费用汇总.xlsx` 的「审核报告」工作表（来源/文件/类型/问题/建议）
 
-### 配置（config.ini `[ai]` 段，也可在「设置」对话框填写）
+### 配置（config.ini `[ai]` 段，也可在 Web「设置」视图填写）
 ```ini
 [ai]
 enabled = true
@@ -242,9 +243,7 @@ timeout = 60
 - `src/core/local_audit.py`：`check_filenames` / `check_rows`（纯规则，可单测）/ `run_local_audit`
 - `src/core/ai_audit.py`：`build_prompt` / `parse_findings`（宽容解析 JSON）/ `audit_records`（urllib 调用，无新增依赖）/ `write_audit_report`（回填 Excel）
 - `src/core/excel_summary.py`：`_parse_didi_trip_details` 增强——行程行提取 `time / city / route / mileage`；高铁票提取发车时间；审核与汇总共用同一套解析
-- `src/ui/app.py`：`_run_ai_audit`；`_process_files` 中本地预检总是执行、AI 按开关执行，结果合并写回 Excel
-- `src/ui/settings_dialog.py`：AI 设置区（启用勾选 / API Key 密码框 / 接口地址 / 模型），整个对话框已包进 QScrollArea
-- `src/ui/components.py`：`ToggleSwitch` 滑动开关（自绘轨道+滑块+动画）；主窗口操作栏「AI 审核」开关点击即时写入 config.ini
+- v7 API：`src/api/routes/settings.py`；Web：`web/src/features/AuditView.tsx` / `web/src/features/SettingsView.tsx`
 
 ### 注意
 - API Key / 邮箱授权码属敏感信息，写入 config.ini（不入库），UI 用密码框显示

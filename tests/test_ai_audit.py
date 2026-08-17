@@ -2,7 +2,24 @@
 
 运行方式: pytest tests/test_ai_audit.py -v
 """
-from src.core.ai_audit import build_prompt, parse_findings
+import json
+import urllib.request
+
+from src.core.ai_audit import build_prompt, parse_findings, test_connection as check_ai_connection
+
+
+class FakeResponse:
+    def __init__(self, body):
+        self.body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        return False
+
+    def read(self):
+        return self.body
 
 
 class TestBuildPrompt:
@@ -52,3 +69,33 @@ class TestParseFindings:
         assert parse_findings(None) == []
         assert parse_findings('') == []
         assert parse_findings('{}') == []
+
+
+def test_connection_posts_minimal_chat_request(monkeypatch):
+    captured = {}
+
+    def fake_urlopen(request, timeout):
+        captured['request'] = request
+        captured['timeout'] = timeout
+        return FakeResponse(b'{"choices":[{"message":{"content":"OK"}}]}')
+
+    monkeypatch.setattr(urllib.request, 'urlopen', fake_urlopen)
+
+    check_ai_connection(
+        'pending-key',
+        api_base='https://ai.example.com/',
+        model='test-model',
+        timeout=15,
+    )
+
+    request = captured['request']
+    assert request.full_url == 'https://ai.example.com/chat/completions'
+    assert request.get_header('Authorization') == 'Bearer pending-key'
+    assert captured['timeout'] == 15
+    assert json.loads(request.data) == {
+        'model': 'test-model',
+        'messages': [{'role': 'user', 'content': '请仅回复 OK'}],
+        'temperature': 0,
+        'max_tokens': 1,
+        'stream': False,
+    }

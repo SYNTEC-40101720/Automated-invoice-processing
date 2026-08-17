@@ -20,6 +20,10 @@ env/
 ENV/
 .python-version
 
+# Frontend dependencies and TypeScript build cache
+web/node_modules/
+web/tsconfig.tsbuildinfo
+
 # PyInstaller
 build/
 dist/

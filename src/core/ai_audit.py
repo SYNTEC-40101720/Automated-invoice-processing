@@ -104,6 +104,46 @@ def audit_records(records: list[dict], api_key: str,
     return parse_findings(content)
 
 
+def test_connection(api_key: str, api_base: str = DEFAULT_API_BASE,
+                    model: str = DEFAULT_MODEL, timeout: int = 60) -> None:
+    """发送最小聊天请求，验证 AI 地址、模型和密钥可用。"""
+    if not api_key:
+        raise ValueError('未配置 AI API Key')
+
+    payload = {
+        'model': model,
+        'messages': [{'role': 'user', 'content': '请仅回复 OK'}],
+        'temperature': 0,
+        'max_tokens': 1,
+        'stream': False,
+    }
+    req = urllib.request.Request(
+        f"{api_base.rstrip('/')}/chat/completions",
+        data=json.dumps(payload).encode('utf-8'),
+        headers={
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {api_key}',
+        },
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = json.loads(resp.read().decode('utf-8'))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode('utf-8', errors='replace')[:200]
+        raise RuntimeError(f'AI HTTP {exc.code}: {detail}') from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f'AI 网络错误: {exc.reason}') from exc
+    except TimeoutError as exc:
+        raise RuntimeError('AI 请求超时') from exc
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise RuntimeError('AI 响应不是有效 JSON') from exc
+
+    choices = body.get('choices') if isinstance(body, dict) else None
+    if not isinstance(choices, list) or not choices:
+        raise RuntimeError('AI 响应格式异常')
+
+
 def write_audit_report(output_dir: str, findings: list[dict]) -> str | None:
     """把审核结果回填到 费用汇总.xlsx 的「审核报告」工作表
 

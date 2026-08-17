@@ -61,6 +61,10 @@ class InvoiceProcessor:
     def reset_dedup(self) -> None:
         self._writer.reset_dedup()
 
+    def check_content_duplicate(self, text: str, source_path: str) -> bool:
+        """判断文本内容是否已处理过，供应用层编排使用。"""
+        return self._writer._check_content_duplicate(text, source_path)
+
     # ── 文本提取（委托提取器） ────────────────────────
     def _extract_raw_text(self, pdf_path: str) -> tuple[str | None, str | None]:
         return self._extractor._extract_raw_text(pdf_path)
