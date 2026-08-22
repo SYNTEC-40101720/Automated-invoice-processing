@@ -9,7 +9,8 @@ import threading
 from collections.abc import Callable
 from concurrent.futures import CancelledError, ThreadPoolExecutor, as_completed
 
-from ..config_manager import get_max_workers
+from ..config_manager import get_email_poll_minutes, get_max_workers
+from ..core.email_pull import pull_invoices
 from ..core.processor import InvoiceProcessor
 from ..domain.errors import (
     ApplicationError,
@@ -36,19 +37,56 @@ class JobService:
         max_workers_provider: Callable[[], int] = get_max_workers,
         audit_service_factory: Callable[..., AuditService] = AuditService,
         file_service_factory: Callable[..., InvoiceFileService] = InvoiceFileService,
+        email_poll_minutes_provider: Callable[[], int] = get_email_poll_minutes,
     ):
         self.events = event_bus or EventBus()
         self._processor_factory = processor_factory
         self._max_workers = max_workers_provider
         self._audit_service_factory = audit_service_factory
         self._file_service_factory = file_service_factory
+        self._email_poll_minutes = email_poll_minutes_provider
         self._lock = threading.RLock()
         self._jobs: dict[str, Job] = {}
         self._current_job_id: str | None = None
         self._cancel_events: dict[str, threading.Event] = {}
         self._threads: dict[str, threading.Thread] = {}
 
-    def start_job(
+    def pull_email_inbox(self) -> dict:
+        """手动拉取邮箱附件；若拉取到新文件则自动启动处理任务。"""
+        from ..config_manager import (
+            get_email_auth_code,
+            get_email_config,
+            get_email_days_back,
+            get_email_username,
+            get_inbox_dir,
+        )
+
+        config = get_email_config()
+        try:
+            result = pull_invoices(
+                host=str(config['imap_host']),
+                port=int(config['imap_port']),
+                username=get_email_username(),
+                auth_code=get_email_auth_code(),
+                inbox_dir=get_inbox_dir(),
+                days_back=get_email_days_back(),
+            )
+        except ValueError as exc:
+            raise ApplicationError('EMAIL_CONFIGURATION_INCOMPLETE', str(exc)) from exc
+        except Exception as exc:
+            raise ApplicationError('EMAIL_PULL_FAILED', f'邮箱拉取失败: {exc}') from exc
+
+        job = None
+        if result.get('new_files'):
+            try:
+                job = self.start_job(get_inbox_dir(), JobTrigger.EMAIL)
+            except ApplicationError as exc:
+                result = {**result, 'job_error': {'code': exc.code, 'message': exc.message}}
+        return {'pull': result, 'job': job}
+
+    @property
+    def email_poll_minutes(self) -> int:
+        return self._email_poll_minutes()
         self,
         source_dir: str,
         trigger: JobTrigger | str = JobTrigger.MANUAL,
@@ -183,9 +221,14 @@ class JobService:
             self._set_phase(job, JobPhase.POST_PROCESS, '执行后处理…')
 
             def on_post_progress(ratio: float) -> None:
-                self._set_progress(job, 0.70 + 0.30 * ratio)
+                # 取消请求到达后不再刷新进度，避免进度条继续冲到 100%
+                if not self._is_cancel_requested(job):
+                    self._set_progress(job, 0.70 + 0.30 * ratio)
 
             result = processor.post_process(output_dir, progress_callback=on_post_progress)
+            if cancel_event.is_set() or self._is_cancel_requested(job):
+                self._finish_cancelled(job)
+                return
             for issue in result.get('tax_issues') or []:
                 self._log(job, issue, 'warning')
             tax_issues = result.get('tax_issues') or []
@@ -212,14 +255,23 @@ class JobService:
             result['audit'] = audit_result
 
             if job.trigger in {JobTrigger.INBOX, JobTrigger.EMAIL}:
+                if cancel_event.is_set() or self._is_cancel_requested(job):
+                    self._finish_cancelled(job)
+                    return
                 self._set_phase(job, JobPhase.ARCHIVE, '归档已处理文件…')
                 archived = self._archive_files(job.source_dir, pdf_files)
                 result['archived'] = archived
                 if archived:
                     self._log(job, f'已归档 {archived} 个已处理发票', 'info')
 
+            if cancel_event.is_set() or self._is_cancel_requested(job):
+                self._finish_cancelled(job)
+                return
+
             self._set_progress(job, 1.0)
             with self._lock:
+                if job.status == JobStatus.CANCELLED:
+                    return
                 job.result = result
                 job.phase = JobPhase.DONE
                 job.message = f'处理完成 — 成功 {success_count}/{job.stats.total}'

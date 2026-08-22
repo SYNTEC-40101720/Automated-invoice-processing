@@ -7,6 +7,7 @@ import imaplib
 from fastapi import APIRouter, Depends
 
 from ...core.ai_audit import test_connection as test_ai_connection
+from ...config import reload_business_config
 from ...config_manager import (
     get_ai_api_base,
     get_ai_api_key,
@@ -85,6 +86,7 @@ def patch_business(request: BusinessSettingsPatch) -> BusinessSettings:
         values.get('target_tax_id', get_target_tax_id()),
         values.get('max_workers', get_max_workers()),
     )
+    reload_business_config()
     return _settings().business
 
 
