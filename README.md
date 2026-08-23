@@ -1,6 +1,6 @@
-# SYNTEC 电子票据处理系统 v7.0.2
+# SYNTEC 电子票据处理系统 v7.0.3
 
-基于 Python 3 + FastAPI 的业务底层、React/Vite Web 工作台和 pywebview/WebView2 桌面壳，用于批量识别、重命名、校验与合并 PDF 电子发票。
+基于 Python 3.12+、FastAPI 的业务底层、React/Vite Web 工作台和 pywebview/WebView2 桌面壳，用于批量识别、重命名、校验与合并 PDF 电子发票。
 
 ## 功能特点
 
@@ -125,9 +125,9 @@ python -m ruff check src tests
 版本源为 `src/version.py`，递增命令会同步 `pyproject.toml`、Web 包元数据和 PyInstaller 资源：
 
 ```bash
-python bump_version.py patch   # 7.0.2 → 7.0.3
-python bump_version.py minor   # 7.0.2 → 7.1.0
-python bump_version.py major   # 7.0.2 → 8.0.0
+python bump_version.py patch   # 7.0.3 → 7.0.4
+python bump_version.py minor   # 7.0.3 → 7.1.0
+python bump_version.py major   # 7.0.3 → 8.0.0
 ```
 
 普通测试和打包不会自动修改版本；正式发布前执行一次递增命令，再运行 `python build_syntec.py`。打包脚本会拒绝不一致的版本配置。
@@ -136,6 +136,7 @@ python bump_version.py major   # 7.0.2 → 8.0.0
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v7.0.3 | 2026-08-23 | 清理未使用占位视图、孤立样式和空目录；更新运行时版本显示并完成发布验证 |
 | v7.0.2 | 2026-08 | 仅支持 Python 3.12，移除 Python 3.10 兼容层和 tomli 依赖 |
 | v7.0.1 | 2026-08 | 统一运行时、前端和 EXE 版本信息，增加发布版本递增与一致性校验 |
 | v7.0.0 | 2026-08 | FastAPI + React 工作台、任务服务、邮箱自动轮询、统一设置、日志恢复、Native Bridge 安全边界和域控打包 |

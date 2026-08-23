@@ -154,7 +154,7 @@ export function App() {
   }
 
   return <div className="workbench-shell">
-    <ActivityBar />
+    <ActivityBar version={healthQuery.data?.version ?? null} />
     <Sidebar activeView={activeView} job={job} onChooseDirectory={chooseDirectory} />
     <main className="main-column">
       {activeView === 'processing'

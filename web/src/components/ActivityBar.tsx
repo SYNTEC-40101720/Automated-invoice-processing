@@ -9,7 +9,7 @@ const items: { id: 'processing' | 'inbox' | 'audit' | 'settings'; label: string;
   { id: 'settings', label: '设置', icon: <Settings2 size={19} /> },
 ]
 
-export function ActivityBar() {
+export function ActivityBar({ version }: { version: string | null }) {
   const activeView = useWorkbench((state) => state.activeView)
   const setView = useWorkbench((state) => state.setView)
   return (
@@ -28,7 +28,7 @@ export function ActivityBar() {
           </button>
         ))}
       </div>
-      <div className="activity-foot">7.0</div>
+      <div className="activity-foot">v{version ?? '--'}</div>
     </nav>
   )
 }
