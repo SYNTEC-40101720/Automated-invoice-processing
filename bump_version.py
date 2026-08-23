@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import re
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 
@@ -14,6 +15,7 @@ WEB_PACKAGE_FILE = ROOT / 'web' / 'package.json'
 WEB_LOCK_FILE = ROOT / 'web' / 'package-lock.json'
 VERSION_INFO_FILE = ROOT / 'version_info.txt'
 VERSION_PATTERN = re.compile(r"(?m)^__version__ = '(\d+\.\d+\.\d+)'$")
+Replacement = str | Callable[[re.Match[str]], str]
 
 
 def read_version() -> str:
@@ -32,7 +34,7 @@ def bump(version: str, level: str) -> str:
     return f'{major}.{minor}.{patch + 1}'
 
 
-def replace_once(path: Path, replacements: list[tuple[str, str]]) -> None:
+def replace_once(path: Path, replacements: list[tuple[str, Replacement]]) -> None:
     content = path.read_text(encoding='utf-8')
     for pattern, replacement in replacements:
         content, count = re.subn(pattern, replacement, content, count=1)
@@ -85,8 +87,10 @@ def update_files(version: str) -> None:
             ),
             (
                 r"StringStruct\(u'LegalCopyright', u'Copyright \\xa9 SYNTEC \d{4}'\)",
-                f"StringStruct(u'LegalCopyright', u'Copyright \\xa9 SYNTEC "
-                f"{release_year}')",
+                lambda match: (
+                    f"StringStruct(u'LegalCopyright', u'Copyright \\xa9 SYNTEC "
+                    f"{release_year}')"
+                ),
             ),
         ],
     )
