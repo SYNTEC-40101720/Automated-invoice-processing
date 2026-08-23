@@ -69,8 +69,7 @@ export function SettingsView() {
           <label>购买方税号<input value={settings.business.target_tax_id} onChange={(event) => setSettings({ ...settings, business: { ...settings.business, target_tax_id: event.target.value } })} /></label>
           <label>并发线程<input type="number" min="2" max="16" value={settings.business.max_workers} onChange={(event) => setSettings({ ...settings, business: { ...settings.business, max_workers: Number(event.target.value) } })} /></label>
         </SettingsCard>
-        <SettingsCard icon={<Mail size={17} />} title="邮箱收件箱">
-          <label className="toggle-label"><input type="checkbox" checked={settings.email.enabled} onChange={(event) => setSettings({ ...settings, email: { ...settings.email, enabled: event.target.checked } })} />启用邮箱拉取</label>
+        <SettingsCard icon={<Mail size={17} />} title="邮箱连接">
           <label>IMAP 服务器<input value={settings.email.imap_host} onChange={(event) => setSettings({ ...settings, email: { ...settings.email, imap_host: event.target.value } })} /></label>
           <label>端口<input type="number" value={settings.email.imap_port} onChange={(event) => setSettings({ ...settings, email: { ...settings.email, imap_port: Number(event.target.value) } })} /></label>
           <label>邮箱账号<input value={settings.email.username} onChange={(event) => setSettings({ ...settings, email: { ...settings.email, username: event.target.value } })} /></label>

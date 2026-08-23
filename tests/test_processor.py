@@ -287,3 +287,44 @@ def test_missing_buyer_tax_id_is_sent_to_manual_review(tmp_path, monkeypatch):
     assert any("购买方税号缺失" in issue for issue in tax_issues)
     assert not invoice.exists()
     assert (output_dir / "需人工处理" / invoice.name).is_file()
+
+
+def test_itinerary_without_buyer_tax_id_is_not_sent_to_manual_review(
+    tmp_path, monkeypatch
+):
+    proc = InvoiceProcessor()
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    itinerary = output_dir / "INV001-100.00行程单.pdf"
+    itinerary.write_bytes(b"pdf")
+    monkeypatch.setattr(proc, "extract_pdf_text", lambda _: "滴滴出行-行程单 合计100.00元")
+
+    tax_issues, special, normal = proc._phase_scan_and_classify(
+        str(output_dir), lambda _: None,
+    )
+
+    assert tax_issues == []
+    assert not special
+    assert normal == [itinerary.name]
+    assert itinerary.is_file()
+    assert not (output_dir / "需人工处理").exists()
+
+
+def test_itinerary_in_manual_review_is_not_rechecked_for_tax_id(tmp_path, monkeypatch):
+    proc = InvoiceProcessor()
+    output_dir = tmp_path / "output"
+    manual_dir = output_dir / "需人工处理"
+    manual_dir.mkdir(parents=True)
+    itinerary = manual_dir / "INV001-100.00行程单.pdf"
+    itinerary.write_bytes(b"pdf")
+    monkeypatch.setattr(
+        proc,
+        "extract_pdf_text",
+        lambda _: "行程单 纳税人识别号：000000000000000000",
+    )
+
+    tax_issues = proc._phase_scan_manual_dir(str(output_dir), lambda _: None)
+
+    assert tax_issues == []
+    assert itinerary.is_file()
+    assert not (output_dir / "税号异常").exists()

@@ -1,4 +1,4 @@
-# SYNTEC 电子票据处理系统 v7.0.3
+# SYNTEC 电子票据处理系统 v7.0.4
 
 基于 Python 3.12+、FastAPI 的业务底层、React/Vite Web 工作台和 pywebview/WebView2 桌面壳，用于批量识别、重命名、校验与合并 PDF 电子发票。
 
@@ -6,7 +6,7 @@
 
 - 📋 自动识别多种类型的 PDF 电子发票（浙江/宁波通用、江苏通行费、江苏行程单、高铁票、滴滴行程单、通用电子发票等）
 - 🔁 按规则提取发票号与金额，重命名输出文件
-- 🔍 异常税号检测，自动归集到「税号异常」子目录
+- 🔍 发票异常税号检测，自动归集到「税号异常」子目录（行程单等凭证跳过）
 - 📑 将所有处理后的 PDF 合并为单个 PDF 文件
 - 🧵 多线程并发处理，带进度条与彩色日志面板
 - 🖥️ Web 工作台支持处理概览、收件箱、审核和设置视图
@@ -89,7 +89,7 @@
 
 ## 配置说明
 
-业务配置（税号、线程数、邮箱和 AI 审核）通过 Web 工作台「设置」视图修改，保存至 `config.ini` 并立即生效；邮箱启用自动轮询时，轮询线程会同步读取新的间隔。授权码和 API Key 由本地安全存储负责保存，API 响应只返回是否已配置。
+业务配置（税号、线程数和 AI 审核）通过 Web 工作台「设置」视图修改；邮箱连接参数在「设置」视图维护，收件目录、自动收件开关和轮询间隔在「收件箱」视图设置并显示。所有配置保存至 `config.ini` 并立即生效，处理工作区的源文件目录由处理页单独选择。授权码和 API Key 由本地安全存储负责保存，API 响应只返回是否已配置。
 
 业务配置默认值和动态读取逻辑见 [src/config.py](src/config.py) 与 [src/config_manager.py](src/config_manager.py)。
 
@@ -118,16 +118,16 @@ python -m pytest tests/test_integration.py -v
 python -m ruff check src tests
 ```
 
-当前 Windows 开发环境已验证 Python 测试 119 条通过、编译和依赖检查通过，前端类型检查与生产构建通过，`build_syntec.py` 可生成并完成 SYNTEC 域控合规校验，本机正式发布包启动冒烟通过。真实浏览器 E2E、干净域控账户启动和目标机 WebView2 验收仍需单独执行。
+当前 Windows 开发环境已验证 Python 测试 121 条通过、编译和依赖检查通过，前端类型检查与生产构建通过，`build_syntec.py` 可生成并完成 SYNTEC 域控合规校验，本机正式发布包启动冒烟通过。真实浏览器 E2E、干净域控账户启动和目标机 WebView2 验收仍需单独执行。
 
 ## 版本发布
 
 版本源为 `src/version.py`，递增命令会同步 `pyproject.toml`、Web 包元数据和 PyInstaller 资源：
 
 ```bash
-python bump_version.py patch   # 7.0.3 → 7.0.4
-python bump_version.py minor   # 7.0.3 → 7.1.0
-python bump_version.py major   # 7.0.3 → 8.0.0
+python bump_version.py patch   # 7.0.4 → 7.0.5
+python bump_version.py minor   # 7.0.4 → 7.1.0
+python bump_version.py major   # 7.0.4 → 8.0.0
 ```
 
 普通测试和打包不会自动修改版本；正式发布前执行一次递增命令，再运行 `python build_syntec.py`。打包脚本会拒绝不一致的版本配置。
@@ -136,6 +136,7 @@ python bump_version.py major   # 7.0.3 → 8.0.0
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v7.0.4 | 2026-08-23 | 收件箱独立指定并显示收件目录，增加自动收件开关与轮询间隔控制；处理工作区目录不再被替换；非发票凭证跳过税号校验，并补充 API 与处理器测试 |
 | v7.0.3 | 2026-08-23 | 清理未使用占位视图、孤立样式和空目录；更新运行时版本显示并完成发布验证 |
 | v7.0.2 | 2026-08 | 仅支持 Python 3.12，移除 Python 3.10 兼容层和 tomli 依赖 |
 | v7.0.1 | 2026-08 | 统一运行时、前端和 EXE 版本信息，增加发布版本递增与一致性校验 |

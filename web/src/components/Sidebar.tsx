@@ -1,13 +1,15 @@
 import { ChevronDown, FileText, FolderOpen, History, Plus } from 'lucide-react'
-import type { Job } from '../api/types'
+import type { EmailSettings, Job } from '../api/types'
 
 interface SidebarProps {
   activeView: string
   job: Job | null
+  emailSettings: EmailSettings | null
   onChooseDirectory: () => void
+  onOpenInbox: () => void
 }
 
-export function Sidebar({ activeView, job, onChooseDirectory }: SidebarProps) {
+export function Sidebar({ activeView, job, emailSettings, onChooseDirectory, onOpenInbox }: SidebarProps) {
   const title = activeView === 'processing'
     ? '处理工作区'
     : activeView === 'inbox'
@@ -43,9 +45,21 @@ export function Sidebar({ activeView, job, onChooseDirectory }: SidebarProps) {
       )}
       {activeView === 'inbox' && (
         <>
-          <div className="sidebar-section-label">自动收件箱</div>
-          <div className="inbox-summary"><span className="status-dot" /> 监听未连接</div>
-          <button className="sidebar-action" onClick={onChooseDirectory}><Plus size={14} /> 指定收件箱目录</button>
+          <div className="sidebar-section-label">收件目录</div>
+          <button className="directory-row" onClick={onOpenInbox} title="打开收件箱设置">
+            <FolderOpen size={15} />
+            <span>{emailSettings?.inbox_dir ?? '正在读取收件目录'}</span>
+          </button>
+          <div className="sidebar-section-label">自动收件</div>
+          <div className={`inbox-summary ${emailSettings?.enabled && emailSettings.poll_minutes > 0 ? 'is-active' : ''}`}>
+            <span className="status-dot" />
+            {emailSettings
+              ? emailSettings.enabled && emailSettings.poll_minutes > 0
+                ? `已开启 · 每 ${emailSettings.poll_minutes} 分钟`
+                : '已关闭'
+              : '正在读取状态'}
+          </div>
+          <button className="sidebar-action" onClick={onOpenInbox}><Plus size={14} /> 管理收件设置</button>
         </>
       )}
       {activeView === 'audit' && (

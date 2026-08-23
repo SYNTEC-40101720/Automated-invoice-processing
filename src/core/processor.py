@@ -38,6 +38,8 @@ from .pdf_text import PdfTextExtractor
 
 __all__ = ['InvoiceProcessor', '_PREFIX_SUFFIX', '_TYPE_REGISTRY']
 
+_NON_INVOICE_MARKERS = ('行程单', '高铁票')
+
 # ═══════════════════════════════════════════════════════════
 # 发票处理核心：外观 / 编排者
 # ═══════════════════════════════════════════════════════════
@@ -98,6 +100,11 @@ class InvoiceProcessor:
             buyer_text,
         )
         return m.group(1) if m else None
+
+    @staticmethod
+    def _requires_tax_id_check(filename: str) -> bool:
+        """仅对发票执行购买方税号校验，行程单等凭证跳过。"""
+        return not any(marker in filename for marker in _NON_INVOICE_MARKERS)
 
     _normalize_amount = staticmethod(_normalize_amount)
 
@@ -258,8 +265,8 @@ class InvoiceProcessor:
             file_path = os.path.join(output_dir, filename)
             text = self.extract_pdf_text(file_path)
             should_classify = True
-            # 税号检查（命中缓存，无额外解析开销）
-            if text:
+            # 税号检查仅针对发票，行程单/高铁票等凭证跳过
+            if text and self._requires_tax_id_check(filename):
                 tax_id = self._extract_buyer_tax_id(text)
                 if tax_id is None:
                     self._move_to_manual_review(file_path, filename, output_dir)
@@ -298,6 +305,8 @@ class InvoiceProcessor:
                     continue
                 file_path = os.path.join(manual_dir, filename)
                 if not os.path.isfile(file_path):
+                    continue
+                if not self._requires_tax_id_check(filename):
                     continue
                 text = self.extract_pdf_text(file_path)
                 if not text:

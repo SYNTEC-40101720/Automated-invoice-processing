@@ -161,6 +161,7 @@ def test_settings_response_redacts_secret_values(monkeypatch, tmp_path):
         'inbox_dir': 'inbox', 'days_back': '30', 'poll_minutes': '0',
     })
     monkeypatch.setattr(settings_route, 'get_email_enabled', lambda: True)
+    monkeypatch.setattr(settings_route, 'get_inbox_dir', lambda: 'C:/invoice-inbox')
     monkeypatch.setattr(
         settings_route, 'get_email_username', lambda: 'user@example.com'
     )
@@ -179,6 +180,7 @@ def test_settings_response_redacts_secret_values(monkeypatch, tmp_path):
     assert response.status_code == 200
     body = response.json()
     assert body['email']['auth_code_configured'] is True
+    assert body['email']['inbox_dir'] == 'C:/invoice-inbox'
     assert body['ai']['api_key_configured'] is True
     assert 'secret-auth' not in response.text
     assert 'secret-key' not in response.text

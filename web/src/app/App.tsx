@@ -15,6 +15,7 @@ export function App() {
   const activeView = useWorkbench((state) => state.activeView)
   const connected = useWorkbench((state) => state.connected)
   const job = useWorkbench((state) => state.currentJob)
+  const setView = useWorkbench((state) => state.setView)
   const setConnected = useWorkbench((state) => state.setConnected)
   const setJob = useWorkbench((state) => state.setJob)
   const appendEvent = useWorkbench((state) => state.appendEvent)
@@ -24,6 +25,7 @@ export function App() {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const lastEventId = useRef(0)
   const healthQuery = useQuery({ queryKey: ['health'], queryFn: api.health, retry: false })
+  const settingsQuery = useQuery({ queryKey: ['settings'], queryFn: api.settings, retry: false })
   const currentJobQuery = useQuery({ queryKey: ['current-job'], queryFn: api.currentJob, retry: false })
 
   useEffect(() => {
@@ -153,14 +155,22 @@ export function App() {
     api.cancelJob(job.id).then((nextJob) => setJob(nextJob)).catch((error: Error) => window.alert(error.message))
   }
 
+  const emailSettings = settingsQuery.data?.email ?? null
+
   return <div className="workbench-shell">
     <ActivityBar version={healthQuery.data?.version ?? null} />
-    <Sidebar activeView={activeView} job={job} onChooseDirectory={chooseDirectory} />
+    <Sidebar
+      activeView={activeView}
+      job={job}
+      emailSettings={emailSettings}
+      onChooseDirectory={chooseDirectory}
+      onOpenInbox={() => setView('inbox')}
+    />
     <main className="main-column">
       {activeView === 'processing'
         ? <ProcessingView job={job} onChooseDirectory={chooseDirectory} onStart={start} onCancel={cancel} onOpenOutput={openOutput} />
         : activeView === 'inbox'
-          ? <InboxView />
+          ? <InboxView emailSettings={emailSettings} />
           : activeView === 'audit'
             ? <AuditView job={job} />
             : <SettingsView />}
