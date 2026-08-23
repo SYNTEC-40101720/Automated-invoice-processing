@@ -1,4 +1,4 @@
-# SYNTEC 电子票据处理系统 v7.0
+# SYNTEC 电子票据处理系统 v7.0.1
 
 基于 Python 3 + FastAPI 的业务底层、React/Vite Web 工作台和 pywebview/WebView2 桌面壳，用于批量识别、重命名、校验与合并 PDF 电子发票。
 
@@ -47,6 +47,7 @@
 ```
 ├── main.py                       # Web 桌面入口（FastAPI + pywebview）
 ├── build_syntec.py               # 前端构建、PyInstaller 打包和合规校验
+├── bump_version.py               # 递增并同步发布版本号
 ├── requirements.txt              # 依赖包列表
 ├── version_info.txt              # PyInstaller Windows 版本信息资源
 ├── pyproject.toml                # 项目元数据与工具配置
@@ -119,11 +120,24 @@ python -m ruff check src tests
 
 当前 Windows 开发环境已验证 Python 测试 119 条通过、编译和依赖检查通过，前端类型检查与生产构建通过，`build_syntec.py` 可生成并完成 SYNTEC 域控合规校验，本机正式发布包启动冒烟通过。真实浏览器 E2E、干净域控账户启动和目标机 WebView2 验收仍需单独执行。
 
+## 版本发布
+
+版本源为 `src/version.py`，递增命令会同步 `pyproject.toml`、Web 包元数据和 PyInstaller 资源：
+
+```bash
+python bump_version.py patch   # 7.0.1 → 7.0.2
+python bump_version.py minor   # 7.0.1 → 7.1.0
+python bump_version.py major   # 7.0.1 → 8.0.0
+```
+
+普通测试和打包不会自动修改版本；正式发布前执行一次递增命令，再运行 `python build_syntec.py`。打包脚本会拒绝不一致的版本配置。
+
 ## 版本历史
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
-| v7.0 | 2026-08 | FastAPI + React 工作台、任务服务、邮箱自动轮询、统一设置、日志恢复、Native Bridge 安全边界和域控打包 |
+| v7.0.1 | 2026-08 | 统一运行时、前端和 EXE 版本信息，增加发布版本递增与一致性校验 |
+| v7.0.0 | 2026-08 | FastAPI + React 工作台、任务服务、邮箱自动轮询、统一设置、日志恢复、Native Bridge 安全边界和域控打包 |
 | v6.2 | 2026-07 | 停止按钮、日志持久化、PDF 异常分类、配置外部化、拖拽导入、内容去重、类型路由注册表、集成测试 |
 | v6.1 | 2026-07 | 域控规范支持、桌面界面迁移、墨韵主题 |
 | v6.0 | 2026-07 | 初始版本 |

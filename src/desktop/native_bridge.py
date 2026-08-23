@@ -9,6 +9,8 @@ from collections.abc import Callable
 from pathlib import Path
 from tkinter import filedialog
 
+from ..version import __version__
+
 
 class NativeBridge:
     """只提供文件选择和打开目录，不承载业务编排。"""
@@ -85,5 +87,5 @@ class NativeBridge:
         return {
             'platform': sys.platform,
             'webview2': os.name == 'nt',
-            'version': '7.0.0',
+            'version': __version__,
         }

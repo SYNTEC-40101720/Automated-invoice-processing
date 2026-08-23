@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from ..application.job_service import JobService
 from ..domain.errors import ApplicationError
+from ..version import __version__
 from .errors import application_error_handler
 from .routes import email, events, jobs, settings, system
 
@@ -19,7 +20,7 @@ def create_app(
     job_service: JobService | None = None,
     *,
     local_token: str | None = None,
-    version: str = '7.0.0',
+    version: str = __version__,
     static_dir: str | Path | None = None,
     allowed_origins: Iterable[str] | None = None,
 ) -> FastAPI:

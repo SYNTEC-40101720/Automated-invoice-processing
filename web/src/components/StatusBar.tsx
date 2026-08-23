@@ -4,6 +4,7 @@ import type { Job } from '../api/types'
 interface StatusBarProps {
   connected: boolean
   job: Job | null
+  version: string | null
 }
 
 const phaseLabels: Record<string, string> = {
@@ -16,7 +17,7 @@ const phaseLabels: Record<string, string> = {
   done: '已完成',
 }
 
-export function StatusBar({ connected, job }: StatusBarProps) {
+export function StatusBar({ connected, job, version }: StatusBarProps) {
   const running = job?.status === 'running' || job?.status === 'cancelling'
   return (
     <footer className="status-bar">
@@ -34,7 +35,7 @@ export function StatusBar({ connected, job }: StatusBarProps) {
       <span className="status-divider" />
       <span>本地模式</span>
       <span className="status-divider" />
-      <span className="status-version">SYNTEC 7.0</span>
+      <span className="status-version">SYNTEC {version ?? '--'}</span>
     </footer>
   )
 }

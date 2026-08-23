@@ -9,11 +9,19 @@ SYNTEC 域控规范打包脚本
     ├── SYNTEC-电子票据处理系统.exe
     └── _internal/  (Python 运行时 + 依赖)
 """
+import json
 import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
+
+from src.version import __version__
 
 # 强制 UTF-8 输出，避免 emoji 在 GBK 终端报错
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
@@ -21,6 +29,9 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-
 ROOT = Path(__file__).resolve().parent
 APP_NAME = "SYNTEC-电子票据处理系统"
 VERSION_FILE = ROOT / "version_info.txt"
+PYPROJECT_FILE = ROOT / "pyproject.toml"
+WEB_PACKAGE_FILE = ROOT / "web" / "package.json"
+WEB_LOCK_FILE = ROOT / "web" / "package-lock.json"
 MAIN_SCRIPT = ROOT / "main.py"
 WEB_DIR = ROOT / "web"
 WEB_DIST_DIR = WEB_DIR / "dist"
@@ -42,6 +53,44 @@ def run(cmd: list[str], desc: str = "") -> None:
     result = subprocess.run(cmd, cwd=str(ROOT))
     if result.returncode != 0:
         sys.exit(f"❌ 失败 (exit {result.returncode})")
+
+
+def validate_version_sources() -> None:
+    """确保运行时、前端和 Windows 资源使用同一版本。"""
+    with PYPROJECT_FILE.open("rb") as handle:
+        pyproject_version = tomllib.load(handle)["project"]["version"]
+    package_version = json.loads(
+        WEB_PACKAGE_FILE.read_text(encoding="utf-8")
+    )["version"]
+    lock_data = json.loads(WEB_LOCK_FILE.read_text(encoding="utf-8"))
+    lock_version = lock_data["version"]
+    lock_package_version = lock_data["packages"][""]["version"]
+    version_info = VERSION_FILE.read_text(encoding="utf-8")
+    windows_version = f"{__version__}.0"
+    version_parts = ', '.join((*__version__.split('.'), '0'))
+    expected_version_fields = (
+        f"filevers=({version_parts})",
+        f"prodvers=({version_parts})",
+        f"StringStruct(u'FileVersion', u'{windows_version}')",
+        f"StringStruct(u'ProductVersion', u'{windows_version}')",
+    )
+    mismatches = []
+    for name, value in (
+        ("pyproject.toml", pyproject_version),
+        ("web/package.json", package_version),
+        ("web/package-lock.json", lock_version),
+        ("web/package-lock.json packages root", lock_package_version),
+    ):
+        if value != __version__:
+            mismatches.append(f"{name}: {value} != {__version__}")
+    mismatches.extend(
+        f"version_info.txt 缺少 {field}"
+        for field in expected_version_fields
+        if field not in version_info
+    )
+    if mismatches:
+        sys.exit("❌ 版本信息不一致:\n   " + "\n   ".join(mismatches))
+    print(f"✅ 版本信息一致: {__version__} / {windows_version}")
 
 
 def verify() -> None:
@@ -93,6 +142,10 @@ def verify() -> None:
             errors.append("❌ 版本信息中不包含 SYNTEC")
         else:
             print("✅ 版本信息包含 SYNTEC")
+        if f"{__version__}.0" not in result.stdout:
+            errors.append(f"❌ exe 版本不是 {__version__}.0")
+        else:
+            print(f"✅ exe 版本为 {__version__}.0")
     except Exception as e:
         print(f"⚠️ 无法读取版本信息: {e}")
 
@@ -111,6 +164,7 @@ def main():
     if not WEB_DIR.exists():
         sys.exit("❌ 缺少 web/ 前端目录")
 
+    validate_version_sources()
     run([NPM_COMMAND, "--prefix", str(WEB_DIR), "run", "build"], "构建 Web 前端")
     if not (WEB_DIST_DIR / "index.html").exists():
         sys.exit("❌ Web 前端构建未生成 web/dist/index.html")

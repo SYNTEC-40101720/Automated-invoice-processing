@@ -12,6 +12,7 @@ from src.api.schemas import SettingsResponse
 from src.application.event_bus import EventBus
 from src.application.job_service import JobService
 from src.domain.job import JobTrigger
+from src.version import __version__
 
 
 def make_app(tmp_path):
@@ -100,7 +101,7 @@ def test_websocket_sends_ready_and_current_snapshot(tmp_path):
     with client.websocket_connect('/api/v1/events?token=test-token') as websocket:
         ready = websocket.receive_json()
         assert ready['type'] == 'system.ready'
-        assert ready['payload']['version'] == '7.0.0'
+        assert ready['payload']['version'] == __version__
 
 
 def test_job_logs_endpoint_returns_only_job_logs(tmp_path):

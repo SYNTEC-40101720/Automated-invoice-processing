@@ -23,6 +23,7 @@ export function App() {
   const [directory, setDirectory] = useState('')
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const lastEventId = useRef(0)
+  const healthQuery = useQuery({ queryKey: ['health'], queryFn: api.health, retry: false })
   const currentJobQuery = useQuery({ queryKey: ['current-job'], queryFn: api.currentJob, retry: false })
 
   useEffect(() => {
@@ -165,6 +166,6 @@ export function App() {
             : <SettingsView />}
       <BottomPanel />
     </main>
-    <StatusBar connected={connected} job={job} />
+    <StatusBar connected={connected} job={job} version={healthQuery.data?.version ?? null} />
   </div>
 }
