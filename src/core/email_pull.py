@@ -10,6 +10,7 @@
 - 约束：本模块不依赖 Qt，可独立运行/测试
 """
 import imaplib
+import io
 import json
 import logging
 import os
@@ -18,6 +19,7 @@ import zipfile
 from datetime import datetime, timedelta
 from email import message_from_bytes
 from email.header import decode_header
+from email.utils import parseaddr
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,11 @@ DEFAULT_KEYWORDS = ['发票', '行程单', '报销']
 
 # 去重记录文件名（存放在收件箱目录内）
 _RECORD_FILENAME = 'processed_messages.json'
+_MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024
+_MAX_ZIP_ENTRIES = 100
+_MAX_ZIP_MEMBER_BYTES = 50 * 1024 * 1024
+_MAX_ZIP_TOTAL_BYTES = 200 * 1024 * 1024
+DEFAULT_IMAP_TIMEOUT_SECONDS = 10.0
 
 
 def _decode(value):
@@ -76,10 +83,15 @@ def _save_processed(record_path: str, processed: set) -> None:
 def _is_invoice_email(from_addr: str, subject: str,
                       senders: list, keywords: list) -> bool:
     """判断邮件是否为发票邮件（发件方白名单 或 主题关键字）"""
-    from_lower = from_addr.lower()
-    if any(s in from_lower for s in senders):
+    address = parseaddr(from_addr)[1].casefold()
+    allowed_senders = {
+        parseaddr(str(sender))[1].casefold() or str(sender).casefold()
+        for sender in senders
+    }
+    if address and address in allowed_senders:
         return True
-    return any(kw in subject for kw in keywords)
+    subject_folded = subject.casefold()
+    return any(kw and str(kw).casefold() in subject_folded for kw in keywords)
 
 
 def _unique_path(directory: str, filename: str) -> str:
@@ -112,33 +124,70 @@ def _save_attachments(msg, inbox_dir: str, new_files: list) -> list:
         payload = part.get_payload(decode=True)
         if not payload:
             continue
+        if len(payload) > _MAX_ATTACHMENT_BYTES:
+            logger.warning('附件超过大小限制，已跳过: %s', filename)
+            continue
         safe = re.sub(r'[\\/:*?"<>|]', '_', filename)
-        dest = _unique_path(inbox_dir, safe)
-        with open(dest, 'wb') as f:
-            f.write(payload)
-        new_files.append(dest)
-        saved.append(dest)
-        logger.info('已保存附件: %s', dest)
+        if is_pdf:
+            dest = _unique_path(inbox_dir, safe)
+            with open(dest, 'wb') as f:
+                f.write(payload)
+            new_files.append(dest)
+            saved.append(dest)
+            logger.info('已保存附件: %s', dest)
+            continue
 
-        if is_zip:
-            try:
-                with zipfile.ZipFile(dest) as zf:
-                    for name in zf.namelist():
-                        if name.lower().endswith('.pdf'):
-                            target = _unique_path(inbox_dir, os.path.basename(name))
-                            with zf.open(name) as src, open(target, 'wb') as out:
-                                out.write(src.read())
-                            new_files.append(target)
-                            saved.append(target)
-                            logger.info('ZIP 内 PDF 已解压: %s', target)
-            except (zipfile.BadZipFile, OSError) as e:
-                logger.warning('ZIP 解压失败 %s: %s', dest, e)
+        try:
+            with zipfile.ZipFile(io.BytesIO(payload)) as zf:
+                infos = zf.infolist()
+                if len(infos) > _MAX_ZIP_ENTRIES:
+                    logger.warning('ZIP 条目数超过限制，已跳过: %s', filename)
+                    continue
+                pdf_infos = [
+                    info for info in infos
+                    if not info.is_dir() and info.filename.lower().endswith('.pdf')
+                ]
+                total_size = 0
+                for info in pdf_infos:
+                    if info.file_size > _MAX_ZIP_MEMBER_BYTES:
+                        logger.warning(
+                            'ZIP 内 PDF 超过大小限制，已跳过: %s', info.filename
+                        )
+                        continue
+                    total_size += info.file_size
+                    if total_size > _MAX_ZIP_TOTAL_BYTES:
+                        logger.warning(
+                            'ZIP 内 PDF 总大小超过限制，已停止解压: %s', filename
+                        )
+                        break
+                    target = _unique_path(inbox_dir, os.path.basename(info.filename))
+                    try:
+                        with zf.open(info) as src, open(target, 'wb') as out:
+                            remaining = info.file_size
+                            while remaining:
+                                chunk = src.read(min(1024 * 1024, remaining))
+                                if not chunk:
+                                    raise OSError('ZIP 条目内容长度不足')
+                                out.write(chunk)
+                                remaining -= len(chunk)
+                        new_files.append(target)
+                        saved.append(target)
+                        logger.info('ZIP 内 PDF 已解压: %s', target)
+                    except OSError as exc:
+                        try:
+                            os.remove(target)
+                        except OSError:
+                            pass
+                        logger.warning('ZIP 内 PDF 解压失败 %s: %s', info.filename, exc)
+        except (zipfile.BadZipFile, OSError) as e:
+            logger.warning('ZIP 解压失败 %s: %s', filename, e)
     return saved
 
 
 def pull_invoices(host='imap.qq.com', port=993, username='', auth_code='',
                   inbox_dir='', days_back=30, senders=None, keywords=None,
-                  mark_seen=False, record_path=None) -> dict:
+                  mark_seen=False, record_path=None,
+                  timeout: float = DEFAULT_IMAP_TIMEOUT_SECONDS) -> dict:
     """从邮箱拉取发票附件
 
     Args:
@@ -152,6 +201,7 @@ def pull_invoices(host='imap.qq.com', port=993, username='', auth_code='',
         keywords: 主题关键字
         mark_seen: 是否标记已读
         record_path: 去重记录文件路径（默认收件箱目录内）
+        timeout: IMAP 连接及读写超时（秒）
 
     Returns:
         {'downloaded': int, 'new_files': list, 'errors': list, 'total_scanned': int}
@@ -175,7 +225,11 @@ def pull_invoices(host='imap.qq.com', port=993, username='', auth_code='',
 
     since = (datetime.now() - timedelta(days=days_back)).strftime('%d-%b-%Y')
 
-    mail = imaplib.IMAP4_SSL(host, port)
+    try:
+        imap_timeout = max(1.0, min(300.0, float(timeout)))
+    except (TypeError, ValueError):
+        imap_timeout = DEFAULT_IMAP_TIMEOUT_SECONDS
+    mail = imaplib.IMAP4_SSL(host, port, timeout=imap_timeout)
     try:
         mail.login(username, auth_code)
         mail.select('INBOX')

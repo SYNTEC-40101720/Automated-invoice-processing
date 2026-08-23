@@ -159,14 +159,17 @@ web/
 - [ ] 重复源文件只输出一份
 - [ ] 税号异常文件移入「税号异常」目录
 - [ ] 进度从 0% 线性到 100%，无跳跃
-- [ ] `pytest tests/ -q` 全部通过
+- [ ] `python -m pytest tests/ -q` 全部通过
 - [ ] 业务层无 Qt 依赖
 
 ## 9. 测试与打包
 
 ```bash
 # 全部 Python 测试
-pytest tests/ -q
+python -m pytest tests/ -q
+
+# Python 静态检查
+python -m ruff check src tests
 
 # 前端类型检查和生产构建
 npm --prefix web run typecheck
@@ -177,8 +180,10 @@ python build_syntec.py
 
 ```
 
+截至 2026-08-23，本机 Windows 环境已验证：119 条 Python 测试通过，`compileall`、`pip check`、Ruff、前端 typecheck/build 和 SYNTEC PyInstaller 域控合规检查通过；本机正式发布包启动冒烟已通过（loopback 监听、首页 200、健康接口无令牌 401、进程树清理）。真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户启动以及目标机 WebView2/DPI 验收尚未执行。
+
 测试文件：
-- `tests/test_processor.py`：核心逻辑单元测试（33 个）
+- `tests/test_processor.py`：核心逻辑单元测试
 - `tests/application/`：任务服务、事件总线和文件服务测试
 - `tests/api/`：HTTP、WebSocket、设置脱敏和静态资源契约测试
 - `tests/test_integration.py`：核心处理集成测试
@@ -196,7 +201,7 @@ python build_syntec.py
 
 ### 配置（config.ini `[email]` 段）
 以上配置均可在 Web 工作台「设置」视图（业务配置 + 邮箱自动拉取）直接填写，含「测试连接」按钮；
-保存后自动写入 config.ini 并即时生效（收件箱监听目录、轮询间隔实时更新，无需重启）。
+保存后通过统一设置接口一次性写入 config.ini 并即时生效（收件箱监听目录、轮询间隔实时更新，无需重启）。桌面模式启动时由应用层邮箱轮询线程按 `poll_minutes` 拉取并创建收件箱任务。
 ```ini
 [email]
 enabled = true                 # 启用开关

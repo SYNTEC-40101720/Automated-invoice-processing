@@ -19,13 +19,11 @@ export function SettingsView() {
   const save = useMutation({
     mutationFn: async () => {
       if (!settings) return
-      await api.updateBusiness(settings.business)
       const email = { ...settings.email, auth_code_configured: undefined, ...(authCode ? { auth_code: authCode } : {}) }
       delete email.auth_code_configured
-      await api.updateEmail(email)
       const ai = { ...settings.ai, api_key_configured: undefined, ...(apiKey ? { api_key: apiKey } : {}) }
       delete ai.api_key_configured
-      await api.updateAi(ai)
+      await api.updateSettings({ business: settings.business, email, ai })
     },
     onSuccess: async () => {
       setAuthCode('')

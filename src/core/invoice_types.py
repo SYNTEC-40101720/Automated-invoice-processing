@@ -11,9 +11,7 @@
 import os
 import re
 import shutil
-
 from collections.abc import Callable
-
 
 # 发票类型注册表：[(keywords, method_name), ...]
 # 顺序敏感 —— 越具体越靠前，通用 fallback 放最后
@@ -46,12 +44,14 @@ def determine_processor_type(processor, text: str) -> Callable | None:
 
 
 @register_type('浙江通用（电子）发票', '宁波通用（电子）发票')
-def process_zhejiang_invoice(processor, source_path: str, output_dir: str) -> str | None:
+def process_zhejiang_invoice(
+    processor, source_path: str, output_dir: str
+) -> str | None:
     """处理浙江/宁波通用电子发票"""
     return processor._process_invoice(
         source_path, output_dir,
         r'发票号码[:：]\s*(\d+)',
-        r'（小写）\s+([\d.]+)',
+        r'（小写）\s*([\d.]+)',
         "ZJ",
     )
 
@@ -72,8 +72,8 @@ def process_jiangsu_invoice(processor, source_path: str, output_dir: str) -> str
     """处理江苏车辆通行费电子票据行程单"""
     return processor._process_invoice(
         source_path, output_dir,
-        r'发票号码\s+(\d+)',
-        r'累计金额\(元\)\s+([\d.]+)',
+        r'发票号码\s*(\d+)',
+        r'累计金额\(元\)\s*([\d.]+)',
         "JS",
     )
 
@@ -97,10 +97,12 @@ def process_didi_trip(processor, source_path: str, output_dir: str) -> str | Non
         text = processor.extract_pdf_text(source_path)
         amount_match = re.search(r'合计([\d.,]+)元', text)
         if amount_match:
-            clean_amount = "{:.2f}".format(float(amount_match.group(1).replace(',', '')))
+            clean_amount = "{:.2f}".format(
+                float(amount_match.group(1).replace(',', ''))
+            )
             new_filename = f"待搜索-{clean_amount}行程单.pdf"
             dest_path = os.path.join(output_dir, new_filename)
-            if not processor._claim_output_name(new_filename, source_path):
+            if not processor._claim_output_name(new_filename, source_path, output_dir):
                 return dest_path  # 重复，跳过
             shutil.copy2(source_path, dest_path)
             processor._copy_cache_entry(source_path, dest_path)
@@ -120,7 +122,8 @@ def process_toll_summary(processor, source_path: str, output_dir: str) -> str | 
     支持两种票据格式:
     - 传统票据: 12位票据代码 + 8位票据号码 + 金额
     - 数电发票: * + 20位发票号码 + 金额
-    注意: 此类汇总单字段间靠空格分隔，需保留空白，故使用 _extract_raw_text 而非去空白的 extract_pdf_text。
+    注意: 此类汇总单字段间靠空格分隔，需保留空白，故使用
+    _extract_raw_text 而非去空白的 extract_pdf_text。
     """
     try:
         text, _ = processor._extract_raw_text(source_path)
@@ -141,7 +144,7 @@ def process_toll_summary(processor, source_path: str, output_dir: str) -> str | 
                 return None
         new_filename = f"{invoice_no}-{processor._normalize_amount(amount)}行程单.pdf"
         dest_path = os.path.join(output_dir, new_filename)
-        if not processor._claim_output_name(new_filename, source_path):
+        if not processor._claim_output_name(new_filename, source_path, output_dir):
             return dest_path  # 重复，跳过
         shutil.copy2(source_path, dest_path)
         processor._copy_cache_entry(source_path, dest_path)
@@ -160,9 +163,16 @@ def process_general_invoice(processor, source_path: str, output_dir: str) -> str
             return None
         pattern1 = re.search(r'(?:发票号码|发\s*票\s*号\s*码)[\s:：]*(\d{8,20})', text)
         # fallback: 在金额关键字附近匹配 20 位连续数字，降低误匹配概率
-        pattern2 = re.search(r'(?:金额|合计|价税|小写).{0,30}(?<!\d)(\d{20})(?!\d)', text)
+        pattern2 = re.search(
+            r'(?:金额|合计|价税|小写).{0,30}'
+            r'(?<!\d)(\d{20})(?!\d)',
+            text,
+        )
         invoice_match = pattern1 if pattern1 else pattern2
-        amount_match = re.search(r'[（(]\s*小写\s*[）)]\s*[:：]?\s*[¥￥]?\s*([\d.]+)', text)
+        amount_match = re.search(
+            r'[（(]\s*小写\s*[）)]\s*[:：]?\s*[¥￥]?\s*([\d.]+)',
+            text,
+        )
         if not (invoice_match and amount_match):
             return None
         return processor._generate_output_file(

@@ -4,5 +4,6 @@
 #       运行时仅解码、不生成，因此 pytest 是唯一运行时依赖。
 #       reportlab 仅用于「重新生成」内嵌 PDF（非常规测试流程），可选安装。
 pytest
-httpx2
+httpx
+ruff
 # reportlab  # 仅重新生成 tests/test_local_audit.py 内嵌合成 PDF 时需要

@@ -23,25 +23,32 @@ class EventSubscription:
         self._condition = threading.Condition()
         self._closed = False
 
-    def put(self, event: DomainEvent) -> None:
+    def put(self, event: DomainEvent) -> bool:
         with self._condition:
             if self._closed:
-                return
+                return False
             if event.type == 'job.progress':
                 self._latest_progress = event
                 self._condition.notify()
-                return
-            while len(self._critical_events) >= self._maxsize and not self._closed:
-                self._condition.wait()
-            if self._closed:
-                return
+                return True
+            if len(self._critical_events) >= self._maxsize:
+                # 关键事件不能静默丢弃，也不能反向阻塞业务线程；
+                # 慢客户端需重连并从历史恢复。
+                self._closed = True
+                self._condition.notify_all()
+                return False
             self._critical_events.append(event)
             self._condition.notify()
+            return True
 
     def get(self, timeout: float | None = None) -> DomainEvent:
         deadline = None if timeout is None else time.monotonic() + timeout
         with self._condition:
-            while not self._critical_events and self._latest_progress is None and not self._closed:
+            while (
+                not self._critical_events
+                and self._latest_progress is None
+                and not self._closed
+            ):
                 remaining = None if deadline is None else deadline - time.monotonic()
                 if remaining is not None and remaining <= 0:
                     raise TimeoutError('等待事件超时')
@@ -92,7 +99,8 @@ class EventBus:
             self._history.append(event)
             subscriptions = tuple(self._subscriptions)
         for subscription in subscriptions:
-            subscription.put(event)
+            if not subscription.put(event):
+                self.unsubscribe(subscription)
         return event
 
     def subscribe(self, maxsize: int = 256) -> EventSubscription:
@@ -108,5 +116,7 @@ class EventBus:
 
     def history(self, after_event_id: int = 0, limit: int = 200) -> list[DomainEvent]:
         with self._lock:
-            events = [event for event in self._history if event.event_id > after_event_id]
+            events = [
+                event for event in self._history if event.event_id > after_event_id
+            ]
         return events[-max(1, limit):]

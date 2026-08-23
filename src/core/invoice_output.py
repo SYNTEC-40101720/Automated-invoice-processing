@@ -10,13 +10,13 @@
 
 依赖 PdfTextExtractor 完成缓存条目复制与日志出口。
 """
+import hashlib
 import os
 import re
 import shutil
-import hashlib
+import threading
 
 from .pdf_text import PdfTextExtractor
-
 
 # 各发票类型生成输出文件时的后缀映射
 _PREFIX_SUFFIX: dict[str, str] = {
@@ -47,26 +47,43 @@ class InvoiceOutputWriter:
         self._generated_names: set[str] = set()
         # 内容哈希去重：text_md5 → 首次出现的源文件名
         self._content_hashes: dict[str, str] = {}
+        self._dedup_lock = threading.Lock()
 
     def reset_dedup(self) -> None:
         """清空输出去重记录（每次开始新一轮处理前调用）"""
-        self._generated_names.clear()
-        self._content_hashes.clear()
+        with self._dedup_lock:
+            self._generated_names.clear()
+            self._content_hashes.clear()
 
     # ── 输出文件名去重 ────────────────────────────────
-    def _claim_output_name(self, filename: str, source_path: str) -> bool:
+    def _claim_output_name(
+        self,
+        filename: str,
+        source_path: str,
+        output_dir: str | None = None,
+    ) -> bool:
         """线程安全地占位一个输出文件名
 
         返回 True 表示首次占位成功（应继续复制），
         返回 False 表示已存在同名输出（应跳过，但源文件保留不动）。
         """
-        if filename in self._generated_names:
+        with self._dedup_lock:
+            already_exists = (
+                filename in self._generated_names
+                or (
+                    output_dir is not None
+                    and os.path.exists(os.path.join(output_dir, filename))
+                )
+            )
+            if not already_exists:
+                self._generated_names.add(filename)
+        if already_exists:
             self._extractor._log_core(
-                f"重复文件已跳过（源文件保留）: {os.path.basename(source_path)} → 输出 {filename}",
+                f"重复文件已跳过（源文件保留）: {os.path.basename(source_path)} "
+                f"→ 输出 {filename}",
                 level='warning',
             )
             return False
-        self._generated_names.add(filename)
         return True
 
     # ── 内容哈希去重 ──────────────────────────────────
@@ -77,14 +94,17 @@ class InvoiceOutputWriter:
         源文件保留不动，仅记录日志。
         """
         content_hash = hashlib.md5(text.encode('utf-8')).hexdigest()
-        if content_hash in self._content_hashes:
+        with self._dedup_lock:
+            first_source = self._content_hashes.get(content_hash)
+            if first_source is None:
+                self._content_hashes[content_hash] = os.path.basename(source_path)
+        if first_source is not None:
             self._extractor._log_core(
                 f"内容重复已跳过（源文件保留）: {os.path.basename(source_path)}"
-                f"（与 {self._content_hashes[content_hash]} 内容相同）",
+                f"（与 {first_source} 内容相同）",
                 level='warning',
             )
             return True
-        self._content_hashes[content_hash] = os.path.basename(source_path)
         return False
 
     # ── 生成输出文件 ──────────────────────────────────
@@ -102,14 +122,16 @@ class InvoiceOutputWriter:
             dest_path = os.path.join(output_dir, new_filename)
 
             # 线程安全去重：同名文件只生成一次
-            if not self._claim_output_name(new_filename, source_path):
+            if not self._claim_output_name(new_filename, source_path, output_dir):
                 return dest_path  # 返回目标路径，但不再复制
 
             shutil.copy2(source_path, dest_path)
             self._extractor._copy_cache_entry(source_path, dest_path)
             return dest_path
         except Exception:
-            self._extractor._log_core(f"输出文件生成失败: {source_path}", level='warning')
+            self._extractor._log_core(
+                f"输出文件生成失败: {source_path}", level='warning'
+            )
             return None
 
     # ── 税号异常归集 ──────────────────────────────────
@@ -133,6 +155,20 @@ class InvoiceOutputWriter:
             shutil.move(file_path, dest_path)
         return dest_path
 
+    def _move_to_manual_review(self, file_path: str, filename: str,
+                               output_dir: str) -> str:
+        """将无法确认税号的输出文件移入人工处理目录。"""
+        manual_dir = os.path.join(output_dir, '需人工处理')
+        os.makedirs(manual_dir, exist_ok=True)
+        dest_path = os.path.join(manual_dir, filename)
+        counter = 1
+        while os.path.exists(dest_path):
+            name, ext = os.path.splitext(filename)
+            dest_path = os.path.join(manual_dir, f'{name}_{counter}{ext}')
+            counter += 1
+        shutil.move(file_path, dest_path)
+        return dest_path
+
     # ── 通用发票处理（被各类型处理器复用） ────────────
     def _process_invoice(self, processor, source_path: str, output_dir: str,
                          invoice_pattern: str, amount_pattern: str,
@@ -150,7 +186,9 @@ class InvoiceOutputWriter:
             amount = amount_match.group(1)
             if amount_processor:
                 amount = amount_processor(amount)
-            return self._generate_output_file(source_path, output_dir, invoice_no, amount, prefix)
+            return self._generate_output_file(
+                source_path, output_dir, invoice_no, amount, prefix
+            )
         except Exception:
             self._extractor._log_core(f"发票处理失败: {source_path}", level='warning')
             return None

@@ -8,13 +8,11 @@
     - 缓存条目复制（文件 copy2 后避免重新解析）
     - 统一日志出口（写 logging + 回调外部 UI）
 """
-import os
+import logging
 import re
 import threading
-import logging
 
 import pdfplumber
-
 
 # 缓存 sentinel：标记"正在解析中"，避免并发重复解析
 _PARSE_PENDING = object()
@@ -26,6 +24,7 @@ class PdfTextExtractor:
     def __init__(self, log_callback=None):
         self._text_cache: dict[str, tuple[str | None, str | None]] = {}
         self._raw_text_cache: dict[str, object] = {}
+        self._raw_parse_events: dict[str, threading.Event] = {}
         self._cache_lock = threading.Lock()
         self._log_callback = log_callback
 
@@ -36,8 +35,12 @@ class PdfTextExtractor:
         注意：不使用 exc_info=True，因为在无活跃异常时会打印 `NoneType: None`。
         错误信息已包含在 msg 中；需要堆栈时由调用方在 except 块内显式记录。
         """
-        log_level = {'info': logging.INFO, 'success': logging.INFO,
-                     'warning': logging.WARNING, 'error': logging.ERROR}.get(level, logging.WARNING)
+        log_level = {
+            'info': logging.INFO,
+            'success': logging.INFO,
+            'warning': logging.WARNING,
+            'error': logging.ERROR,
+        }.get(level, logging.WARNING)
         logging.log(log_level, msg)
         if self._log_callback:
             self._log_callback(msg, level)
@@ -46,7 +49,11 @@ class PdfTextExtractor:
         """清除文本缓存"""
         with self._cache_lock:
             self._text_cache.clear()
-            self._raw_text_cache.clear()
+            self._raw_text_cache = {
+                path: value
+                for path, value in self._raw_text_cache.items()
+                if value is _PARSE_PENDING
+            }
 
     # ── 原始文本提取（保留空白） ──────────────────────
     def _extract_raw_text(self, pdf_path: str) -> tuple[str | None, str | None]:
@@ -54,17 +61,23 @@ class PdfTextExtractor:
 
         返回 (text, error_type)：
             - 成功：(text, None)
-            - 失败：(None, error_type)，error_type ∈ {'encrypted','corrupted','empty','unknown'}
+                        - 失败：(None, error_type)，error_type ∈
+                            {'encrypted','corrupted','empty','unknown'}
         """
-        with self._cache_lock:
-            val = self._raw_text_cache.get(pdf_path)
-            if val is not None:
-                if val is _PARSE_PENDING:
-                    return None, None  # 正在解析中（其他线程会填充）
-                # 缓存值是 (text, error_type) 元组
-                return val if isinstance(val, tuple) else (val, None)
-            # 标记为解析中，阻止其他线程重复解析
-            self._raw_text_cache[pdf_path] = _PARSE_PENDING
+        while True:
+            with self._cache_lock:
+                val = self._raw_text_cache.get(pdf_path)
+                if val is None:
+                    parse_event = threading.Event()
+                    self._raw_parse_events[pdf_path] = parse_event
+                    self._raw_text_cache[pdf_path] = _PARSE_PENDING
+                    break
+                if val is not _PARSE_PENDING:
+                    # 缓存值是 (text, error_type) 元组
+                    return val if isinstance(val, tuple) else (val, None)
+                parse_event = self._raw_parse_events.get(pdf_path)
+            if parse_event is not None:
+                parse_event.wait()
         try:
             with pdfplumber.open(pdf_path) as pdf:
                 # 检测加密 PDF
@@ -77,7 +90,10 @@ class PdfTextExtractor:
                 text = '\n'.join(pages_text)
                 # 检测扫描件（无文本内容）
                 if not text.strip():
-                    self._log_core(f"PDF 无文本内容（可能是扫描件）: {pdf_path}", level='warning')
+                    self._log_core(
+                        f"PDF 无文本内容（可能是扫描件）: {pdf_path}",
+                        level='warning',
+                    )
                     with self._cache_lock:
                         self._raw_text_cache[pdf_path] = (None, 'empty')
                     return None, 'empty'
@@ -92,13 +108,23 @@ class PdfTextExtractor:
                 error_type = 'corrupted'
             else:
                 error_type = 'unknown'
-            self._log_core(f"PDF 文本提取失败 [{error_type}]: {pdf_path} - {e}", level='warning')
+            self._log_core(
+                f"PDF 文本提取失败 [{error_type}]: {pdf_path} - {e}",
+                level='warning',
+            )
             with self._cache_lock:
                 self._raw_text_cache[pdf_path] = (None, error_type)
             return None, error_type
+        finally:
+            with self._cache_lock:
+                parse_event = self._raw_parse_events.pop(pdf_path, None)
+            if parse_event is not None:
+                parse_event.set()
 
     # ── 去空白文本提取（带缓存） ──────────────────────
-    def extract_pdf_text_with_error(self, pdf_path: str) -> tuple[str | None, str | None]:
+    def extract_pdf_text_with_error(
+        self, pdf_path: str
+    ) -> tuple[str | None, str | None]:
         """提取 PDF 文本内容（去空白，带缓存），并返回错误类型
 
         返回 (text, error_type)，error_type 为 None 表示成功。

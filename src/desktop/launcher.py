@@ -49,19 +49,16 @@ def _wait_until_ready(url: str, token: str, timeout: float = 10.0) -> None:
 
 def run_desktop() -> None:
     """启动桌面应用；pywebview 只在真正进入桌面模式时导入。"""
-    try:
-        import webview
-    except ImportError as exc:
-        raise RuntimeError('缺少 pywebview，请安装桌面运行依赖') from exc
-
     port = _find_free_port()
     token = secrets.token_urlsafe(32)
     job_service = JobService()
     app = create_app(
         job_service,
         local_token=token,
+        allowed_origins={f'http://127.0.0.1:{port}'},
         static_dir=_bundle_root() / 'web' / 'dist',
     )
+    job_service.start_background_tasks()
     config = uvicorn.Config(
         app,
         host='127.0.0.1',
@@ -76,10 +73,15 @@ def run_desktop() -> None:
     base_url = f'http://127.0.0.1:{port}'
     try:
         _wait_until_ready(f'{base_url}/api/v1/system/health', token)
+        try:
+            import webview
+        except ImportError as exc:
+            raise RuntimeError('缺少 pywebview，请安装桌面运行依赖') from exc
+
         webview.create_window(
             'SYNTEC · 电子票据工作台',
             f'{base_url}/?token={token}',
-            js_api=NativeBridge(),
+            js_api=NativeBridge(job_service.is_known_output_directory),
             width=1280,
             height=820,
             min_size=(1024, 700),

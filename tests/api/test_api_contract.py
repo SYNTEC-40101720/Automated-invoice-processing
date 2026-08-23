@@ -8,6 +8,7 @@ from src.api.app import create_app
 from src.api.dependencies import get_job_service
 from src.api.routes import email as email_route
 from src.api.routes import settings as settings_route
+from src.api.schemas import SettingsResponse
 from src.application.event_bus import EventBus
 from src.application.job_service import JobService
 from src.domain.job import JobTrigger
@@ -31,6 +32,34 @@ def test_health_requires_local_token_and_returns_version(tmp_path):
     assert response.status_code == 200
     assert response.json()['status'] == 'ok'
     assert response.json()['mode'] == 'local'
+
+
+def test_api_rejects_untrusted_origin_and_sets_security_headers(tmp_path):
+    app = create_app(
+        local_token='test-token',
+        allowed_origins={'http://testserver'},
+    )
+    client = TestClient(app)
+
+    trusted = client.get(
+        '/api/v1/system/health',
+        headers={
+            'X-Local-Token': 'test-token',
+            'Origin': 'http://testserver',
+        },
+    )
+    assert trusted.status_code == 200
+    assert "default-src 'self'" in trusted.headers['content-security-policy']
+    assert trusted.headers['x-content-type-options'] == 'nosniff'
+
+    untrusted = client.get(
+        '/api/v1/system/health',
+        headers={
+            'X-Local-Token': 'test-token',
+            'Origin': 'http://evil.example',
+        },
+    )
+    assert untrusted.status_code == 403
 
 
 def test_empty_source_returns_stable_error(tmp_path):
@@ -78,9 +107,13 @@ def test_job_logs_endpoint_returns_only_job_logs(tmp_path):
     service = JobService(event_bus=EventBus())
     app = create_app(service, local_token='test-token')
     client = TestClient(app)
-    service.events.publish('job.log_appended', {'level': 'info', 'message': 'hello'}, 'job-1')
+    service.events.publish(
+        'job.log_appended', {'level': 'info', 'message': 'hello'}, 'job-1'
+    )
     service.events.publish('job.progress', {'progress': 0.5}, 'job-1')
-    service.events.publish('job.log_appended', {'level': 'warning', 'message': 'warn'}, 'job-2')
+    service.events.publish(
+        'job.log_appended', {'level': 'warning', 'message': 'warn'}, 'job-2'
+    )
 
     # 注入一个已知任务，绕过启动线程，只测试日志过滤协议。
     from src.domain.job import Job
@@ -94,6 +127,30 @@ def test_job_logs_endpoint_returns_only_job_logs(tmp_path):
     assert [item['message'] for item in response.json()['items']] == ['hello']
 
 
+def test_job_logs_endpoint_supports_event_cursor(tmp_path):
+    service = JobService(event_bus=EventBus())
+    app = create_app(service, local_token='test-token')
+    client = TestClient(app)
+    first = service.events.publish(
+        'job.log_appended', {'level': 'info', 'message': 'first'}, 'job-1'
+    )
+    second = service.events.publish(
+        'job.log_appended', {'level': 'info', 'message': 'second'}, 'job-1'
+    )
+
+    from src.domain.job import Job
+    service._jobs['job-1'] = Job(source_dir=str(tmp_path), id='job-1')
+
+    response = client.get(
+        f'/api/v1/jobs/job-1/logs?after_event_id={first.event_id}',
+        headers={'X-Local-Token': 'test-token'},
+    )
+
+    assert response.status_code == 200
+    assert [item['message'] for item in response.json()['items']] == ['second']
+    assert response.json()['next_event_id'] == second.event_id
+
+
 def test_settings_response_redacts_secret_values(monkeypatch, tmp_path):
     monkeypatch.setattr(settings_route, 'get_target_tax_id', lambda: 'TAX-ID')
     monkeypatch.setattr(settings_route, 'get_max_workers', lambda: 8)
@@ -103,7 +160,9 @@ def test_settings_response_redacts_secret_values(monkeypatch, tmp_path):
         'inbox_dir': 'inbox', 'days_back': '30', 'poll_minutes': '0',
     })
     monkeypatch.setattr(settings_route, 'get_email_enabled', lambda: True)
-    monkeypatch.setattr(settings_route, 'get_email_username', lambda: 'user@example.com')
+    monkeypatch.setattr(
+        settings_route, 'get_email_username', lambda: 'user@example.com'
+    )
     monkeypatch.setattr(settings_route, 'get_email_auth_code', lambda: 'secret-auth')
     monkeypatch.setattr(settings_route, 'get_email_days_back', lambda: 30)
     monkeypatch.setattr(settings_route, 'get_email_poll_minutes', lambda: 0)
@@ -132,7 +191,9 @@ def test_ai_test_uses_pending_key_and_settings(monkeypatch, tmp_path):
     monkeypatch.setattr(settings_route, 'get_ai_timeout', lambda: 60)
 
     def fake_test_connection(api_key, *, api_base, model, timeout):
-        captured.update(api_key=api_key, api_base=api_base, model=model, timeout=timeout)
+        captured.update(
+            api_key=api_key, api_base=api_base, model=model, timeout=timeout
+        )
 
     monkeypatch.setattr(settings_route, 'test_ai_connection', fake_test_connection)
     client = TestClient(make_app(tmp_path))
@@ -199,7 +260,9 @@ def test_email_pull_starts_email_job_for_downloaded_files(monkeypatch, tmp_path)
     app = make_app(tmp_path)
     app.dependency_overrides[get_job_service] = lambda: fake_service
     client = TestClient(app)
-    response = client.post('/api/v1/email/pull', headers={'X-Local-Token': 'test-token'})
+    response = client.post(
+        '/api/v1/email/pull', headers={'X-Local-Token': 'test-token'}
+    )
 
     assert response.status_code == 200
     assert response.json()['job']['id'] == 'job-email'
@@ -209,7 +272,9 @@ def test_email_pull_starts_email_job_for_downloaded_files(monkeypatch, tmp_path)
 def test_static_frontend_is_served_after_api_routes(tmp_path):
     static_dir = tmp_path / 'dist'
     static_dir.mkdir()
-    (static_dir / 'index.html').write_text('<html><body>workbench</body></html>', encoding='utf-8')
+    (static_dir / 'index.html').write_text(
+        '<html><body>workbench</body></html>', encoding='utf-8'
+    )
     client = TestClient(create_app(local_token='test-token', static_dir=static_dir))
 
     response = client.get('/')
@@ -220,7 +285,11 @@ def test_static_frontend_is_served_after_api_routes(tmp_path):
 
 def test_email_patch_does_not_persist_none_values(monkeypatch, tmp_path):
     captured = {}
-    monkeypatch.setattr(settings_route, 'set_email_config', lambda **values: captured.update(values))
+    monkeypatch.setattr(
+        settings_route,
+        'set_email_config',
+        lambda **values: captured.update(values),
+    )
     monkeypatch.setattr(settings_route, 'get_email_config', lambda: {
         'enabled': 'false', 'imap_host': 'imap.example.com', 'imap_port': '993',
         'username': '', 'auth_code': '', 'inbox_dir': 'inbox', 'days_back': '30',
@@ -242,3 +311,51 @@ def test_email_patch_does_not_persist_none_values(monkeypatch, tmp_path):
     assert response.status_code == 200
     assert captured == {'imap_host': 'imap.updated.example.com'}
     assert None not in captured.values()
+
+
+def test_settings_patch_writes_all_sections_once(monkeypatch, tmp_path):
+    captured = {}
+    monkeypatch.setattr(
+        settings_route,
+        'set_all_config',
+        lambda **values: captured.update(values),
+    )
+    monkeypatch.setattr(settings_route, 'reload_business_config', lambda: None)
+    monkeypatch.setattr(settings_route, '_settings', lambda: SettingsResponse(
+        business={'target_tax_id': 'TAX-ID', 'max_workers': 4},
+        email={
+            'enabled': True,
+            'imap_host': 'imap.example.com',
+            'imap_port': 993,
+            'username': 'user@example.com',
+            'inbox_dir': 'inbox',
+            'days_back': 30,
+            'poll_minutes': 0,
+            'auth_code_configured': False,
+        },
+        ai={
+            'enabled': False,
+            'api_base': 'https://ai.example.com',
+            'model': 'model',
+            'timeout': 60,
+            'api_key_configured': False,
+        },
+    ))
+
+    client = TestClient(make_app(tmp_path))
+    response = client.patch(
+        '/api/v1/settings',
+        headers={'X-Local-Token': 'test-token'},
+        json={
+            'business': {'target_tax_id': 'TAX-ID', 'max_workers': 4},
+            'email': {'enabled': True},
+            'ai': {'enabled': False},
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        'business': {'target_tax_id': 'TAX-ID', 'max_workers': 4},
+        'email': {'enabled': True},
+        'ai': {'enabled': False},
+    }

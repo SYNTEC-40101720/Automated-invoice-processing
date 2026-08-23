@@ -1,4 +1,4 @@
-import { AlertTriangle, ChevronUp, ClipboardList, Terminal, X } from 'lucide-react'
+import { AlertTriangle, ChevronUp, ClipboardList, Download, Terminal, X } from 'lucide-react'
 import { useWorkbench } from '../stores/workbench'
 
 export function BottomPanel() {
@@ -6,6 +6,31 @@ export function BottomPanel() {
   const setPanel = useWorkbench((state) => state.setBottomPanel)
   const logs = useWorkbench((state) => state.logs)
   const clearLogs = useWorkbench((state) => state.clearLogs)
+  const exportLogs = async () => {
+    if (logs.length === 0) return
+    const content = logs.map((log) => (
+      `${log.occurred_at} [${log.level.toUpperCase()}] ${log.message}`
+    )).join('\n') + '\n'
+    try {
+      if (window.pywebview?.api) {
+        const path = await window.pywebview.api.save_log_dialog('invoice.log.txt')
+        if (!path) return
+        if (!await window.pywebview.api.write_log(content)) {
+          window.alert('日志导出失败')
+        }
+        return
+      }
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'invoice.log.txt'
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      window.alert((error as Error).message)
+    }
+  }
   return (
     <section className="bottom-panel">
       <div className="panel-tabs">
@@ -19,6 +44,7 @@ export function BottomPanel() {
           <ClipboardList size={14} /> 任务详情
         </button>
         <span className="panel-grow" />
+        <button className="icon-button subtle" title="导出日志" aria-label="导出日志" onClick={() => void exportLogs()} disabled={logs.length === 0}><Download size={14} /></button>
         <button className="icon-button subtle" title="清空当前日志" onClick={clearLogs}><X size={14} /></button>
         <ChevronUp size={15} className="panel-chevron" />
       </div>

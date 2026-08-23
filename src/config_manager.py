@@ -8,10 +8,13 @@ import configparser
 import logging
 import os
 import sys
+import tempfile
+import threading
 
 from .secret_store import PREFIX, decrypt, encrypt
 
 logger = logging.getLogger(__name__)
+_CONFIG_LOCK = threading.RLock()
 
 # 默认配置（与原 config.py 硬编码值一致，保证向后兼容）
 _DEFAULTS = {
@@ -107,27 +110,82 @@ def load_config() -> configparser.ConfigParser:
 
     返回 ConfigParser 实例，业务配置位于 [business] 段。
     """
-    _ensure_config_exists()
-    cfg = configparser.ConfigParser()
-    # 先加载默认值，再读取文件覆盖
-    cfg.read_dict(_DEFAULTS)
-    try:
-        cfg.read(get_config_path(), encoding='utf-8')
-    except (OSError, configparser.Error) as e:
-        logger.warning(f"读取配置失败: {e}，将使用默认配置")
-    return cfg
+    with _CONFIG_LOCK:
+        _ensure_config_exists()
+        cfg = configparser.ConfigParser()
+        # 先加载默认值，再读取文件覆盖
+        cfg.read_dict(_DEFAULTS)
+        try:
+            cfg.read(get_config_path(), encoding='utf-8')
+        except (OSError, configparser.Error) as e:
+            logger.warning(f"读取配置失败: {e}，将使用默认配置")
+        return cfg
 
 
 def save_config(cfg: configparser.ConfigParser) -> None:
     """保存配置到 config.ini"""
     path = get_config_path()
+    temp_path = None
     try:
-        with open(path, 'w', encoding='utf-8') as f:
+        directory = os.path.dirname(path) or '.'
+        fd, temp_path = tempfile.mkstemp(
+            prefix='.config-', suffix='.tmp', dir=directory,
+        )
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
             cfg.write(f)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp_path, path)
+        temp_path = None
         logger.info(f"配置已保存: {path}")
     except OSError as e:
         logger.error(f"保存配置失败: {e}")
         raise
+    finally:
+        if temp_path:
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+
+
+def _set_section_values(
+    cfg: configparser.ConfigParser,
+    section: str,
+    values: dict,
+    secret_key: str | None = None,
+) -> None:
+    if not cfg.has_section(section):
+        cfg.add_section(section)
+    for key, value in values.items():
+        if key not in _DEFAULTS[section] or value is None:
+            continue
+        if key == secret_key and value and not str(value).startswith(PREFIX):
+            value = encrypt(str(value))
+        cfg.set(section, key, str(value))
+
+
+def set_all_config(
+    *,
+    business: dict | None = None,
+    email: dict | None = None,
+    ai: dict | None = None,
+) -> None:
+    """一次性保存多段配置，避免前端连续 PATCH 留下半套配置。"""
+    with _CONFIG_LOCK:
+        cfg = load_config()
+        if business:
+            business = dict(business)
+            if business.get('max_workers') is not None:
+                business['max_workers'] = max(
+                    2, min(16, int(business['max_workers']))
+                )
+            _set_section_values(cfg, 'business', business)
+        if email:
+            _set_section_values(cfg, 'email', email, secret_key='auth_code')
+        if ai:
+            _set_section_values(cfg, 'ai', ai, secret_key='api_key')
+        save_config(cfg)
 
 
 def get_target_tax_id() -> str:
@@ -150,12 +208,10 @@ def get_max_workers() -> int:
 
 def set_business_config(target_tax_id: str, max_workers: int) -> None:
     """便捷写入：业务配置（税号 + 线程数）"""
-    cfg = load_config()
-    if not cfg.has_section('business'):
-        cfg.add_section('business')
-    cfg.set('business', 'target_tax_id', target_tax_id)
-    cfg.set('business', 'max_workers', str(max(2, min(16, max_workers))))
-    save_config(cfg)
+    set_all_config(business={
+        'target_tax_id': target_tax_id,
+        'max_workers': max_workers,
+    })
 
 
 # ── 邮箱配置（自动拉取发票）──────────────────────────────
@@ -218,15 +274,7 @@ def set_email_config(**kwargs) -> None:
 
     auth_code 明文写入时自动经 DPAPI 加密，config.ini 不保留明文。
     """
-    cfg = load_config()
-    if not cfg.has_section('email'):
-        cfg.add_section('email')
-    for k, v in kwargs.items():
-        if k in _DEFAULTS['email']:
-            if k == 'auth_code' and v and not str(v).startswith(PREFIX):
-                v = encrypt(str(v))
-            cfg.set('email', k, str(v))
-    save_config(cfg)
+    set_all_config(email=kwargs)
 
 
 # ── AI 审核配置 ────────────────────────────────────────
@@ -275,12 +323,4 @@ def set_ai_config(**kwargs) -> None:
 
     api_key 明文写入时自动经 DPAPI 加密，config.ini 不保留明文。
     """
-    cfg = load_config()
-    if not cfg.has_section('ai'):
-        cfg.add_section('ai')
-    for k, v in kwargs.items():
-        if k in _DEFAULTS['ai']:
-            if k == 'api_key' and v and not str(v).startswith(PREFIX):
-                v = encrypt(str(v))
-            cfg.set('ai', k, str(v))
-    save_config(cfg)
+    set_all_config(ai=kwargs)

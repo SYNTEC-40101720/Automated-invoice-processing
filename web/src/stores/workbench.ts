@@ -13,6 +13,7 @@ interface WorkbenchState {
   setBottomPanel: (panel: WorkbenchState['bottomPanel']) => void
   appendEvent: (event: DomainEvent) => void
   setLogs: (logs: LogEntry[]) => void
+  mergeLogs: (logs: LogEntry[]) => void
   clearLogs: () => void
 }
 
@@ -31,6 +32,7 @@ export const useWorkbench = create<WorkbenchState>((set) => ({
       return { currentJob: event.payload as unknown as Job }
     }
     if (event.type === 'job.log_appended') {
+      if (state.logs.some((entry) => entry.event_id === event.event_id)) return state
       const entry: LogEntry = {
         event_id: event.event_id,
         occurred_at: event.occurred_at,
@@ -78,5 +80,10 @@ export const useWorkbench = create<WorkbenchState>((set) => ({
     return state
   }),
   setLogs: (logs) => set({ logs }),
+  mergeLogs: (logs) => set((state) => {
+    const byEventId = new Map(state.logs.map((entry) => [entry.event_id, entry]))
+    for (const entry of logs) byEventId.set(entry.event_id, entry)
+    return { logs: [...byEventId.values()].sort((left, right) => left.event_id - right.event_id).slice(-500) }
+  }),
   clearLogs: () => set({ logs: [] }),
 }))

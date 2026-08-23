@@ -5,12 +5,17 @@ from __future__ import annotations
 import os
 import sys
 import tkinter as tk
+from collections.abc import Callable
 from pathlib import Path
 from tkinter import filedialog
 
 
 class NativeBridge:
     """只提供文件选择和打开目录，不承载业务编排。"""
+
+    def __init__(self, directory_checker: Callable[[str], bool] | None = None):
+        self._directory_checker = directory_checker
+        self._selected_log_path: Path | None = None
 
     @staticmethod
     def _dialog_root() -> tk.Tk:
@@ -39,19 +44,35 @@ class NativeBridge:
     def save_log_dialog(self, default_name: str = 'invoice.log') -> str:
         root = self._dialog_root()
         try:
-            return filedialog.asksaveasfilename(
+            selected = filedialog.asksaveasfilename(
                 title='导出处理日志',
                 initialfile=default_name,
                 defaultextension='.txt',
                 filetypes=[('文本文件', '*.txt'), ('所有文件', '*.*')],
             ) or ''
+            self._selected_log_path = (
+                Path(selected).expanduser().resolve() if selected else None
+            )
+            return selected
         finally:
             root.destroy()
 
-    @staticmethod
-    def open_directory(path: str) -> bool:
+    def write_log(self, content: str) -> bool:
+        target = self._selected_log_path
+        self._selected_log_path = None
+        if target is None or target.is_dir():
+            return False
+        try:
+            target.write_text(content, encoding='utf-8')
+        except OSError:
+            return False
+        return True
+
+    def open_directory(self, path: str) -> bool:
         target = Path(path).expanduser().resolve()
         if not target.is_dir():
+            return False
+        if self._directory_checker and not self._directory_checker(str(target)):
             return False
         if os.name == 'nt':
             os.startfile(str(target))
@@ -61,4 +82,8 @@ class NativeBridge:
 
     @staticmethod
     def get_runtime_info() -> dict[str, str | bool]:
-        return {'platform': sys.platform, 'webview2': os.name == 'nt', 'version': '7.0.0'}
+        return {
+            'platform': sys.platform,
+            'webview2': os.name == 'nt',
+            'version': '7.0.0',
+        }

@@ -3,7 +3,7 @@
 业务配置（税号、线程数）从 config.ini 读取。
 """
 
-from .config_manager import get_target_tax_id, get_max_workers
+from .config_manager import get_max_workers, get_target_tax_id
 
 # ── 业务配置（从 config.ini 读取，首次运行自动生成默认配置）──
 TARGET_TAX_ID = get_target_tax_id()

@@ -26,7 +26,7 @@
 1. 克隆或下载项目到本地
 2. 安装 Python 依赖包：
    ```
-   pip install -r requirements.txt
+   python -m pip install -r requirements.txt
    ```
 3. 安装并构建 Web 工作台：
    ```
@@ -88,7 +88,7 @@
 
 ## 配置说明
 
-业务配置（税号、线程数、邮箱和 AI 审核）通过 Web 工作台「设置」视图修改，保存至 `config.ini`，下次处理生效。授权码和 API Key 由本地安全存储负责保存，API 响应只返回是否已配置。
+业务配置（税号、线程数、邮箱和 AI 审核）通过 Web 工作台「设置」视图修改，保存至 `config.ini` 并立即生效；邮箱启用自动轮询时，轮询线程会同步读取新的间隔。授权码和 API Key 由本地安全存储负责保存，API 响应只返回是否已配置。
 
 业务配置默认值和动态读取逻辑见 [src/config.py](src/config.py) 与 [src/config_manager.py](src/config_manager.py)。
 
@@ -105,19 +105,25 @@
 
 ```bash
 # 全部测试
-pytest tests/ -v
+python -m pytest tests/ -v
 
 # 仅单元测试
-pytest tests/test_processor.py -v
+python -m pytest tests/test_processor.py -v
 
 # 仅集成测试
-pytest tests/test_integration.py -v
+python -m pytest tests/test_integration.py -v
+
+# Python 静态检查
+python -m ruff check src tests
 ```
+
+当前 Windows 开发环境已验证 Python 测试 119 条通过、编译和依赖检查通过，前端类型检查与生产构建通过，`build_syntec.py` 可生成并完成 SYNTEC 域控合规校验，本机正式发布包启动冒烟通过。真实浏览器 E2E、干净域控账户启动和目标机 WebView2 验收仍需单独执行。
 
 ## 版本历史
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v7.0 | 2026-08 | FastAPI + React 工作台、任务服务、邮箱自动轮询、统一设置、日志恢复、Native Bridge 安全边界和域控打包 |
 | v6.2 | 2026-07 | 停止按钮、日志持久化、PDF 异常分类、配置外部化、拖拽导入、内容去重、类型路由注册表、集成测试 |
 | v6.1 | 2026-07 | 域控规范支持、桌面界面迁移、墨韵主题 |
 | v6.0 | 2026-07 | 初始版本 |

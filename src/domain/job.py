@@ -63,7 +63,7 @@ class JobStats:
 
 
 _ALLOWED_TRANSITIONS: dict[JobStatus, set[JobStatus]] = {
-    JobStatus.QUEUED: {JobStatus.RUNNING, JobStatus.CANCELLED},
+    JobStatus.QUEUED: {JobStatus.RUNNING, JobStatus.CANCELLED, JobStatus.FAILED},
     JobStatus.RUNNING: {
         JobStatus.CANCELLING,
         JobStatus.SUCCEEDED,
@@ -110,7 +110,10 @@ class Job:
     def transition(self, target: JobStatus) -> None:
         if target == self.status:
             return
-        if self.status.is_terminal or target not in _ALLOWED_TRANSITIONS.get(self.status, set()):
+        if (
+            self.status.is_terminal
+            or target not in _ALLOWED_TRANSITIONS.get(self.status, set())
+        ):
             raise InvalidJobTransition(self.status.value, target.value)
         self.status = target
         if target == JobStatus.RUNNING and self.started_at is None:

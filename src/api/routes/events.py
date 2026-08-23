@@ -6,6 +6,7 @@ import asyncio
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from ...domain.errors import EventStreamClosed
 from ..dependencies import validate_websocket_token
 
 router = APIRouter(tags=['events'])
@@ -50,7 +51,7 @@ async def events(websocket: WebSocket) -> None:
                 })
                 continue
             await websocket.send_json(event.to_dict())
-    except (WebSocketDisconnect, RuntimeError):
+    except (WebSocketDisconnect, RuntimeError, EventStreamClosed):
         pass
     finally:
         subscription.close()

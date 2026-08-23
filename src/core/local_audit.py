@@ -54,7 +54,10 @@ def check_filenames(files: list[str]) -> list[dict]:
                 findings.append({
                     'file': inv,
                     'type': 'duplicate',
-                    'issue': f'发票号 {inv} 金额 {amt:.2f}{suffix} 出现 {cnt} 次，疑似重复下载',
+                    'issue': (
+                        f'发票号 {inv} 金额 {amt:.2f}{suffix} 出现 {cnt} 次，'
+                        '疑似重复下载'
+                    ),
                     'suggestion': '确认是否为同一张发票重复',
                 })
     return findings

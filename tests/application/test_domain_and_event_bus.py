@@ -1,5 +1,7 @@
 """领域模型和事件总线的第一批回归测试。"""
 
+import threading
+
 import pytest
 
 from src.application.event_bus import EventBus
@@ -52,3 +54,22 @@ def test_event_bus_drops_progress_before_critical_events():
 
     events = [subscription.get(timeout=0.1), subscription.get(timeout=0.1)]
     assert any(event.type == 'job.completed' for event in events)
+
+
+def test_event_bus_does_not_block_when_critical_queue_is_full():
+    bus = EventBus()
+    subscription = bus.subscribe(maxsize=1)
+    bus.publish('job.status_changed', {'status': 'running'}, 'job-1')
+    finished = threading.Event()
+
+    def publish_second_event():
+        bus.publish('job.completed', {'status': 'succeeded'}, 'job-1')
+        finished.set()
+
+    thread = threading.Thread(target=publish_second_event)
+    thread.start()
+    assert finished.wait(timeout=0.2)
+    thread.join(timeout=1)
+    assert subscription.get(timeout=0.1).type == 'job.status_changed'
+    with pytest.raises(EventStreamClosed):
+        subscription.get(timeout=0.1)

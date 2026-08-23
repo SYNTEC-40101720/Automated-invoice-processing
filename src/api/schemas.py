@@ -122,6 +122,14 @@ class AiSettingsPatch(BaseModel):
     timeout: int | None = Field(default=None, ge=10, le=600)
 
 
+class SettingsPatch(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    business: BusinessSettingsPatch
+    email: EmailSettingsPatch
+    ai: AiSettingsPatch
+
+
 class EmailTestResponse(BaseModel):
     ok: bool
     message: str

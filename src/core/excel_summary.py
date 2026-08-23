@@ -2,15 +2,14 @@
 
 从已处理的 PDF 发票中提取费用数据，按日期归集生成 Excel 汇总表。
 """
+import logging
 import os
 import re
-import logging
 from collections import defaultdict
 from datetime import datetime
 
 import openpyxl
-from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
-from openpyxl.utils import get_column_letter
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +45,7 @@ _HOTEL_TAX_PATTERNS = [
 
 def _determine_category(text: str) -> str:
     """根据文本内容判断费用类别
-    
+
     返回: 'transport' | 'hotel' | 'unknown'
 
     注意：交通关键字优先于住宿关键字，因为滴滴行程单的目的地可能包含"酒店"，
@@ -92,25 +91,45 @@ def _extract_date(text: str, category: str = 'unknown') -> str | None:
     if category == 'transport':
         # ① 优先匹配行程日期（乘车、行程），不匹配开票/发票日期
         for prefix in ('乘车', '行程'):
-            m = re.search(rf'{prefix}日期\s*[:：]?\s*(\d{{4}})[年/-](\d{{1,2}})[月/-](\d{{1,2}})[日]?', text)
+            m = re.search(
+                rf'{prefix}日期\s*[:：]?\s*(\d{{4}})'
+                r'[年/-](\d{{1,2}})[月/-](\d{{1,2}})[日]?',
+                text,
+            )
             if m:
                 return _fmt(m)
         # ② 高铁票发车时间格式：2026年07月22日 19:00开
-        m = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日\s*\d{2}:\d{2}开', text)
+        m = re.search(
+            r'(\d{4})年(\d{1,2})月(\d{1,2})日\s*\d{2}:\d{2}'
+            r'开',
+            text,
+        )
         if m:
             return _fmt(m)
         # ③ fallback 到开票日期
-        m = re.search(r'(?:开票|开具)日期\s*[:：]?\s*(\d{4})[年/-](\d{1,2})[月/-](\d{1,2})[日]?', text)
+        m = re.search(
+            r'(?:开票|开具)日期\s*[:：]?\s*(\d{4})'
+            r'[年/-](\d{1,2})[月/-](\d{1,2})[日]?',
+            text,
+        )
         if m:
             return _fmt(m)
 
     elif category == 'hotel':
         # ① 优先匹配入住日期
-        m = re.search(r'入住日期\s*[:：]?\s*(\d{4})[年/-](\d{1,2})[月/-](\d{1,2})[日]?', text)
+        m = re.search(
+            r'入住日期\s*[:：]?\s*(\d{4})'
+            r'[年/-](\d{1,2})[月/-](\d{1,2})[日]?',
+            text,
+        )
         if m:
             return _fmt(m)
         # ② fallback 到开票日期
-        m = re.search(r'(?:开票|开具)日期\s*[:：]?\s*(\d{4})[年/-](\d{1,2})[月/-](\d{1,2})[日]?', text)
+        m = re.search(
+            r'(?:开票|开具)日期\s*[:：]?\s*(\d{4})'
+            r'[年/-](\d{1,2})[月/-](\d{1,2})[日]?',
+            text,
+        )
         if m:
             return _fmt(m)
 

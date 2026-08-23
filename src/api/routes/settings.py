@@ -6,7 +6,8 @@ import imaplib
 
 from fastapi import APIRouter, Depends
 
-from ...core.ai_audit import test_connection as test_ai_connection
+from ...application.job_service import JobService
+from ...config import reload_business_config
 from ...config_manager import (
     get_ai_api_base,
     get_ai_api_key,
@@ -22,11 +23,13 @@ from ...config_manager import (
     get_max_workers,
     get_target_tax_id,
     set_ai_config,
+    set_all_config,
     set_business_config,
     set_email_config,
 )
+from ...core.ai_audit import test_connection as test_ai_connection
 from ...domain.errors import ApplicationError
-from ..dependencies import require_local_token
+from ..dependencies import get_job_service, require_local_token
 from ..schemas import (
     AiSettings,
     AiSettingsPatch,
@@ -36,6 +39,7 @@ from ..schemas import (
     EmailSettings,
     EmailSettingsPatch,
     EmailTestResponse,
+    SettingsPatch,
     SettingsResponse,
 )
 
@@ -78,6 +82,34 @@ def get_settings() -> SettingsResponse:
     return _settings()
 
 
+@router.patch('', response_model=SettingsResponse)
+def patch_settings(
+    request: SettingsPatch,
+    service: JobService = Depends(get_job_service),
+) -> SettingsResponse:
+    values = request.model_dump(exclude_unset=True)
+    set_all_config(
+        business={
+            key: value
+            for key, value in (values.get('business') or {}).items()
+            if value is not None
+        },
+        email={
+            key: value
+            for key, value in (values.get('email') or {}).items()
+            if value is not None
+        },
+        ai={
+            key: value
+            for key, value in (values.get('ai') or {}).items()
+            if value is not None
+        },
+    )
+    reload_business_config()
+    service.wake_background_tasks()
+    return _settings()
+
+
 @router.patch('/business', response_model=BusinessSettings)
 def patch_business(request: BusinessSettingsPatch) -> BusinessSettings:
     values = request.model_dump(exclude_unset=True)
@@ -85,11 +117,15 @@ def patch_business(request: BusinessSettingsPatch) -> BusinessSettings:
         values.get('target_tax_id', get_target_tax_id()),
         values.get('max_workers', get_max_workers()),
     )
+    reload_business_config()
     return _settings().business
 
 
 @router.patch('/email', response_model=EmailSettings)
-def patch_email(request: EmailSettingsPatch) -> EmailSettings:
+def patch_email(
+    request: EmailSettingsPatch,
+    service: JobService = Depends(get_job_service),
+) -> EmailSettings:
     values = {
         key: value
         for key, value in request.model_dump(exclude_unset=True).items()
@@ -97,6 +133,7 @@ def patch_email(request: EmailSettingsPatch) -> EmailSettings:
     }
     if values:
         set_email_config(**values)
+        service.wake_background_tasks()
     return _settings().email
 
 
@@ -158,7 +195,9 @@ def test_email(request: EmailSettingsPatch) -> EmailTestResponse:
         mail = imaplib.IMAP4_SSL(host, port, timeout=10)
         mail.login(username, auth_code)
     except Exception as exc:
-        raise ApplicationError('EMAIL_CONNECTION_FAILED', f'邮箱连接失败: {exc}') from exc
+        raise ApplicationError(
+            'EMAIL_CONNECTION_FAILED', f'邮箱连接失败: {exc}'
+        ) from exc
     finally:
         if mail is not None:
             try:

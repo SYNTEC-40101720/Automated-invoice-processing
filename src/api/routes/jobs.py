@@ -47,7 +47,9 @@ def get_job(job_id: str, service: JobService = Depends(get_job_service)) -> dict
     return service.get_job(job_id)
 
 
-@router.post('/{job_id}/cancel', response_model=dict, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    '/{job_id}/cancel', response_model=dict, status_code=status.HTTP_202_ACCEPTED
+)
 def cancel_job(job_id: str, service: JobService = Depends(get_job_service)) -> dict:
     return service.cancel_job(job_id)
 

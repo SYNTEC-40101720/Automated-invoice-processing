@@ -12,6 +12,7 @@ from src.core.email_pull import (
     _decode,
     _is_invoice_email,
     _save_attachments,
+    pull_invoices,
 )
 
 
@@ -54,6 +55,12 @@ class TestIsInvoiceEmail:
             'hr@example.com', '会议通知', DEFAULT_SENDERS, DEFAULT_KEYWORDS,
         )
 
+    def test_sender_match_is_not_substring_match(self):
+        assert not _is_invoice_email(
+            'attacker-didifapiao@mailgate.xiaojukeji.com', '会议通知',
+            DEFAULT_SENDERS, DEFAULT_KEYWORDS,
+        )
+
 
 class TestSaveAttachments:
     def test_save_pdf(self, tmp_path):
@@ -74,11 +81,12 @@ class TestSaveAttachments:
         msg = _build_msg([('12306.zip', zip_bytes, 'application/zip')])
         new_files = []
         saved = _save_attachments(msg, str(tmp_path), new_files)
-        # ZIP 本体 + 解压出的 PDF；OFD 不保留
-        assert os.path.isfile(os.path.join(tmp_path, '12306.zip'))
+        # 只保留解压出的 PDF；ZIP 原件和 OFD 不进入处理目录
+        assert not os.path.isfile(os.path.join(tmp_path, '12306.zip'))
         assert os.path.isfile(os.path.join(tmp_path, 'invoice.pdf'))
         assert not os.path.isfile(os.path.join(tmp_path, 'invoice.ofd'))
-        assert len(saved) == 2
+        assert len(saved) == 1
+        assert len(new_files) == 1
 
     def test_duplicate_filename_gets_suffix(self, tmp_path):
         with open(os.path.join(tmp_path, 'a.pdf'), 'wb') as f:
@@ -88,3 +96,41 @@ class TestSaveAttachments:
         saved = _save_attachments(msg, str(tmp_path), new_files)
         assert os.path.isfile(os.path.join(tmp_path, 'a_1.pdf'))
         assert len(saved) == 1
+
+
+def test_pull_invoices_passes_bounded_timeout_to_imap(monkeypatch, tmp_path):
+    captured = {}
+
+    class FakeMail:
+        def login(self, username, auth_code):
+            pass
+
+        def select(self, mailbox):
+            pass
+
+        def search(self, charset, query):
+            return 'OK', [b'']
+
+        def logout(self):
+            pass
+
+    def fake_imap(host, port, timeout):
+        captured.update(host=host, port=port, timeout=timeout)
+        return FakeMail()
+
+    monkeypatch.setattr('src.core.email_pull.imaplib.IMAP4_SSL', fake_imap)
+    result = pull_invoices(
+        host='imap.example.com',
+        port=993,
+        username='user@example.com',
+        auth_code='auth',
+        inbox_dir=str(tmp_path),
+        timeout=2.5,
+    )
+
+    assert result['downloaded'] == 0
+    assert captured == {
+        'host': 'imap.example.com',
+        'port': 993,
+        'timeout': 2.5,
+    }

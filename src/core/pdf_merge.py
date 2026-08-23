@@ -9,12 +9,13 @@
 每个文件 append 两遍；普通发票单份即可。
 """
 import os
-import logging
 from collections.abc import Callable
 
 from pypdf import PdfReader, PdfWriter
 
 from .pdf_text import PdfTextExtractor
+
+MERGED_FILENAME = '合并结果.pdf'
 
 
 def classify_invoice(filename: str, text: str | None) -> str:
@@ -40,9 +41,13 @@ class PdfMerger:
     def __init__(self, extractor: PdfTextExtractor):
         self._extractor = extractor
 
-    def merge_classified(self, output_dir: str, special_invoices: list[str],
-                         normal_files: list[str],
-                         progress_callback: Callable[[float], None] | None = None) -> str | None:
+    def merge_classified(
+        self,
+        output_dir: str,
+        special_invoices: list[str],
+        normal_files: list[str],
+        progress_callback: Callable[[float], None] | None = None,
+    ) -> str | None:
         """合并已分类的PDF文件
 
         Args:
@@ -82,7 +87,7 @@ class PdfMerger:
                     _report(done / total_work * 0.7)
 
             _report(0.7)  # 所有文件已追加
-            merged_path = os.path.join(output_dir, '合并结果.pdf')
+            merged_path = os.path.join(output_dir, MERGED_FILENAME)
             with open(merged_path, 'wb') as f:
                 writer.write(f)
             writer.close()
@@ -98,6 +103,8 @@ class PdfMerger:
         normal_files: list[str] = []
         for filename in os.listdir(output_dir):
             if not filename.lower().endswith('.pdf'):
+                continue
+            if filename == MERGED_FILENAME:
                 continue
             file_path = os.path.join(output_dir, filename)
             if not os.path.isfile(file_path):

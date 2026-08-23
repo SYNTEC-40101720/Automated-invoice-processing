@@ -48,8 +48,20 @@ export const api = {
   cancelJob: (jobId: string) => request<Job>(`/jobs/${jobId}/cancel`, {
     method: 'POST',
   }),
-  logs: (jobId: string) => request<{ items: LogEntry[] }>(`/jobs/${jobId}/logs`),
+  logs: (jobId: string, afterEventId = 0) => request<{
+    items: LogEntry[]
+    next_event_id: number | null
+  }>(
+    `/jobs/${jobId}/logs?after_event_id=${afterEventId}`,
+  ),
   settings: () => request<SettingsResponse>('/settings'),
+  updateSettings: (body: {
+    business: BusinessSettings
+    email: Record<string, unknown>
+    ai: Record<string, unknown>
+  }) => request<SettingsResponse>('/settings', {
+    method: 'PATCH', body: JSON.stringify(body),
+  }),
   updateBusiness: (body: Partial<BusinessSettings>) => request<BusinessSettings>('/settings/business', {
     method: 'PATCH', body: JSON.stringify(body),
   }),

@@ -5,7 +5,8 @@
 import json
 import urllib.request
 
-from src.core.ai_audit import build_prompt, parse_findings, test_connection as check_ai_connection
+from src.core.ai_audit import build_prompt, parse_findings
+from src.core.ai_audit import test_connection as check_ai_connection
 
 
 class FakeResponse:
@@ -46,20 +47,30 @@ class TestParseFindings:
         assert parse_findings('[]') == []
 
     def test_plain_json_array(self):
-        content = '[{"file": "a.pdf", "type": "conflict", "issue": "时间冲突", "suggestion": "核对"}]'
+        content = (
+            '[{"file": "a.pdf", "type": "conflict", '
+            '"issue": "时间冲突", "suggestion": "核对"}]'
+        )
         out = parse_findings(content)
         assert len(out) == 1
         assert out[0]['file'] == 'a.pdf'
         assert out[0]['type'] == 'conflict'
 
     def test_markdown_fenced(self):
-        content = '```json\n[{"file": "b.pdf", "type": "extract", "issue": "x", "suggestion": "y"}]\n```'
+        content = (
+            '```json\n[{"file": "b.pdf", "type": "extract", '
+            '"issue": "x", "suggestion": "y"}]\n```'
+        )
         out = parse_findings(content)
         assert len(out) == 1
         assert out[0]['type'] == 'extract'
 
     def test_noise_around(self):
-        content = '好的，以下是审核结果：\n[{"file": "c.pdf", "type": "duplicate", "issue": "重复", "suggestion": "z"}]\n完毕'
+        content = (
+            '好的，以下是审核结果：\n'
+            '[{"file": "c.pdf", "type": "duplicate", "issue": "重复", '
+            '"suggestion": "z"}]\n完毕'
+        )
         out = parse_findings(content)
         assert len(out) == 1
         assert out[0]['type'] == 'duplicate'

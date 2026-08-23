@@ -20,6 +20,7 @@ from ..domain.errors import (
 )
 from ..domain.job import Job, JobPhase, JobStatus, JobTrigger
 from .audit_service import AuditService
+from .email_poller import EmailPoller
 from .event_bus import EventBus
 from .invoice_file_service import FileProcessResult, InvoiceFileService
 
@@ -36,9 +37,11 @@ class JobService:
         max_workers_provider: Callable[[], int] = get_max_workers,
         audit_service_factory: Callable[..., AuditService] = AuditService,
         file_service_factory: Callable[..., InvoiceFileService] = InvoiceFileService,
+        job_history_limit: int = 100,
     ):
         self.events = event_bus or EventBus()
         self._processor_factory = processor_factory
+        self._job_history_limit = max(1, job_history_limit)
         self._max_workers = max_workers_provider
         self._audit_service_factory = audit_service_factory
         self._file_service_factory = file_service_factory
@@ -47,6 +50,15 @@ class JobService:
         self._current_job_id: str | None = None
         self._cancel_events: dict[str, threading.Event] = {}
         self._threads: dict[str, threading.Thread] = {}
+        self._email_poller = EmailPoller(self.start_job)
+
+    def start_background_tasks(self) -> None:
+        """启动桌面模式所需的后台任务。"""
+        self._email_poller.start()
+
+    def wake_background_tasks(self) -> None:
+        """通知后台任务立即重读外部配置。"""
+        self._email_poller.wake()
 
     def start_job(
         self,
@@ -126,6 +138,15 @@ class JobService:
                 raise JobNotFound(job_id)
             return job.to_dict()
 
+    def is_known_output_directory(self, path: str) -> bool:
+        normalized = os.path.realpath(os.path.abspath(os.path.expanduser(path)))
+        with self._lock:
+            return any(
+                job.output_dir
+                and os.path.realpath(job.output_dir) == normalized
+                for job in self._jobs.values()
+            )
+
     def wait_for_job(self, job_id: str, timeout: float | None = None) -> dict:
         with self._lock:
             thread = self._threads.get(job_id)
@@ -135,6 +156,7 @@ class JobService:
 
     def shutdown(self, timeout: float = 5.0) -> None:
         """请求当前任务停止并等待 worker 收敛，供桌面壳退出时调用。"""
+        self._email_poller.stop(timeout)
         with self._lock:
             job_id = self._current_job_id
             thread = self._threads.get(job_id) if job_id else None
@@ -147,10 +169,17 @@ class JobService:
             thread.join(timeout)
 
     def _run_job(self, job_id: str, pdf_files: tuple[str, ...]) -> None:
-        processor = self._processor_factory()
-        cancel_event = self._cancel_events[job_id]
         job = self._get_job_object(job_id)
+        with self._lock:
+            cancel_event = self._cancel_events.get(job_id)
+        if cancel_event is None:
+            return
+        processor = None
         try:
+            if cancel_event.is_set() or self._is_cancel_requested(job):
+                self._finish_cancelled(job)
+                return
+            processor = self._processor_factory()
             with self._lock:
                 if job.status == JobStatus.CANCELLED:
                     return
@@ -177,7 +206,8 @@ class JobService:
 
             self._log(
                 job,
-                f'统计: 总 {job.stats.total} | 成功 {success_count} | 失败 {failure_count}',
+                f'统计: 总 {job.stats.total} | 成功 {success_count} '
+                f'| 失败 {failure_count}',
                 'info',
             )
             self._set_phase(job, JobPhase.POST_PROCESS, '执行后处理…')
@@ -185,14 +215,21 @@ class JobService:
             def on_post_progress(ratio: float) -> None:
                 self._set_progress(job, 0.70 + 0.30 * ratio)
 
-            result = processor.post_process(output_dir, progress_callback=on_post_progress)
+            result = processor.post_process(
+                output_dir, progress_callback=on_post_progress
+            )
             for issue in result.get('tax_issues') or []:
                 self._log(job, issue, 'warning')
             tax_issues = result.get('tax_issues') or []
             with self._lock:
                 job.stats.tax_issues = len(tax_issues)
             self._publish_stats(job)
-            self._log(job, f"金额映射: {len(result.get('amount_map') or {})} 条", 'info')
+            if cancel_event.is_set() or self._is_cancel_requested(job):
+                self._finish_cancelled(job)
+                return
+            self._log(
+                job, f"金额映射: {len(result.get('amount_map') or {})} 条", 'info'
+            )
             self._log(job, '待搜索文件替换完成', 'success')
             self._log(
                 job,
@@ -202,21 +239,36 @@ class JobService:
             if result.get('excel'):
                 self._log(job, f"费用汇总已生成: {result['excel']}", 'success')
             else:
-                self._log(job, '费用汇总生成失败（输出目录中可能无可识别发票）', 'warning')
+                self._log(
+                    job, '费用汇总生成失败（输出目录中可能无可识别发票）', 'warning'
+                )
 
             self._set_phase(job, JobPhase.LOCAL_AUDIT, '执行审核…')
+            if cancel_event.is_set() or self._is_cancel_requested(job):
+                self._finish_cancelled(job)
+                return
             audit_service = self._audit_service_factory(
-                processor, log_callback=lambda message, level: self._log(job, message, level)
+                processor,
+                log_callback=lambda message, level: self._log(job, message, level),
             )
             audit_result = audit_service.run(output_dir)
             result['audit'] = audit_result
+            if cancel_event.is_set() or self._is_cancel_requested(job):
+                self._finish_cancelled(job)
+                return
 
             if job.trigger in {JobTrigger.INBOX, JobTrigger.EMAIL}:
                 self._set_phase(job, JobPhase.ARCHIVE, '归档已处理文件…')
+                if cancel_event.is_set() or self._is_cancel_requested(job):
+                    self._finish_cancelled(job)
+                    return
                 archived = self._archive_files(job.source_dir, pdf_files)
                 result['archived'] = archived
                 if archived:
                     self._log(job, f'已归档 {archived} 个已处理发票', 'info')
+                if cancel_event.is_set() or self._is_cancel_requested(job):
+                    self._finish_cancelled(job)
+                    return
 
             self._set_progress(job, 1.0)
             with self._lock:
@@ -237,18 +289,28 @@ class JobService:
             logger.exception('任务处理失败: %s', job.id)
             with self._lock:
                 if not job.status.is_terminal:
-                    job.error_code = 'INTERNAL_ERROR'
-                    job.error_message = str(exc)
-                    job.message = f'处理出错: {exc}'
-                    job.transition(JobStatus.FAILED)
+                    if job.cancel_requested:
+                        job.message = '处理已中止，部分文件可能未完成'
+                        job.phase = JobPhase.DONE
+                        job.transition(JobStatus.CANCELLED)
+                    else:
+                        job.error_code = 'INTERNAL_ERROR'
+                        job.error_message = str(exc)
+                        job.message = f'处理出错: {exc}'
+                        job.transition(JobStatus.FAILED)
             self._log(job, f'处理出错: {exc}', 'error')
             self._publish_status(job)
             self._publish_snapshot(job)
         finally:
-            try:
-                processor.clear_cache()
-            except Exception:
-                logger.exception('清理处理器缓存失败')
+            if processor is not None:
+                try:
+                    processor.clear_cache()
+                except Exception:
+                    logger.exception('清理处理器缓存失败')
+            with self._lock:
+                self._threads.pop(job_id, None)
+                self._cancel_events.pop(job_id, None)
+                self._trim_job_history_locked()
 
     def _process_files(
         self,
@@ -287,7 +349,11 @@ class JobService:
                 except Exception as exc:
                     filename = futures[future]
                     file_result = FileProcessResult(
-                        filename, None, 'error', f'处理失败: {filename}，{exc}', 'failure'
+                        filename,
+                        None,
+                        'error',
+                        f'处理失败: {filename}，{exc}',
+                        'failure',
                     )
                 completed_count += 1
                 if file_result.outcome == 'success':
@@ -389,6 +455,27 @@ class JobService:
         self.events.publish('job.snapshot', payload, job.id)
 
     def _log(self, job: Job, message: str, level: str) -> None:
+        log_level = {
+            'info': logging.INFO,
+            'success': logging.INFO,
+            'warning': logging.WARNING,
+            'error': logging.ERROR,
+        }.get(level, logging.INFO)
+        logger.log(log_level, '[%s] %s', job.id, message)
         self.events.publish(
             'job.log_appended', {'message': message, 'level': level}, job.id
         )
+
+    def _trim_job_history_locked(self) -> None:
+        terminal_jobs = [
+            job for job in self._jobs.values()
+            if job.status.is_terminal and job.id != self._current_job_id
+        ]
+        excess = len(terminal_jobs) - self._job_history_limit
+        if excess <= 0:
+            return
+        terminal_jobs.sort(
+            key=lambda job: job.finished_at or job.started_at,
+        )
+        for job in terminal_jobs[:excess]:
+            self._jobs.pop(job.id, None)

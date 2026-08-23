@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import threading
-import time
 
 import pytest
 
@@ -52,7 +51,9 @@ class FakeFileService:
         if is_cancelled():
             return FileProcessResult(filename, None, 'warning', '已取消', 'cancelled')
         self.processor.files.append(filename)
-        return FileProcessResult(filename, None, 'success', f'成功: {filename}', 'success')
+        return FileProcessResult(
+            filename, None, 'success', f'成功: {filename}', 'success'
+        )
 
 
 class FakeAuditService:
@@ -103,6 +104,24 @@ def test_job_service_runs_pipeline_and_publishes_terminal_snapshot(tmp_path):
     assert processor.clear_called is True
     assert processor.files == ['invoice-0.pdf', 'invoice-1.pdf']
     assert any(event.type == 'job.completed' for event in event_bus.history())
+
+
+def test_processor_factory_failure_marks_job_failed(tmp_path):
+    source = make_source(tmp_path, count=1)
+
+    def failing_factory():
+        raise RuntimeError('processor unavailable')
+
+    service = JobService(
+        processor_factory=failing_factory,
+        max_workers_provider=lambda: 2,
+    )
+    snapshot = service.start_job(str(source))
+    final = service.wait_for_job(snapshot['id'], timeout=5)
+
+    assert final['status'] == JobStatus.FAILED.value
+    assert final['error_code'] == 'INTERNAL_ERROR'
+    assert 'processor unavailable' in final['error_message']
 
 
 def test_inbox_job_archives_only_initial_pdf_files(tmp_path):
@@ -156,3 +175,36 @@ def test_cancelled_job_does_not_run_post_process(tmp_path):
     service.cancel_job(snapshot['id'])
     final = service.wait_for_job(snapshot['id'], timeout=5)
     assert final['status'] == JobStatus.CANCELLED.value
+
+
+def test_cancel_during_post_process_skips_audit_and_archive(tmp_path):
+    post_started = threading.Event()
+    release_post = threading.Event()
+    audit_calls = []
+
+    class BlockingProcessor(FakeProcessor):
+        def post_process(self, output_dir, progress_callback=None):
+            post_started.set()
+            release_post.wait(timeout=5)
+            return super().post_process(output_dir, progress_callback)
+
+    processor = BlockingProcessor()
+    service = JobService(
+        processor_factory=lambda: processor,
+        max_workers_provider=lambda: 2,
+        audit_service_factory=lambda *args, **kwargs: (
+            audit_calls.append(True) or FakeAuditService(*args, **kwargs)
+        ),
+        file_service_factory=FakeFileService,
+    )
+    source = make_source(tmp_path, count=1)
+    snapshot = service.start_job(str(source), JobTrigger.EMAIL)
+
+    assert post_started.wait(timeout=5)
+    service.cancel_job(snapshot['id'])
+    release_post.set()
+    final = service.wait_for_job(snapshot['id'], timeout=5)
+
+    assert final['status'] == JobStatus.CANCELLED.value
+    assert audit_calls == []
+    assert (source / 'invoice-0.pdf').is_file()

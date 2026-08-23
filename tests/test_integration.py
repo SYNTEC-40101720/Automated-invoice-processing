@@ -2,15 +2,17 @@
 
 运行方式: pytest tests/test_integration.py -v
 """
-import os
 import re
-import pytest
+import threading
 
-from src.core.processor import InvoiceProcessor, _TYPE_REGISTRY
 from src.config_manager import (
-    load_config, set_business_config, get_target_tax_id, get_max_workers,
+    get_max_workers,
+    get_target_tax_id,
+    load_config,
+    set_business_config,
 )
-
+from src.core.pdf_text import PdfTextExtractor
+from src.core.processor import _TYPE_REGISTRY, InvoiceProcessor
 
 # ═══════════════════════════════════════════════════════════
 # 改进 7: 内容哈希去重
@@ -205,6 +207,59 @@ class TestPDFExceptionClassification:
         assert err1 == err2
 
 
+def test_pdf_cache_parses_same_path_once_concurrently(monkeypatch, tmp_path):
+    import src.core.pdf_text as pdf_text_module
+
+    parse_started = threading.Event()
+    release_parse = threading.Event()
+    parse_calls = 0
+    parse_calls_lock = threading.Lock()
+
+    class FakePage:
+        def extract_text(self):
+            return '发票 文本'
+
+    class FakePdf:
+        is_encrypted = False
+        pages = [FakePage()]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+    def fake_open(_):
+        nonlocal parse_calls
+        with parse_calls_lock:
+            parse_calls += 1
+        parse_started.set()
+        release_parse.wait(timeout=5)
+        return FakePdf()
+
+    monkeypatch.setattr(pdf_text_module.pdfplumber, 'open', fake_open)
+    extractor = PdfTextExtractor()
+    pdf_path = str(tmp_path / 'invoice.pdf')
+    results = []
+
+    def extract():
+        results.append(extractor.extract_pdf_text(pdf_path))
+
+    first = threading.Thread(target=extract)
+    first.start()
+    assert parse_started.wait(timeout=5)
+    others = [threading.Thread(target=extract) for _ in range(7)]
+    for thread in others:
+        thread.start()
+    release_parse.set()
+    first.join(timeout=5)
+    for thread in others:
+        thread.join(timeout=5)
+
+    assert parse_calls == 1
+    assert results == ['发票文本'] * 8
+
+
 # ═══════════════════════════════════════════════════════════
 # 改进 1: 停止中断 + 进度回调集成
 # ═══════════════════════════════════════════════════════════
@@ -219,7 +274,9 @@ class TestProgressCallback:
         out_dir = tmp_path / "output"
         out_dir.mkdir()
         progress_values = []
-        proc.post_process(str(out_dir), progress_callback=lambda r: progress_values.append(r))
+        proc.post_process(
+            str(out_dir), progress_callback=lambda r: progress_values.append(r)
+        )
         # 应至少报告 0.0 和 1.0
         assert len(progress_values) > 0
         assert progress_values[0] == 0.0
@@ -234,7 +291,9 @@ class TestProgressCallback:
         out_dir = tmp_path / "output"
         out_dir.mkdir()
         progress_values = []
-        proc.post_process(str(out_dir), progress_callback=lambda r: progress_values.append(r))
+        proc.post_process(
+            str(out_dir), progress_callback=lambda r: progress_values.append(r)
+        )
         for v in progress_values:
             assert 0.0 <= v <= 1.0
 

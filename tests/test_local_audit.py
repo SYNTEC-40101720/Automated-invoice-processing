@@ -3,6 +3,7 @@
 运行方式: pytest tests/test_local_audit.py -v
 """
 import base64
+
 import pytest
 
 from src.core.local_audit import check_filenames, check_rows
@@ -73,7 +74,8 @@ class TestCheckRows:
         assert check_rows(rows) == []
 
 
-# ---- 内嵌合成发票 PDF（一次性生成后 base64 固化，假发票号 SYNTH000x，无真实发票数据）----
+# ---- 内嵌合成发票 PDF（一次性生成后 base64 固化，
+# 假发票号 SYNTH000x，无真实发票数据）----
 # 运行时仅 base64 解码写入 tmp_path，不依赖 reportlab 等生成库，也不入库。
 _SYNTH_TRIP_PDF_B64 = (
     "JVBERi0xLjMKJZOMi54gUmVwb3J0TGFiIEdlbmVyYXRlZCBQREYgZG9jdW1lbnQgKG9wZW5zb3VyY2Up"

@@ -19,6 +19,7 @@ export function App() {
   const setJob = useWorkbench((state) => state.setJob)
   const appendEvent = useWorkbench((state) => state.appendEvent)
   const setLogs = useWorkbench((state) => state.setLogs)
+  const mergeLogs = useWorkbench((state) => state.mergeLogs)
   const [directory, setDirectory] = useState('')
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const lastEventId = useRef(0)
@@ -34,19 +35,36 @@ export function App() {
   useEffect(() => {
     let disposed = false
     let cleanup: (() => void) | undefined
+    let reconnectScheduled = false
+    let reconnectDelay = 1500
+    let restoreInFlight: Promise<void> | undefined
+    const restoreState = () => {
+      if (restoreInFlight) return restoreInFlight
+      const afterEventId = lastEventId.current
+      restoreInFlight = api.currentJob().then((snapshot) => {
+        setJob(snapshot)
+        if (!snapshot?.id) {
+          setLogs([])
+          return
+        }
+        setDirectory(snapshot.source_dir)
+        return api.logs(snapshot.id, afterEventId).then((response) => {
+          mergeLogs(response.items)
+          const latestLogEventId = response.items.at(-1)?.event_id ?? 0
+          lastEventId.current = Math.max(lastEventId.current, latestLogEventId)
+        })
+      }).catch(() => undefined).finally(() => {
+        restoreInFlight = undefined
+      })
+      return restoreInFlight
+    }
     const connect = () => {
       if (disposed) return
-      lastEventId.current = 0
+      reconnectScheduled = false
       cleanup = connectEvents((event) => {
         if (event.event_id > 0) {
           if (lastEventId.current > 0 && event.event_id > lastEventId.current + 1) {
-            api.currentJob().then((snapshot) => {
-              setJob(snapshot)
-              if (snapshot?.id) {
-                setDirectory(snapshot.source_dir)
-                api.logs(snapshot.id).then((response) => setLogs(response.items)).catch(() => undefined)
-              }
-            }).catch(() => undefined)
+            void restoreState()
           }
           if (event.event_id <= lastEventId.current) return
           lastEventId.current = event.event_id
@@ -59,8 +77,17 @@ export function App() {
         }
       }, (isConnected) => {
         setConnected(isConnected)
-        if (!isConnected && !disposed) {
-          reconnectTimer.current = setTimeout(connect, 1500)
+        if (isConnected) {
+          reconnectDelay = 1500
+          void restoreState()
+        } else if (!disposed && !reconnectScheduled) {
+          reconnectScheduled = true
+          const delay = reconnectDelay
+          reconnectDelay = Math.min(reconnectDelay * 2, 10000)
+          reconnectTimer.current = setTimeout(() => {
+            reconnectTimer.current = undefined
+            connect()
+          }, delay)
         }
       })
     }
@@ -70,11 +97,19 @@ export function App() {
       cleanup?.()
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
     }
-  }, [appendEvent, setConnected, setJob])
+  }, [appendEvent, mergeLogs, setConnected, setJob, setLogs])
 
   useEffect(() => {
-    if (job?.id) api.logs(job.id).then((response) => setLogs(response.items)).catch(() => undefined)
-  }, [job?.id, setLogs])
+    if (!job?.id) {
+      setLogs([])
+      return
+    }
+    setLogs([])
+    api.logs(job.id).then((response) => {
+      mergeLogs(response.items)
+      lastEventId.current = Math.max(lastEventId.current, response.next_event_id ?? 0)
+    }).catch(() => undefined)
+  }, [job?.id, mergeLogs, setLogs])
 
   const chooseDirectory = async () => {
     const value = window.pywebview?.api
