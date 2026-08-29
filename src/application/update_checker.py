@@ -31,7 +31,8 @@ GITHUB_RELEASES_URL = (
 )
 MAIN_EXECUTABLE_NAME = 'SYNTEC-电子票据处理系统.exe'
 UPDATE_HELPER_NAME = 'SYNTEC-电子票据更新器.exe'
-UPDATE_ASSET_PREFIX = 'SYNTEC-电子票据处理系统'
+UPDATE_ASSET_PREFIX = 'SYNTEC-Invoice-Processor'
+LEGACY_UPDATE_ASSET_PREFIXES = ('SYNTEC-电子票据处理系统', 'SYNTEC-.-')
 REQUEST_TIMEOUT = 3.0
 MAX_UPDATE_BYTES = 512 * 1024 * 1024
 DOWNLOAD_CHUNK_SIZE = 1024 * 1024
@@ -136,7 +137,7 @@ def _select_release_asset(payload: dict[str, Any]) -> ReleaseAsset | None:
         name = item.get('name')
         if (
             not isinstance(name, str)
-            or not name.startswith(UPDATE_ASSET_PREFIX)
+            or not name.startswith((UPDATE_ASSET_PREFIX, *LEGACY_UPDATE_ASSET_PREFIXES))
             or not name.lower().endswith('.zip')
             or Path(name).name != name
         ):

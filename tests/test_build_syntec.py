@@ -22,7 +22,7 @@ def test_create_release_archive_contains_complete_install_directory(
     archive_path = build_syntec.create_release_archive()
 
     assert archive_path.name == (
-        f'{build_syntec.APP_NAME}-v{build_syntec.__version__}.zip'
+        f'{build_syntec.RELEASE_ARCHIVE_PREFIX}-v{build_syntec.__version__}.zip'
     )
     with zipfile.ZipFile(archive_path) as archive:
         names = set(archive.namelist())

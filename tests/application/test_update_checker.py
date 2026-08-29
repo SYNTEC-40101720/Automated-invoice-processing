@@ -86,7 +86,7 @@ def test_check_for_update_selects_installable_zip_asset():
             'tag_name': 'v7.0.5',
             'html_url': 'https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.0.5',
             'assets': [{
-                'name': 'SYNTEC-电子票据处理系统-v7.0.5.zip',
+                'name': 'SYNTEC-Invoice-Processor-v7.0.5.zip',
                 'browser_download_url': 'https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/download/v7.0.5/SYNTEC.zip',
                 'digest': 'sha256:' + 'a' * 64,
             }],
@@ -94,8 +94,25 @@ def test_check_for_update_selects_installable_zip_asset():
     )
 
     assert result.installable is True
-    assert result.asset_name == 'SYNTEC-电子票据处理系统-v7.0.5.zip'
+    assert result.asset_name == 'SYNTEC-Invoice-Processor-v7.0.5.zip'
     assert result.asset_digest == 'a' * 64
+
+
+def test_check_for_update_accepts_github_normalised_legacy_asset():
+    result = check_for_update(
+        '7.0.4',
+        opener=lambda *_args, **_kwargs: FakeResponse({
+            'tag_name': 'v7.0.5',
+            'html_url': 'https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.0.5',
+            'assets': [{
+                'name': 'SYNTEC-.-v7.0.5.zip',
+                'browser_download_url': 'https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/download/v7.0.5/SYNTEC.zip',
+            }],
+        }),
+    )
+
+    assert result.installable is True
+    assert result.asset_name == 'SYNTEC-.-v7.0.5.zip'
 
 
 def test_check_for_update_ignores_older_release_and_untrusted_url():

@@ -9,6 +9,9 @@ SYNTEC 域控规范打包脚本
     ├── SYNTEC-电子票据处理系统.exe
     ├── SYNTEC-电子票据更新器.exe
     └── _internal/  (Python 运行时 + 依赖)
+
+Release 资产：
+    dist/SYNTEC-Invoice-Processor-v{version}.zip
 """
 import hashlib
 import json
@@ -27,6 +30,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-
 ROOT = Path(__file__).resolve().parent
 APP_NAME = "SYNTEC-电子票据处理系统"
 UPDATER_NAME = "SYNTEC-电子票据更新器"
+RELEASE_ARCHIVE_PREFIX = "SYNTEC-Invoice-Processor"
 VERSION_FILE = ROOT / "version_info.txt"
 PYPROJECT_FILE = ROOT / "pyproject.toml"
 WEB_PACKAGE_FILE = ROOT / "web" / "package.json"
@@ -172,7 +176,7 @@ def create_release_archive() -> Path:
     if not package_dir.is_dir():
         sys.exit(f"❌ 缺少打包目录: {package_dir}")
 
-    archive_base = DIST_DIR / f"{APP_NAME}-v{__version__}"
+    archive_base = DIST_DIR / f"{RELEASE_ARCHIVE_PREFIX}-v{__version__}"
     archive_path = Path(
         shutil.make_archive(
             str(archive_base),

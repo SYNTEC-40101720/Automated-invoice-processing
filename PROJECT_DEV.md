@@ -153,7 +153,7 @@ web/
 
 ### 自动更新发布约定
 
-- `build_syntec.py` 会在主程序和独立更新器构建、合规验证通过后生成 `dist/SYNTEC-电子票据处理系统-v{version}.zip`。
+- `build_syntec.py` 会在主程序和独立更新器构建、合规验证通过后生成 `dist/SYNTEC-Invoice-Processor-v{version}.zip`；Release 资产名使用 ASCII，避免 GitHub 自动重命名中文文件名。
 - ZIP 必须保留顶层 `SYNTEC-电子票据处理系统/` 目录，并包含主程序、`SYNTEC-电子票据更新器.exe` 和完整 `_internal/`。
 - 应用只接受目标 GitHub 仓库中版本更高的 Release；设置页点击更新后执行下载、大小限制、SHA-256（若 Release 提供）和安全解压校验。
 - 主程序退出后由临时目录中的独立更新器完成替换，更新器日志也写入临时目录，避免 Windows 目录句柄锁定；成功后保留 `config.ini`、`logs/` 和 `发票收件箱/`。
