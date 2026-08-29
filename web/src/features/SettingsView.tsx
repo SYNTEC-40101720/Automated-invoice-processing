@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, KeyRound, LoaderCircle, Mail, RefreshCw, Save, Settings2, ShieldCheck } from 'lucide-react'
+import { Bot, Download, KeyRound, LoaderCircle, Mail, RefreshCw, Save, Settings2, ShieldCheck } from 'lucide-react'
 import { api } from '../api/client'
 import type { SettingsResponse, UpdateApplyResponse, UpdateResponse } from '../api/types'
+import type { SettingsSection } from '../stores/workbench'
+import { useWorkbench } from '../stores/workbench'
 
 interface SettingsViewProps {
   version: string | null
@@ -11,8 +13,38 @@ interface SettingsViewProps {
   onApplyUpdate: () => Promise<UpdateApplyResponse>
 }
 
+const settingsSectionMeta: Record<SettingsSection, { label: string; eyebrow: string; description: string; icon: React.ReactNode }> = {
+  business: {
+    label: '业务规则',
+    eyebrow: 'WORKBENCH / SETTINGS / BUSINESS',
+    description: '配置发票处理的业务规则和并发策略。',
+    icon: <ShieldCheck size={17} />,
+  },
+  email: {
+    label: '邮箱连接',
+    eyebrow: 'WORKBENCH / SETTINGS / EMAIL',
+    description: '管理 IMAP 连接、授权码以及发件人和主题白名单。',
+    icon: <Mail size={17} />,
+  },
+  ai: {
+    label: 'AI 审核',
+    eyebrow: 'WORKBENCH / SETTINGS / AI',
+    description: '配置智能审核服务，并在保存前测试接口连通性。',
+    icon: <Bot size={17} />,
+  },
+  updates: {
+    label: '软件更新',
+    eyebrow: 'WORKBENCH / SETTINGS / UPDATES',
+    description: '检查当前版本，并在有可用版本时执行更新。',
+    icon: <RefreshCw size={17} />,
+  },
+}
+const settingsSectionOrder: SettingsSection[] = ['business', 'email', 'ai', 'updates']
+
 export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate }: SettingsViewProps) {
   const queryClient = useQueryClient()
+  const settingsSection = useWorkbench((state) => state.settingsSection)
+  const setSettingsSection = useWorkbench((state) => state.setSettingsSection)
   const settingsQuery = useQuery({ queryKey: ['settings'], queryFn: api.settings })
   const [settings, setSettings] = useState<SettingsResponse | null>(null)
   const [authCode, setAuthCode] = useState('')
@@ -103,17 +135,33 @@ export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate }: 
   if (settingsQuery.error) return <div className="editor-view feature-view"><div className="feedback error">{(settingsQuery.error as Error).message}</div></div>
   if (settingsQuery.isLoading || !settings) return <div className="editor-view feature-view"><div className="loading-state"><LoaderCircle size={20} className="spin" /> 正在读取配置</div></div>
 
+  const section = settingsSectionMeta[settingsSection]
+
   return <div className="editor-view feature-view">
-    <div className="editor-tabs"><div className="editor-tab active"><Settings2 size={14} /> 工作台设置</div></div>
+    <div className="editor-tabs"><div className="editor-tab active"><Settings2 size={14} /> 工作台设置 / {section.label}</div></div>
     <div className="view-scroll feature-scroll settings-scroll">
-      <header className="view-header feature-header"><div><div className="eyebrow">WORKBENCH / SETTINGS</div><h1>工作台设置</h1><p>本地服务保存业务规则、邮箱连接和智能审核配置。</p></div><button className="primary-button" onClick={() => save.mutate()} disabled={save.isPending}><Save size={15} /> {save.isPending ? '保存中' : '保存配置'}</button></header>
+      <nav className="settings-mobile-nav" aria-label="设置分类">
+        {settingsSectionOrder.map((sectionId) => {
+          const item = settingsSectionMeta[sectionId]
+          return <button
+            key={sectionId}
+            className={settingsSection === sectionId ? 'is-active' : ''}
+            onClick={() => setSettingsSection(sectionId)}
+            aria-current={settingsSection === sectionId ? 'page' : undefined}
+          >
+            {item.icon}
+            <span>{item.label}</span>
+          </button>
+        })}
+      </nav>
+      <header className="view-header feature-header"><div><div className="eyebrow">{section.eyebrow}</div><h1>{section.label}</h1><p>{section.description}</p></div><button className="primary-button" onClick={() => save.mutate()} disabled={save.isPending}><Save size={15} /> {save.isPending ? '保存中' : '保存配置'}</button></header>
       {message && <div className={`feedback ${message.includes('失败') || message.includes('错误') ? 'error' : 'success'}`}>{message}</div>}
-      <section className="settings-grid">
-        <SettingsCard icon={<ShieldCheck size={17} />} title="业务规则">
+      <section className="settings-panel-shell">
+        {settingsSection === 'business' && <SettingsCard icon={section.icon} title={section.label}>
           <label>购买方税号<input value={settings.business.target_tax_id} onChange={(event) => setSettings({ ...settings, business: { ...settings.business, target_tax_id: event.target.value } })} /></label>
           <label>并发线程<input type="number" min="2" max="16" value={settings.business.max_workers} onChange={(event) => setSettings({ ...settings, business: { ...settings.business, max_workers: Number(event.target.value) } })} /></label>
-        </SettingsCard>
-        <SettingsCard icon={<Mail size={17} />} title="邮箱连接">
+        </SettingsCard>}
+        {settingsSection === 'email' && <SettingsCard icon={section.icon} title={section.label}>
           <label>IMAP 服务器<input value={settings.email.imap_host} onChange={(event) => setSettings({ ...settings, email: { ...settings.email, imap_host: event.target.value } })} /></label>
           <label>端口<input type="number" value={settings.email.imap_port} onChange={(event) => setSettings({ ...settings, email: { ...settings.email, imap_port: Number(event.target.value) } })} /></label>
           <label>邮箱账号<input value={settings.email.username} onChange={(event) => setSettings({ ...settings, email: { ...settings.email, username: event.target.value } })} /></label>
@@ -121,15 +169,15 @@ export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate }: 
           <label>发件人白名单<textarea rows={5} value={settings.email.senders.join('\n')} onChange={(event) => setSettings({ ...settings, email: { ...settings.email, senders: event.target.value.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean) } })} placeholder="每行一个邮箱地址" /></label>
           <label>主题关键词白名单<textarea rows={4} value={settings.email.keywords.join('\n')} onChange={(event) => setSettings({ ...settings, email: { ...settings.email, keywords: event.target.value.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean) } })} placeholder="每行一个主题关键词" /></label>
           <button className="secondary-button" onClick={() => testEmail.mutate()} disabled={testEmail.isPending}><KeyRound size={14} /> {testEmail.isPending ? '测试中' : '测试连接'}</button>
-        </SettingsCard>
-        <SettingsCard icon={<Settings2 size={17} />} title="AI 审核">
+        </SettingsCard>}
+        {settingsSection === 'ai' && <SettingsCard icon={section.icon} title={section.label}>
           <label className="toggle-label"><input type="checkbox" checked={settings.ai.enabled} onChange={(event) => setSettings({ ...settings, ai: { ...settings.ai, enabled: event.target.checked } })} />启用 AI 审核</label>
           <label>接口地址<input value={settings.ai.api_base} onChange={(event) => setSettings({ ...settings, ai: { ...settings.ai, api_base: event.target.value } })} /></label>
           <label>模型<input value={settings.ai.model} onChange={(event) => setSettings({ ...settings, ai: { ...settings.ai, model: event.target.value } })} /></label>
           <label>API Key<input type="password" placeholder={settings.ai.api_key_configured ? '已配置，留空保持不变' : '输入 API Key'} value={apiKey} onChange={(event) => setApiKey(event.target.value)} /></label>
           <button className="secondary-button" onClick={() => testAi.mutate()} disabled={testAi.isPending}><KeyRound size={14} /> {testAi.isPending ? '测试中' : '测试连接'}</button>
-        </SettingsCard>
-        <SettingsCard icon={<RefreshCw size={17} />} title="软件更新">
+        </SettingsCard>}
+        {settingsSection === 'updates' && <SettingsCard icon={section.icon} title={section.label}>
           <div className="update-settings">
             <div className="update-version">
               <span className="field-label">当前版本</span>
@@ -147,7 +195,7 @@ export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate }: 
             <p className="update-message">{updateMessage || '检测到新版本后，可由程序自动下载、替换并重启。'}</p>
             {update?.available && !update.installable && <p className="update-message warning">请在该 Release 上传 SYNTEC ZIP 打包文件。</p>}
           </div>
-        </SettingsCard>
+        </SettingsCard>}
       </section>
     </div>
   </div>

@@ -1,15 +1,19 @@
 import { create } from 'zustand'
 import type { DomainEvent, Job, LogEntry } from '../api/types'
 
+export type SettingsSection = 'business' | 'email' | 'ai' | 'updates'
+
 interface WorkbenchState {
   connected: boolean
   currentJob: Job | null
   logs: LogEntry[]
   activeView: 'processing' | 'inbox' | 'audit' | 'settings'
+  settingsSection: SettingsSection
   bottomPanel: 'output' | 'problems' | 'details'
   setConnected: (connected: boolean) => void
   setJob: (job: Job | null) => void
   setView: (view: WorkbenchState['activeView']) => void
+  setSettingsSection: (section: SettingsSection) => void
   setBottomPanel: (panel: WorkbenchState['bottomPanel']) => void
   appendEvent: (event: DomainEvent) => void
   setLogs: (logs: LogEntry[]) => void
@@ -22,10 +26,12 @@ export const useWorkbench = create<WorkbenchState>((set) => ({
   currentJob: null,
   logs: [],
   activeView: 'processing',
+  settingsSection: 'business',
   bottomPanel: 'output',
   setConnected: (connected) => set({ connected }),
   setJob: (currentJob) => set({ currentJob }),
   setView: (activeView) => set({ activeView }),
+  setSettingsSection: (settingsSection) => set({ settingsSection }),
   setBottomPanel: (bottomPanel) => set({ bottomPanel }),
   appendEvent: (event) => set((state) => {
     if (event.type === 'job.snapshot') {

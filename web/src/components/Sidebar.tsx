@@ -1,5 +1,7 @@
-import { ChevronDown, FileText, FolderOpen, History, Plus } from 'lucide-react'
+import { Bot, ChevronDown, FileText, FolderOpen, History, Mail, Plus, RefreshCw, ShieldCheck } from 'lucide-react'
 import type { EmailSettings, Job } from '../api/types'
+import type { SettingsSection } from '../stores/workbench'
+import { useWorkbench } from '../stores/workbench'
 
 interface SidebarProps {
   activeView: string
@@ -9,7 +11,16 @@ interface SidebarProps {
   onOpenInbox: () => void
 }
 
+const settingsItems: { id: SettingsSection; label: string; description: string; icon: React.ReactNode }[] = [
+  { id: 'business', label: '业务规则', description: '税号与处理并发', icon: <ShieldCheck size={16} /> },
+  { id: 'email', label: '邮箱连接', description: 'IMAP 与发件人白名单', icon: <Mail size={16} /> },
+  { id: 'ai', label: 'AI 审核', description: '模型接口与审核开关', icon: <Bot size={16} /> },
+  { id: 'updates', label: '软件更新', description: '版本检查与安装', icon: <RefreshCw size={16} /> },
+]
+
 export function Sidebar({ activeView, job, emailSettings, onChooseDirectory, onOpenInbox }: SidebarProps) {
+  const settingsSection = useWorkbench((state) => state.settingsSection)
+  const setSettingsSection = useWorkbench((state) => state.setSettingsSection)
   const title = activeView === 'processing'
     ? '处理工作区'
     : activeView === 'inbox'
@@ -66,7 +77,26 @@ export function Sidebar({ activeView, job, emailSettings, onChooseDirectory, onO
         <div className="sidebar-note">处理完成后，审核报告会出现在这里。</div>
       )}
       {activeView === 'settings' && (
-        <div className="sidebar-note">业务、邮箱和 AI 审核配置统一由本地服务保存。</div>
+        <>
+          <div className="sidebar-section-label settings-section-label">设置分类</div>
+          <nav className="settings-nav" aria-label="设置分类">
+            {settingsItems.map((item) => (
+              <button
+                key={item.id}
+                className={`settings-nav-item ${settingsSection === item.id ? 'is-active' : ''}`}
+                onClick={() => setSettingsSection(item.id)}
+                aria-current={settingsSection === item.id ? 'page' : undefined}
+              >
+                <span className="settings-nav-icon">{item.icon}</span>
+                <span className="settings-nav-copy">
+                  <strong>{item.label}</strong>
+                  <small>{item.description}</small>
+                </span>
+              </button>
+            ))}
+          </nav>
+          <div className="sidebar-note settings-sidebar-note">配置由本地服务保存，切换分类不会丢失未保存的修改。</div>
+        </>
       )}
     </aside>
   )
