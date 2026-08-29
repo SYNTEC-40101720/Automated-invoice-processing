@@ -9,6 +9,8 @@ from ...config_manager import (
     get_email_auth_code,
     get_email_config,
     get_email_days_back,
+    get_email_keywords,
+    get_email_senders,
     get_email_username,
     get_inbox_dir,
 )
@@ -38,6 +40,8 @@ def pull_email(
             auth_code=get_email_auth_code(),
             inbox_dir=get_inbox_dir(),
             days_back=get_email_days_back(),
+            senders=get_email_senders(),
+            keywords=get_email_keywords(),
         )
     except ValueError as exc:
         raise ApplicationError('EMAIL_CONFIGURATION_INCOMPLETE', str(exc)) from exc

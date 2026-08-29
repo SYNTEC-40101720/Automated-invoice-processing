@@ -31,6 +31,8 @@ _DEFAULTS = {
         'inbox_dir': '发票收件箱',
         'days_back': '30',
         'poll_minutes': '0',
+        'senders': '12306@rails.com.cn,didifapiao@mailgate.xiaojukeji.com,fapiao@mailgate.hongyibo.com.cn,invoice@invoice01.huazhuhotels.com,service@invoice.txffp.com',
+        'keywords': '发票,行程单,报销',
     },
     'ai': {
         'enabled': 'false',
@@ -63,6 +65,8 @@ auth_code =
 inbox_dir = 发票收件箱
 # 只拉取最近 N 天的邮件
 days_back = 30
+# 邮件主题关键词白名单（任意一个命中即可）
+keywords = 发票,行程单,报销
 # 自动轮询间隔（分钟，0 = 不自动轮询，仅手动拉取）
 poll_minutes = 0
 
@@ -182,6 +186,14 @@ def set_all_config(
                 )
             _set_section_values(cfg, 'business', business)
         if email:
+            email = dict(email)
+            for list_key in ('senders', 'keywords'):
+                if list_key in email and isinstance(email[list_key], (list, tuple)):
+                    email[list_key] = ','.join(
+                        str(item).strip()
+                        for item in email[list_key]
+                        if str(item).strip()
+                    )
             _set_section_values(cfg, 'email', email, secret_key='auth_code')
         if ai:
             _set_section_values(cfg, 'ai', ai, secret_key='api_key')
@@ -220,6 +232,28 @@ def get_email_config() -> dict:
     """读取邮箱拉取配置（缺失字段用默认值）"""
     cfg = load_config()
     return {k: cfg.get('email', k, fallback=v) for k, v in _DEFAULTS['email'].items()}
+
+
+def get_email_senders() -> list[str]:
+    """发票发件方白名单；配置为空时使用内置默认名单。"""
+    return _parse_email_list(get_email_config().get('senders', ''))
+
+
+def get_email_keywords() -> list[str]:
+    """邮件主题关键词白名单。"""
+    return _parse_email_list(get_email_config().get('keywords', ''))
+
+
+def _parse_email_list(raw) -> list[str]:
+    senders = []
+    seen = set()
+    for item in str(raw).replace('\n', ',').split(','):
+        value = item.strip()
+        key = value.casefold()
+        if value and key not in seen:
+            seen.add(key)
+            senders.append(value)
+    return senders
 
 
 def get_email_enabled() -> bool:

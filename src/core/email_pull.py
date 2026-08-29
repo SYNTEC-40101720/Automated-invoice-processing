@@ -215,8 +215,8 @@ def pull_invoices(host='imap.qq.com', port=993, username='', auth_code='',
         raise ValueError('未配置发票收件箱目录（config.ini [email] inbox_dir）')
 
     os.makedirs(inbox_dir, exist_ok=True)
-    senders = senders or DEFAULT_SENDERS
-    keywords = keywords or DEFAULT_KEYWORDS
+    senders = DEFAULT_SENDERS if senders is None else senders
+    keywords = DEFAULT_KEYWORDS if keywords is None else keywords
     record_path = record_path or os.path.join(inbox_dir, _RECORD_FILENAME)
     processed = _load_processed(record_path)
     new_files: list = []

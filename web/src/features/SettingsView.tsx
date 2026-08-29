@@ -74,6 +74,8 @@ export function SettingsView() {
           <label>端口<input type="number" value={settings.email.imap_port} onChange={(event) => setSettings({ ...settings, email: { ...settings.email, imap_port: Number(event.target.value) } })} /></label>
           <label>邮箱账号<input value={settings.email.username} onChange={(event) => setSettings({ ...settings, email: { ...settings.email, username: event.target.value } })} /></label>
           <label>授权码<input type="password" placeholder={settings.email.auth_code_configured ? '已配置，留空保持不变' : '输入 IMAP 授权码'} value={authCode} onChange={(event) => setAuthCode(event.target.value)} /></label>
+          <label>发件人白名单<textarea rows={5} value={settings.email.senders.join('\n')} onChange={(event) => setSettings({ ...settings, email: { ...settings.email, senders: event.target.value.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean) } })} placeholder="每行一个邮箱地址" /></label>
+          <label>主题关键词白名单<textarea rows={4} value={settings.email.keywords.join('\n')} onChange={(event) => setSettings({ ...settings, email: { ...settings.email, keywords: event.target.value.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean) } })} placeholder="每行一个主题关键词" /></label>
           <button className="secondary-button" onClick={() => testEmail.mutate()} disabled={testEmail.isPending}><KeyRound size={14} /> {testEmail.isPending ? '测试中' : '测试连接'}</button>
         </SettingsCard>
         <SettingsCard icon={<Settings2 size={17} />} title="AI 审核">

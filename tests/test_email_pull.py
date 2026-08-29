@@ -6,6 +6,7 @@ import os
 import zipfile
 from email.message import EmailMessage
 
+from src import config_manager
 from src.core.email_pull import (
     DEFAULT_KEYWORDS,
     DEFAULT_SENDERS,
@@ -50,6 +51,11 @@ class TestIsInvoiceEmail:
             DEFAULT_SENDERS, DEFAULT_KEYWORDS,
         )
 
+    def test_configured_subject_keyword(self):
+        assert _is_invoice_email(
+            'noreply@example.com', '差旅凭证', [], ['差旅'],
+        )
+
     def test_non_invoice(self):
         assert not _is_invoice_email(
             'hr@example.com', '会议通知', DEFAULT_SENDERS, DEFAULT_KEYWORDS,
@@ -60,6 +66,16 @@ class TestIsInvoiceEmail:
             'attacker-didifapiao@mailgate.xiaojukeji.com', '会议通知',
             DEFAULT_SENDERS, DEFAULT_KEYWORDS,
         )
+
+
+def test_email_keywords_are_trimmed_and_deduplicated(monkeypatch):
+    monkeypatch.setattr(
+        config_manager,
+        'get_email_config',
+        lambda: {'keywords': ' 发票,\n报销,发票, 报销 '},
+    )
+
+    assert config_manager.get_email_keywords() == ['发票', '报销']
 
 
 class TestSaveAttachments:

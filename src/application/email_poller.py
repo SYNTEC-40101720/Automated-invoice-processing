@@ -12,7 +12,9 @@ from ..config_manager import (
     get_email_config,
     get_email_days_back,
     get_email_enabled,
+    get_email_keywords,
     get_email_poll_minutes,
+    get_email_senders,
     get_email_username,
     get_inbox_dir,
 )
@@ -95,6 +97,8 @@ class EmailPoller:
                 auth_code=get_email_auth_code(),
                 inbox_dir=inbox_dir,
                 days_back=get_email_days_back(),
+                senders=get_email_senders(),
+                keywords=get_email_keywords(),
                 timeout=self._imap_timeout,
             )
             if result.get('new_files') and not self._stop_event.is_set():

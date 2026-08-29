@@ -43,6 +43,14 @@ def test_email_poller_starts_email_job_for_new_files(monkeypatch, tmp_path):
         'src.application.email_poller.get_email_auth_code', lambda: 'auth'
     )
     monkeypatch.setattr('src.application.email_poller.get_email_days_back', lambda: 30)
+    monkeypatch.setattr(
+        'src.application.email_poller.get_email_senders',
+        lambda: ['trusted@example.com'],
+    )
+    monkeypatch.setattr(
+        'src.application.email_poller.get_email_keywords',
+        lambda: ['差旅'],
+    )
 
     def fake_pull(**kwargs):
         calls.append(('pull', kwargs))
@@ -62,6 +70,8 @@ def test_email_poller_starts_email_job_for_new_files(monkeypatch, tmp_path):
 
     assert result['downloaded'] == 1
     assert calls[0][0] == 'pull'
+    assert calls[0][1]['senders'] == ['trusted@example.com']
+    assert calls[0][1]['keywords'] == ['差旅']
     assert calls[1] == ('job', str(tmp_path), JobTrigger.EMAIL)
 
 

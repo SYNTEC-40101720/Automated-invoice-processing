@@ -75,6 +75,8 @@ class EmailSettings(BaseModel):
     inbox_dir: str
     days_back: int
     poll_minutes: int
+    senders: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
     auth_code_configured: bool
 
 
@@ -110,6 +112,8 @@ class EmailSettingsPatch(BaseModel):
     inbox_dir: str | None = Field(default=None, min_length=1)
     days_back: int | None = Field(default=None, ge=1, le=365)
     poll_minutes: int | None = Field(default=None, ge=0, le=1440)
+    senders: list[str] | None = None
+    keywords: list[str] | None = None
 
 
 class AiSettingsPatch(BaseModel):

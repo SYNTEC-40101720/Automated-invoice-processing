@@ -19,6 +19,8 @@ from ...config_manager import (
     get_email_days_back,
     get_email_enabled,
     get_email_poll_minutes,
+    get_email_keywords,
+    get_email_senders,
     get_email_username,
     get_inbox_dir,
     get_max_workers,
@@ -66,6 +68,8 @@ def _settings() -> SettingsResponse:
             inbox_dir=get_inbox_dir(),
             days_back=get_email_days_back(),
             poll_minutes=get_email_poll_minutes(),
+            senders=get_email_senders(),
+            keywords=get_email_keywords(),
             auth_code_configured=bool(get_email_auth_code()),
         ),
         ai=AiSettings(
