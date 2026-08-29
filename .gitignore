@@ -23,12 +23,16 @@ ENV/
 # Frontend dependencies and TypeScript build cache
 web/node_modules/
 web/tsconfig.tsbuildinfo
+web/dist/
 
 # PyInstaller
 build/
 dist/
 *.spec
 *.egg
+*.zip
+*.tmp
+*.bak
 
 # IDE / Editor
 .idea/

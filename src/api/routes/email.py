@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends
 
 from ...application.job_service import JobService
 from ...config_manager import (
-    get_email_auto_process,
     get_email_auth_code,
+    get_email_auto_process,
     get_email_config,
     get_email_days_back,
     get_email_keywords,

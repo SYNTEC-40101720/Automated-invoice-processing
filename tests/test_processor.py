@@ -297,7 +297,11 @@ def test_itinerary_without_buyer_tax_id_is_not_sent_to_manual_review(
     output_dir.mkdir()
     itinerary = output_dir / "INV001-100.00行程单.pdf"
     itinerary.write_bytes(b"pdf")
-    monkeypatch.setattr(proc, "extract_pdf_text", lambda _: "滴滴出行-行程单 合计100.00元")
+    monkeypatch.setattr(
+        proc,
+        "extract_pdf_text",
+        lambda _: "滴滴出行-行程单 合计100.00元",
+    )
 
     tax_issues, special, normal = proc._phase_scan_and_classify(
         str(output_dir), lambda _: None,

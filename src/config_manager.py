@@ -32,7 +32,11 @@ _DEFAULTS = {
         'days_back': '30',
         'poll_minutes': '0',
         'auto_process': 'false',
-        'senders': '12306@rails.com.cn,didifapiao@mailgate.xiaojukeji.com,fapiao@mailgate.hongyibo.com.cn,invoice@invoice01.huazhuhotels.com,service@invoice.txffp.com',
+        'senders': (
+            '12306@rails.com.cn,didifapiao@mailgate.xiaojukeji.com,'
+            'fapiao@mailgate.hongyibo.com.cn,invoice@invoice01.huazhuhotels.com,'
+            'service@invoice.txffp.com'
+        ),
         'keywords': '发票,行程单,报销',
     },
     'ai': {

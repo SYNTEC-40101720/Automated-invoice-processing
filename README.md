@@ -1,4 +1,4 @@
-# SYNTEC 电子票据处理系统 v7.0.4
+# SYNTEC 电子票据处理系统 v7.0.5
 
 基于 Python 3.12+、FastAPI 的业务底层、React/Vite Web 工作台和 pywebview/WebView2 桌面壳，用于批量识别、重命名、校验与合并 PDF 电子发票。
 
@@ -119,16 +119,16 @@ python -m pytest tests/test_integration.py -v
 python -m ruff check src tests
 ```
 
-当前 Windows 开发环境已验证 Python 测试 121 条通过、编译和依赖检查通过，前端类型检查与生产构建通过，`build_syntec.py` 可生成并完成 SYNTEC 域控合规校验，本机正式发布包启动冒烟通过。真实浏览器 E2E、干净域控账户启动和目标机 WebView2 验收仍需单独执行。
+当前 Windows 开发环境已验证 Python 测试 143 条通过、编译和依赖检查通过，前端类型检查与生产构建通过，`build_syntec.py` 可生成并完成 SYNTEC 域控合规校验，本机正式发布包启动冒烟通过。真实浏览器 E2E、干净域控账户启动和目标机 WebView2 验收仍需单独执行。
 
 ## 版本发布
 
 版本源为 `src/version.py`，递增命令会同步 `pyproject.toml`、Web 包元数据和 PyInstaller 资源：
 
 ```bash
-python bump_version.py patch   # 7.0.4 → 7.0.5
-python bump_version.py minor   # 7.0.4 → 7.1.0
-python bump_version.py major   # 7.0.4 → 8.0.0
+python bump_version.py patch   # 7.0.5 → 7.0.6
+python bump_version.py minor   # 7.0.5 → 7.1.0
+python bump_version.py major   # 7.0.5 → 8.0.0
 ```
 
 普通测试和打包不会自动修改版本；正式发布前执行一次递增命令，再运行 `python build_syntec.py`。打包脚本会拒绝不一致的版本配置。
@@ -155,6 +155,7 @@ python bump_version.py major   # 7.0.4 → 8.0.0
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v7.0.5 | 2026-08-29 | 清理发布产物和冗余配置入口，补齐 README/版本信息并完成发布前静态验证与打包路径整理 |
 | v7.0.4 | 2026-08-23 | 收件箱独立指定并显示收件目录，增加自动收件开关与轮询间隔控制；处理工作区目录不再被替换；非发票凭证跳过税号校验，并补充 API 与处理器测试 |
 | v7.0.3 | 2026-08-23 | 清理未使用占位视图、孤立样式和空目录；更新运行时版本显示并完成发布验证 |
 | v7.0.2 | 2026-08 | 仅支持 Python 3.12，移除 Python 3.10 兼容层和 tomli 依赖 |
