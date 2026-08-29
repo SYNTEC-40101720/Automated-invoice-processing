@@ -8,6 +8,7 @@ import time
 from collections.abc import Callable
 
 from ..config_manager import (
+    get_email_auto_process,
     get_email_auth_code,
     get_email_config,
     get_email_days_back,
@@ -101,7 +102,11 @@ class EmailPoller:
                 keywords=get_email_keywords(),
                 timeout=self._imap_timeout,
             )
-            if result.get('new_files') and not self._stop_event.is_set():
+            if (
+                result.get('new_files')
+                and get_email_auto_process()
+                and not self._stop_event.is_set()
+            ):
                 try:
                     self._start_job(inbox_dir, JobTrigger.EMAIL)
                 except ApplicationError as exc:

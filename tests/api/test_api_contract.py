@@ -161,6 +161,7 @@ def test_settings_response_redacts_secret_values(monkeypatch, tmp_path):
         'inbox_dir': 'inbox', 'days_back': '30', 'poll_minutes': '0',
     })
     monkeypatch.setattr(settings_route, 'get_email_enabled', lambda: True)
+    monkeypatch.setattr(settings_route, 'get_email_auto_process', lambda: False)
     monkeypatch.setattr(settings_route, 'get_inbox_dir', lambda: 'C:/invoice-inbox')
     monkeypatch.setattr(
         settings_route, 'get_email_username', lambda: 'user@example.com'
@@ -180,6 +181,7 @@ def test_settings_response_redacts_secret_values(monkeypatch, tmp_path):
     assert response.status_code == 200
     body = response.json()
     assert body['email']['auth_code_configured'] is True
+    assert body['email']['auto_process'] is False
     assert body['email']['inbox_dir'] == 'C:/invoice-inbox'
     assert body['ai']['api_key_configured'] is True
     assert 'secret-auth' not in response.text
@@ -255,6 +257,7 @@ def test_email_pull_starts_email_job_for_downloaded_files(monkeypatch, tmp_path)
     monkeypatch.setattr(email_route, 'get_email_auth_code', lambda: 'auth')
     monkeypatch.setattr(email_route, 'get_inbox_dir', lambda: str(tmp_path))
     monkeypatch.setattr(email_route, 'get_email_days_back', lambda: 30)
+    monkeypatch.setattr(email_route, 'get_email_auto_process', lambda: True)
     monkeypatch.setattr(email_route, 'pull_invoices', lambda **kwargs: {
         'downloaded': 1, 'new_files': [str(tmp_path / 'invoice.pdf')],
         'errors': [], 'total_scanned': 1,
@@ -270,6 +273,41 @@ def test_email_pull_starts_email_job_for_downloaded_files(monkeypatch, tmp_path)
     assert response.status_code == 200
     assert response.json()['job']['id'] == 'job-email'
     assert fake_service.arguments == (str(tmp_path), JobTrigger.EMAIL)
+
+
+def test_email_pull_only_downloads_when_auto_process_disabled(monkeypatch, tmp_path):
+    class FakeJobService:
+        def __init__(self):
+            self.called = False
+
+        def start_job(self, source_dir, trigger):
+            self.called = True
+            return {'id': 'unexpected-job', 'status': 'queued'}
+
+    fake_service = FakeJobService()
+    monkeypatch.setattr(email_route, 'get_email_config', lambda: {
+        'imap_host': 'imap.example.com', 'imap_port': '993',
+    })
+    monkeypatch.setattr(email_route, 'get_email_username', lambda: 'user@example.com')
+    monkeypatch.setattr(email_route, 'get_email_auth_code', lambda: 'auth')
+    monkeypatch.setattr(email_route, 'get_inbox_dir', lambda: str(tmp_path))
+    monkeypatch.setattr(email_route, 'get_email_days_back', lambda: 30)
+    monkeypatch.setattr(email_route, 'get_email_auto_process', lambda: False)
+    monkeypatch.setattr(email_route, 'pull_invoices', lambda **kwargs: {
+        'downloaded': 1, 'new_files': [str(tmp_path / 'invoice.pdf')],
+        'errors': [], 'total_scanned': 1,
+    })
+
+    app = make_app(tmp_path)
+    app.dependency_overrides[get_job_service] = lambda: fake_service
+    client = TestClient(app)
+    response = client.post(
+        '/api/v1/email/pull', headers={'X-Local-Token': 'test-token'}
+    )
+
+    assert response.status_code == 200
+    assert response.json()['job'] is None
+    assert fake_service.called is False
 
 
 def test_static_frontend_is_served_after_api_routes(tmp_path):
@@ -303,6 +341,7 @@ def test_email_patch_does_not_persist_none_values(monkeypatch, tmp_path):
     monkeypatch.setattr(settings_route, 'get_email_auth_code', lambda: '')
     monkeypatch.setattr(settings_route, 'get_email_days_back', lambda: 30)
     monkeypatch.setattr(settings_route, 'get_email_poll_minutes', lambda: 0)
+    monkeypatch.setattr(settings_route, 'get_email_auto_process', lambda: False)
 
     client = TestClient(make_app(tmp_path))
     response = client.patch(
@@ -334,6 +373,7 @@ def test_settings_patch_writes_all_sections_once(monkeypatch, tmp_path):
             'inbox_dir': 'inbox',
             'days_back': 30,
             'poll_minutes': 0,
+            'auto_process': False,
             'auth_code_configured': False,
         },
         ai={

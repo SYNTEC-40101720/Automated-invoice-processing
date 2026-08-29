@@ -115,6 +115,7 @@ export interface EmailSettings {
   inbox_dir: string
   days_back: number
   poll_minutes: number
+  auto_process: boolean
   senders: string[]
   keywords: string[]
   auth_code_configured: boolean

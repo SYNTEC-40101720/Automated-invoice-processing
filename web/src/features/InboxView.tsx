@@ -50,6 +50,10 @@ export function InboxView({ emailSettings }: InboxViewProps) {
     updateEmail.mutate({ enabled, ...(enabled ? { poll_minutes: interval } : {}) })
   }
 
+  const toggleAutomaticProcessing = (autoProcess: boolean) => {
+    updateEmail.mutate({ auto_process: autoProcess })
+  }
+
   const savePollMinutes = () => {
     const interval = Math.min(1440, Math.max(1, Number(pollMinutes) || 5))
     setPollMinutes(interval)
@@ -62,7 +66,7 @@ export function InboxView({ emailSettings }: InboxViewProps) {
       <div className="editor-tabs"><div className="editor-tab active"><Inbox size={14} /> 发票收件箱</div></div>
       <div className="view-scroll feature-scroll">
         <header className="view-header feature-header">
-          <div><div className="eyebrow">INBOX / EMAIL PULL</div><h1>发票收件箱</h1><p>从邮箱收取附件，保存到指定目录后进入处理队列。</p></div>
+          <div><div className="eyebrow">INBOX / EMAIL PULL</div><h1>发票收件箱</h1><p>从邮箱收取附件；是否自动创建处理任务由下方设置决定。</p></div>
           <button className="primary-button" onClick={() => pull.mutate()} disabled={pull.isPending}>
             {pull.isPending ? <LoaderCircle size={15} className="spin" /> : <RefreshCw size={15} />} {pull.isPending ? '正在拉取' : '立即拉取'}
           </button>
@@ -110,12 +114,28 @@ export function InboxView({ emailSettings }: InboxViewProps) {
               <Power size={14} /> 保存间隔
             </button>
           </div>
+          <div className="inbox-processing-block">
+            <div className="inbox-processing-copy">
+              <span className="field-label">拉取后自动处理</span>
+              <strong>{emailSettings?.auto_process ? '自动处理已开启' : '仅拉取，不处理'}</strong>
+              <span className="inbox-control-hint">开启后，拉取到新附件会自动创建发票处理任务</span>
+            </div>
+            <label className="switch-control">
+              <input
+                type="checkbox"
+                checked={Boolean(emailSettings?.auto_process)}
+                onChange={(event) => toggleAutomaticProcessing(event.target.checked)}
+                disabled={!emailSettings || updateEmail.isPending}
+              />
+              <span className="switch-track" aria-hidden="true"><span /></span>
+            </label>
+          </div>
         </section>
         {result && <section className="feature-section inbox-result">
           <div className="feature-stat"><strong>{result.downloaded}</strong><span>新附件</span></div>
           <div className="feature-stat"><strong>{result.total_scanned}</strong><span>扫描邮件</span></div>
           <div className="feature-stat"><strong>{result.errors.length}</strong><span>异常</span></div>
-          <div className="feature-message">{result.job_error ? result.job_error.message : pull.data?.job ? '已创建处理任务' : '没有发现新的 PDF 附件'}</div>
+          <div className="feature-message">{result.job_error ? result.job_error.message : pull.data?.job ? '已创建处理任务' : result.new_files.length > 0 ? '已拉取新附件，未启动处理任务' : '没有发现新的 PDF 附件'}</div>
         </section>}
         {result?.errors.length ? <section className="feature-section error-list">{result.errors.map((error) => <p key={error}>{error}</p>)}</section> : null}
       </div>

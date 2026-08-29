@@ -2,6 +2,7 @@
 
 运行方式: pytest tests/test_email_pull.py -v
 """
+import configparser
 import os
 import zipfile
 from email.message import EmailMessage
@@ -76,6 +77,14 @@ def test_email_keywords_are_trimmed_and_deduplicated(monkeypatch):
     )
 
     assert config_manager.get_email_keywords() == ['发票', '报销']
+
+
+def test_email_auto_process_defaults_to_disabled_for_legacy_config(monkeypatch):
+    cfg = configparser.ConfigParser()
+    cfg.read_dict({'email': {}})
+    monkeypatch.setattr(config_manager, 'load_config', lambda: cfg)
+
+    assert config_manager.get_email_auto_process() is False
 
 
 class TestSaveAttachments:

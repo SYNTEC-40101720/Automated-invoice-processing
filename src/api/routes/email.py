@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 
 from ...application.job_service import JobService
 from ...config_manager import (
+    get_email_auto_process,
     get_email_auth_code,
     get_email_config,
     get_email_days_back,
@@ -49,7 +50,7 @@ def pull_email(
         raise ApplicationError('EMAIL_PULL_FAILED', f'邮箱拉取失败: {exc}') from exc
 
     job = None
-    if result.get('new_files'):
+    if result.get('new_files') and get_email_auto_process():
         try:
             job = service.start_job(get_inbox_dir(), JobTrigger.EMAIL)
         except ApplicationError as exc:

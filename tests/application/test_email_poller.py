@@ -29,6 +29,9 @@ def test_email_poller_starts_email_job_for_new_files(monkeypatch, tmp_path):
         'src.application.email_poller.get_email_poll_minutes', lambda: 5
     )
     monkeypatch.setattr(
+        'src.application.email_poller.get_email_auto_process', lambda: True
+    )
+    monkeypatch.setattr(
         'src.application.email_poller.get_inbox_dir', lambda: str(tmp_path)
     )
     monkeypatch.setattr('src.application.email_poller.get_email_config', lambda: {
@@ -73,6 +76,51 @@ def test_email_poller_starts_email_job_for_new_files(monkeypatch, tmp_path):
     assert calls[0][1]['senders'] == ['trusted@example.com']
     assert calls[0][1]['keywords'] == ['差旅']
     assert calls[1] == ('job', str(tmp_path), JobTrigger.EMAIL)
+
+
+def test_email_poller_only_pulls_when_auto_process_disabled(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr('src.application.email_poller.get_email_enabled', lambda: True)
+    monkeypatch.setattr(
+        'src.application.email_poller.get_email_poll_minutes', lambda: 5
+    )
+    monkeypatch.setattr(
+        'src.application.email_poller.get_email_auto_process', lambda: False
+    )
+    monkeypatch.setattr(
+        'src.application.email_poller.get_inbox_dir', lambda: str(tmp_path)
+    )
+    monkeypatch.setattr('src.application.email_poller.get_email_config', lambda: {
+        'imap_host': 'imap.example.com', 'imap_port': '993',
+    })
+    monkeypatch.setattr(
+        'src.application.email_poller.get_email_username', lambda: 'user'
+    )
+    monkeypatch.setattr(
+        'src.application.email_poller.get_email_auth_code', lambda: 'auth'
+    )
+    monkeypatch.setattr('src.application.email_poller.get_email_days_back', lambda: 30)
+    monkeypatch.setattr(
+        'src.application.email_poller.get_email_senders', lambda: []
+    )
+    monkeypatch.setattr(
+        'src.application.email_poller.get_email_keywords', lambda: []
+    )
+
+    def fake_pull(**_):
+        calls.append('pull')
+        return {
+            'downloaded': 1,
+            'new_files': [str(tmp_path / 'invoice.pdf')],
+            'errors': [],
+            'total_scanned': 1,
+        }
+
+    poller = EmailPoller(lambda *_: calls.append('job'), fake_pull)
+    result = poller.poll_once()
+
+    assert result['new_files']
+    assert calls == ['pull']
 
 
 def test_email_poller_stop_wakes_disabled_wait(monkeypatch):

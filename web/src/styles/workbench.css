@@ -1,10 +1,11 @@
  .inbox-config { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 0; overflow: hidden; }
- .inbox-directory-block, .inbox-automation-block { display: flex; align-items: center; gap: 13px; min-width: 0; padding: 18px; }
+ .inbox-directory-block, .inbox-automation-block, .inbox-processing-block { display: flex; align-items: center; gap: 13px; min-width: 0; padding: 18px; }
  .inbox-directory-block { border-right: 1px solid var(--line); }
  .inbox-directory-block .secondary-button { flex: 0 0 auto; }
  .inbox-automation-block { gap: 15px; }
- .inbox-automation-copy { min-width: 0; flex: 1; }
- .inbox-automation-copy strong { display: block; color: var(--text); font-size: 13px; font-weight: 600; }
+ .inbox-processing-block { grid-column: 1 / -1; border-top: 1px solid var(--line); }
+ .inbox-automation-copy, .inbox-processing-copy { min-width: 0; flex: 1; }
+ .inbox-automation-copy strong, .inbox-processing-copy strong { display: block; color: var(--text); font-size: 13px; font-weight: 600; }
  .inbox-control-hint { display: block; margin-top: 5px; color: var(--text-subtle); font-size: 11px; line-height: 1.5; }
  .switch-control { position: relative; display: inline-flex; flex: 0 0 auto; align-items: center; cursor: pointer; }
  .switch-control input { position: absolute; width: 1px; height: 1px; opacity: 0; }
@@ -19,7 +20,7 @@
  .inbox-summary.is-active { color: var(--teal); }
  .inbox-summary.is-active .status-dot { background: var(--teal); box-shadow: 0 0 0 3px var(--teal-soft); }
  @media (max-width: 900px) { .inbox-config { grid-template-columns: 1fr; } .inbox-directory-block { border-right: 0; border-bottom: 1px solid var(--line); } }
- @media (max-width: 760px) { .inbox-directory-block, .inbox-automation-block { align-items: flex-start; flex-wrap: wrap; } .inbox-directory-block .source-copy { flex: 1 1 calc(100% - 56px); } .inbox-directory-block .secondary-button { margin-left: 52px; } .inbox-automation-copy { flex-basis: calc(100% - 53px); } .inbox-automation-block .poll-interval { margin-left: 0; } }
+ @media (max-width: 760px) { .inbox-directory-block, .inbox-automation-block, .inbox-processing-block { align-items: flex-start; flex-wrap: wrap; } .inbox-directory-block .source-copy { flex: 1 1 calc(100% - 56px); } .inbox-directory-block .secondary-button { margin-left: 52px; } .inbox-automation-copy, .inbox-processing-copy { flex-basis: calc(100% - 53px); } .inbox-automation-block .poll-interval { margin-left: 0; } }
 body {
   background:
     radial-gradient(circle at 75% -20%, rgba(19, 124, 116, .10), transparent 34%),

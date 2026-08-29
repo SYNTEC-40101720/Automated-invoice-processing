@@ -31,6 +31,7 @@ _DEFAULTS = {
         'inbox_dir': '发票收件箱',
         'days_back': '30',
         'poll_minutes': '0',
+        'auto_process': 'false',
         'senders': '12306@rails.com.cn,didifapiao@mailgate.xiaojukeji.com,fapiao@mailgate.hongyibo.com.cn,invoice@invoice01.huazhuhotels.com,service@invoice.txffp.com',
         'keywords': '发票,行程单,报销',
     },
@@ -69,6 +70,8 @@ days_back = 30
 keywords = 发票,行程单,报销
 # 自动轮询间隔（分钟，0 = 不自动轮询，仅手动拉取）
 poll_minutes = 0
+# 拉取新附件后自动创建处理任务（true/false，默认 false；关闭时只保存附件）
+auto_process = false
 
 [ai]
 # AI 审核开关（true/false）—— 处理完成后自动审核发票与行程
@@ -293,6 +296,11 @@ def get_email_poll_minutes() -> int:
         return max(0, int(get_email_config()['poll_minutes']))
     except (ValueError, TypeError):
         return 0
+
+
+def get_email_auto_process() -> bool:
+    """拉取新附件后是否自动创建处理任务"""
+    return get_email_config()['auto_process'].lower() in ('1', 'true', 'yes', 'on')
 
 
 def get_email_days_back() -> int:
