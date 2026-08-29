@@ -8,6 +8,8 @@ import type {
   Job,
   LogEntry,
   SettingsResponse,
+  UpdateApplyResponse,
+  UpdateResponse,
 } from './types'
 
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
@@ -37,6 +39,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   health: () => request<HealthResponse>('/system/health'),
+  updateCheck: () => request<UpdateResponse>('/system/update'),
+  applyUpdate: () => request<UpdateApplyResponse>('/system/update/apply', { method: 'POST' }),
   currentJob: () => request<Job | null>('/jobs/current'),
   scanDirectory: (sourceDir: string) => request<{ source_dir: string; pdf_count: number }>('/jobs/scan', {
     method: 'POST', body: JSON.stringify({ source_dir: sourceDir }),

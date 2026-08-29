@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import secrets
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from ..application.job_service import JobService
+from ..application.update_checker import UpdateApplyResult
 from ..domain.errors import ApplicationError
 from ..version import __version__
 from .errors import application_error_handler
@@ -23,6 +24,7 @@ def create_app(
     version: str = __version__,
     static_dir: str | Path | None = None,
     allowed_origins: Iterable[str] | None = None,
+    update_apply: Callable[[str], UpdateApplyResult] | None = None,
 ) -> FastAPI:
     service = job_service or JobService()
     app = FastAPI(
@@ -37,6 +39,7 @@ def create_app(
         local_token if local_token is not None else secrets.token_urlsafe(32)
     )
     app.state.version = version
+    app.state.update_apply = update_apply
     app.state.allowed_origins = frozenset(
         origin.rstrip('/') for origin in (allowed_origins or ())
     )

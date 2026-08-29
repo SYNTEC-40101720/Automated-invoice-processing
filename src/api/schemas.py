@@ -42,6 +42,22 @@ class HealthResponse(BaseModel):
     mode: str
 
 
+class UpdateResponse(BaseModel):
+    current_version: str
+    checked: bool
+    available: bool
+    latest_version: str | None = None
+    release_url: str | None = None
+    installable: bool
+    asset_name: str | None = None
+
+
+class UpdateApplyResponse(BaseModel):
+    status: str
+    message: str
+    latest_version: str | None = None
+
+
 class LogEntry(BaseModel):
     event_id: int
     occurred_at: str

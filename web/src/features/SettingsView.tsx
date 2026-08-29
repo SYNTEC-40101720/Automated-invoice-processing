@@ -1,16 +1,26 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { KeyRound, LoaderCircle, Mail, Save, Settings2, ShieldCheck } from 'lucide-react'
+import { Download, KeyRound, LoaderCircle, Mail, RefreshCw, Save, Settings2, ShieldCheck } from 'lucide-react'
 import { api } from '../api/client'
-import type { SettingsResponse } from '../api/types'
+import type { SettingsResponse, UpdateApplyResponse, UpdateResponse } from '../api/types'
 
-export function SettingsView() {
+interface SettingsViewProps {
+  version: string | null
+  update: UpdateResponse | null
+  onCheckUpdate: () => Promise<UpdateResponse | null>
+  onApplyUpdate: () => Promise<UpdateApplyResponse>
+}
+
+export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate }: SettingsViewProps) {
   const queryClient = useQueryClient()
   const settingsQuery = useQuery({ queryKey: ['settings'], queryFn: api.settings })
   const [settings, setSettings] = useState<SettingsResponse | null>(null)
   const [authCode, setAuthCode] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [message, setMessage] = useState('')
+  const [checkingUpdate, setCheckingUpdate] = useState(false)
+  const [applyingUpdate, setApplyingUpdate] = useState(false)
+  const [updateMessage, setUpdateMessage] = useState('')
 
   useEffect(() => {
     if (settingsQuery.data) setSettings(settingsQuery.data)
@@ -56,6 +66,40 @@ export function SettingsView() {
     onError: (error) => setMessage((error as Error).message),
   })
 
+  const checkUpdate = async () => {
+    setCheckingUpdate(true)
+    setUpdateMessage('正在检查 GitHub Release…')
+    try {
+      const result = await onCheckUpdate()
+      if (!result || !result.checked) {
+        setUpdateMessage('暂时无法连接 GitHub，请稍后再试')
+      } else if (!result.available) {
+        setUpdateMessage(`当前已是最新版本 v${result.current_version}`)
+      } else if (!result.installable) {
+        setUpdateMessage(`发现 v${result.latest_version ?? '--'}，但该 Release 没有可安装的 ZIP 文件`)
+      } else {
+        setUpdateMessage(`发现 v${result.latest_version}，可以自动下载并安装`)
+      }
+    } catch (error) {
+      setUpdateMessage((error as Error).message)
+    } finally {
+      setCheckingUpdate(false)
+    }
+  }
+
+  const applyUpdate = async () => {
+    setApplyingUpdate(true)
+    setUpdateMessage('正在下载并准备安装更新，请稍候…')
+    try {
+      const result = await onApplyUpdate()
+      setUpdateMessage(result.message)
+    } catch (error) {
+      setUpdateMessage((error as Error).message)
+    } finally {
+      setApplyingUpdate(false)
+    }
+  }
+
   if (settingsQuery.error) return <div className="editor-view feature-view"><div className="feedback error">{(settingsQuery.error as Error).message}</div></div>
   if (settingsQuery.isLoading || !settings) return <div className="editor-view feature-view"><div className="loading-state"><LoaderCircle size={20} className="spin" /> 正在读取配置</div></div>
 
@@ -84,6 +128,25 @@ export function SettingsView() {
           <label>模型<input value={settings.ai.model} onChange={(event) => setSettings({ ...settings, ai: { ...settings.ai, model: event.target.value } })} /></label>
           <label>API Key<input type="password" placeholder={settings.ai.api_key_configured ? '已配置，留空保持不变' : '输入 API Key'} value={apiKey} onChange={(event) => setApiKey(event.target.value)} /></label>
           <button className="secondary-button" onClick={() => testAi.mutate()} disabled={testAi.isPending}><KeyRound size={14} /> {testAi.isPending ? '测试中' : '测试连接'}</button>
+        </SettingsCard>
+        <SettingsCard icon={<RefreshCw size={17} />} title="软件更新">
+          <div className="update-settings">
+            <div className="update-version">
+              <span className="field-label">当前版本</span>
+              <strong>v{update?.current_version ?? version ?? '--'}</strong>
+              {update?.available && <span className="update-available">发现 v{update.latest_version ?? '--'}</span>}
+            </div>
+            <div className="update-actions">
+              <button className="secondary-button" onClick={() => void checkUpdate()} disabled={checkingUpdate || applyingUpdate}>
+                <RefreshCw size={14} className={checkingUpdate ? 'spin' : ''} /> {checkingUpdate ? '检查中' : '检查更新'}
+              </button>
+              {update?.available && update.installable && <button className="primary-button" onClick={() => void applyUpdate()} disabled={checkingUpdate || applyingUpdate}>
+                <Download size={14} className={applyingUpdate ? 'spin' : ''} /> {applyingUpdate ? '下载并安装中' : '立即更新'}
+              </button>}
+            </div>
+            <p className="update-message">{updateMessage || '检测到新版本后，可由程序自动下载、替换并重启。'}</p>
+            {update?.available && !update.installable && <p className="update-message warning">请在该 Release 上传 SYNTEC ZIP 打包文件。</p>}
+          </div>
         </SettingsCard>
       </section>
     </div>

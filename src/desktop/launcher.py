@@ -16,6 +16,7 @@ import uvicorn
 from ..api.app import create_app
 from ..application.job_service import JobService
 from .native_bridge import NativeBridge
+from .update_manager import DesktopUpdateManager
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +53,24 @@ def run_desktop() -> None:
     port = _find_free_port()
     token = secrets.token_urlsafe(32)
     job_service = JobService()
+    terminal_statuses = {
+        'succeeded',
+        'completed_with_warnings',
+        'cancelled',
+        'failed',
+    }
+
+    def can_update() -> bool:
+        current_job = job_service.current_job()
+        return not current_job or current_job['status'] in terminal_statuses
+
+    update_manager = DesktopUpdateManager(can_update=can_update)
     app = create_app(
         job_service,
         local_token=token,
         allowed_origins={f'http://127.0.0.1:{port}'},
         static_dir=_bundle_root() / 'web' / 'dist',
+        update_apply=update_manager.apply,
     )
     job_service.start_background_tasks()
     config = uvicorn.Config(
@@ -78,15 +92,17 @@ def run_desktop() -> None:
         except ImportError as exc:
             raise RuntimeError('缺少 pywebview，请安装桌面运行依赖') from exc
 
-        webview.create_window(
+        native_bridge = NativeBridge(job_service.is_known_output_directory)
+        window = webview.create_window(
             'SYNTEC · 电子票据工作台',
             f'{base_url}/?token={token}',
-            js_api=NativeBridge(job_service.is_known_output_directory),
+            js_api=native_bridge,
             width=1280,
             height=820,
             min_size=(1024, 700),
             resizable=True,
         )
+        update_manager.set_close_callback(window.destroy)
         webview.start(gui='edgechromium', debug=False)
         logger.info('WebView 窗口已关闭')
     finally:

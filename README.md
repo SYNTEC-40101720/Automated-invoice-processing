@@ -12,6 +12,7 @@
 - 🖥️ Web 工作台支持处理概览、收件箱、审核和设置视图
 - 📡 FastAPI + WebSocket 实时推送任务进度、日志和状态
 - 📁 桌面壳提供目录选择、PDF 文件选择、日志导出和打开输出目录
+- 🔄 软件打开后自动检查 GitHub Release，可在设置页自动下载并安装新版本
 - ⚙️ 配置 API 对敏感授权码和 API Key 只返回配置状态
 
 ## 环境要求
@@ -77,9 +78,9 @@
 | 模块 | 职责 |
 |---|---|
 | `main.py` | 桌面入口，启动本地 FastAPI 服务和 WebView2 |
-| `src/desktop/` | 随机本地端口、token、桌面桥接和退出清理 |
+| `src/desktop/` | 随机本地端口、token、桌面桥接、更新编排和退出清理 |
 | `src/api/` | HTTP/WebSocket 契约、本地 token 和 React 静态资源 |
-| `src/application/` | 任务状态、取消、日志、审核和归档编排 |
+| `src/application/` | 任务状态、取消、日志、审核、归档和更新检查编排 |
 | `src/domain/` | Job 状态机、事件和领域错误 |
 | `src/config.py` | 集中存放业务配置常量（税号、线程数） |
 | `src/config_manager.py` | INI 配置文件读写，运行时动态访问税号等 |
@@ -131,6 +132,24 @@ python bump_version.py major   # 7.0.4 → 8.0.0
 ```
 
 普通测试和打包不会自动修改版本；正式发布前执行一次递增命令，再运行 `python build_syntec.py`。打包脚本会拒绝不一致的版本配置。
+
+## 自动更新检查
+
+应用每次打开工作台时，会通过本地 API 查询 GitHub 的最新稳定 Release。设置页也提供「检查更新」按钮。查询使用仓库
+[`SYNTEC-40101720/Automated-invoice-processing`](https://github.com/SYNTEC-40101720/Automated-invoice-processing)
+的公开 Releases API；网络不可用或 GitHub 暂时无法访问时，应用仍会正常启动。
+
+发现比当前版本更高且包含可安装 ZIP 的 Release 后，工作台顶部会提示更新，设置页会出现「立即更新」。点击后程序会在后台下载 ZIP，校验 GitHub 提供的 SHA-256 摘要（Release 未提供摘要时使用 HTTPS 和包结构校验），然后关闭当前窗口，由独立更新器替换安装目录并启动新版本。`config.ini`、`logs/` 和默认收件箱会从旧版本保留。
+
+支持自动安装的第一版需要先人工部署一次，因为旧版本安装目录中没有独立更新器；从该版本开始，后续 Release 可以完全免人工下载。安装目录还必须对当前用户可写，否则更新器无法替换文件。
+
+发布新版本时保持版本号一致：
+
+1. 执行 `python bump_version.py patch`（或 `minor`、`major`）。
+2. 执行 `python build_syntec.py`，生成新的 `dist/SYNTEC-电子票据处理系统/` 打包目录，其中包含主程序和 `SYNTEC-电子票据更新器.exe`。
+3. 将整个 `dist/SYNTEC-电子票据处理系统/` 目录压缩为以 `SYNTEC-电子票据处理系统` 开头、以 `.zip` 结尾的文件。
+4. 在 GitHub 创建 Release，标签使用 `v7.0.5` 这类格式，上传该 ZIP 并发布。
+5. 发布 Release 后，用户在设置页点击「检查更新」即可下载并完成更新；Release 标签版本必须高于软件当前版本。
 
 ## 版本历史
 

@@ -86,6 +86,22 @@ export interface HealthResponse {
   mode: string
 }
 
+export interface UpdateResponse {
+  current_version: string
+  checked: boolean
+  available: boolean
+  latest_version: string | null
+  release_url: string | null
+  installable: boolean
+  asset_name: string | null
+}
+
+export interface UpdateApplyResponse {
+  status: string
+  message: string
+  latest_version: string | null
+}
+
 export interface BusinessSettings {
   target_tax_id: string
   max_workers: number

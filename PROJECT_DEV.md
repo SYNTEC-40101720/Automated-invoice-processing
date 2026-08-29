@@ -104,9 +104,9 @@
 ```
 src/
 ├── domain/             # Job、状态机、领域事件和错误码
-├── application/       # JobService、EventBus、文件服务和审核服务
+├── application/       # JobService、EventBus、文件服务、审核服务和更新检查
 ├── api/                # FastAPI 路由、token、静态资源和 WebSocket
-├── desktop/            # pywebview 启动器和 NativeBridge
+├── desktop/            # pywebview 启动器、NativeBridge 和自动更新器
 └── core/               # 发票处理业务，不依赖 Web
 web/
 └── src/                # React 工作台和前端状态管理
@@ -149,6 +149,15 @@ web/
 | 8 | 类型路由注册表 | `processor.py:@register_type` | 装饰器注册，无需改 determine_processor_type |
 | 9 | 集成测试 | `tests/test_integration.py` | 20 个集成测试覆盖新功能 |
 | 10 | 合并性能评估 | `processor.py:_merge_classified_pdfs` | PdfWriter.append 已是推荐 API，无需优化 |
+| 11 | 自动更新 | `update_checker.py` + `desktop/update_manager.py` + `desktop/update_helper.py` | 设置页下载并校验 Release ZIP，由独立更新器替换目录后重启 |
+
+### 自动更新发布约定
+
+- `build_syntec.py` 会在主程序和独立更新器构建、合规验证通过后生成 `dist/SYNTEC-电子票据处理系统-v{version}.zip`。
+- ZIP 必须保留顶层 `SYNTEC-电子票据处理系统/` 目录，并包含主程序、`SYNTEC-电子票据更新器.exe` 和完整 `_internal/`。
+- 应用只接受目标 GitHub 仓库中版本更高的 Release；设置页点击更新后执行下载、大小限制、SHA-256（若 Release 提供）和安全解压校验。
+- 主程序退出后由临时目录中的独立更新器完成替换，更新器日志也写入临时目录，避免 Windows 目录句柄锁定；成功后保留 `config.ini`、`logs/` 和 `发票收件箱/`。
+- 没有更新器的旧安装包不能自更新，首次需要人工部署一次包含更新器的版本；安装目录还必须对当前用户可写。
 
 ## 8. 开发检查清单
 

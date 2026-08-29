@@ -7,8 +7,10 @@ SYNTEC 域控规范打包脚本
 输出：
     dist/SYNTEC-电子票据处理系统/
     ├── SYNTEC-电子票据处理系统.exe
+    ├── SYNTEC-电子票据更新器.exe
     └── _internal/  (Python 运行时 + 依赖)
 """
+import hashlib
 import json
 import os
 import shutil
@@ -24,11 +26,13 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-
 
 ROOT = Path(__file__).resolve().parent
 APP_NAME = "SYNTEC-电子票据处理系统"
+UPDATER_NAME = "SYNTEC-电子票据更新器"
 VERSION_FILE = ROOT / "version_info.txt"
 PYPROJECT_FILE = ROOT / "pyproject.toml"
 WEB_PACKAGE_FILE = ROOT / "web" / "package.json"
 WEB_LOCK_FILE = ROOT / "web" / "package-lock.json"
 MAIN_SCRIPT = ROOT / "main.py"
+UPDATER_SCRIPT = ROOT / "src" / "desktop" / "update_helper.py"
 WEB_DIR = ROOT / "web"
 WEB_DIST_DIR = WEB_DIR / "dist"
 DIST_DIR = ROOT / "dist"
@@ -106,6 +110,12 @@ def verify() -> None:
     else:
         print(f"✅ exe 存在: {exe.name}")
 
+    updater = DIST_DIR / APP_NAME / f"{UPDATER_NAME}.exe"
+    if not updater.exists():
+        errors.append(f"更新器不存在: {updater}")
+    else:
+        print(f"✅ 更新器存在: {updater.name}")
+
     # 2. 文件名以 SYNTEC 开头
     if not exe.name.startswith("SYNTEC"):
         errors.append(f"❌ exe 文件名不以 SYNTEC 开头: {exe.name}")
@@ -156,6 +166,31 @@ def verify() -> None:
         print(f"📦 输出: {exe.parent}")
 
 
+def create_release_archive() -> Path:
+    """将完整安装目录压缩成可供应用自动更新的 Release 资产。"""
+    package_dir = DIST_DIR / APP_NAME
+    if not package_dir.is_dir():
+        sys.exit(f"❌ 缺少打包目录: {package_dir}")
+
+    archive_base = DIST_DIR / f"{APP_NAME}-v{__version__}"
+    archive_path = Path(
+        shutil.make_archive(
+            str(archive_base),
+            "zip",
+            root_dir=str(DIST_DIR),
+            base_dir=APP_NAME,
+        )
+    )
+    digest = hashlib.sha256()
+    with archive_path.open("rb") as archive_file:
+        for chunk in iter(lambda: archive_file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    print(f"📦 Release ZIP: {archive_path}")
+    print(f"   大小: {archive_path.stat().st_size / 1024 / 1024:.2f} MB")
+    print(f"   SHA-256: {digest.hexdigest()}")
+    return archive_path
+
+
 def main():
     if not WEB_DIR.exists():
         sys.exit("❌ 缺少 web/ 前端目录")
@@ -193,7 +228,24 @@ def main():
     ]
 
     run(cmd, "PyInstaller 打包")
+    updater_cmd = [
+        sys.executable, "-m", "PyInstaller",
+        "--onefile",
+        "--windowed",
+        "--name", UPDATER_NAME,
+        "--icon", str(ROOT / "logo.ico"),
+        "--version-file", str(VERSION_FILE),
+        "--noupx",
+        "--clean",
+        "--noconfirm",
+        "--distpath", str(DIST_DIR / APP_NAME),
+        "--workpath", str(BUILD_DIR / UPDATER_NAME),
+        "--specpath", str(BUILD_DIR / UPDATER_NAME),
+        str(UPDATER_SCRIPT),
+    ]
+    run(updater_cmd, "打包独立更新器")
     verify()
+    create_release_archive()
 
 
 if __name__ == "__main__":

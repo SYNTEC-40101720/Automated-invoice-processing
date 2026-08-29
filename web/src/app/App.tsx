@@ -4,6 +4,7 @@ import { ActivityBar } from '../components/ActivityBar'
 import { BottomPanel } from '../components/BottomPanel'
 import { Sidebar } from '../components/Sidebar'
 import { StatusBar } from '../components/StatusBar'
+import { UpdateBanner } from '../components/UpdateBanner'
 import { api, connectEvents } from '../api/client'
 import { ProcessingView } from '../features/processing/ProcessingView'
 import { AuditView } from '../features/AuditView'
@@ -25,6 +26,12 @@ export function App() {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const lastEventId = useRef(0)
   const healthQuery = useQuery({ queryKey: ['health'], queryFn: api.health, retry: false })
+  const updateQuery = useQuery({
+    queryKey: ['update'],
+    queryFn: api.updateCheck,
+    retry: false,
+    staleTime: 5 * 60_000,
+  })
   const settingsQuery = useQuery({ queryKey: ['settings'], queryFn: api.settings, retry: false })
   const currentJobQuery = useQuery({ queryKey: ['current-job'], queryFn: api.currentJob, retry: false })
 
@@ -155,6 +162,14 @@ export function App() {
     api.cancelJob(job.id).then((nextJob) => setJob(nextJob)).catch((error: Error) => window.alert(error.message))
   }
 
+  const checkForUpdate = async () => {
+    const result = await updateQuery.refetch()
+    if (result.error) throw result.error
+    return result.data ?? null
+  }
+
+  const applyUpdate = () => api.applyUpdate()
+
   const emailSettings = settingsQuery.data?.email ?? null
 
   return <div className="workbench-shell">
@@ -166,14 +181,22 @@ export function App() {
       onChooseDirectory={chooseDirectory}
       onOpenInbox={() => setView('inbox')}
     />
-    <main className="main-column">
-      {activeView === 'processing'
-        ? <ProcessingView job={job} onChooseDirectory={chooseDirectory} onStart={start} onCancel={cancel} onOpenOutput={openOutput} />
-        : activeView === 'inbox'
-          ? <InboxView emailSettings={emailSettings} />
-          : activeView === 'audit'
-            ? <AuditView job={job} />
-            : <SettingsView />}
+    <main className={`main-column ${updateQuery.data?.available ? 'has-update' : ''}`}>
+      {updateQuery.data?.available && <UpdateBanner update={updateQuery.data} onOpenSettings={() => setView('settings')} />}
+      <div className="main-content">
+        {activeView === 'processing'
+          ? <ProcessingView job={job} onChooseDirectory={chooseDirectory} onStart={start} onCancel={cancel} onOpenOutput={openOutput} />
+          : activeView === 'inbox'
+            ? <InboxView emailSettings={emailSettings} />
+            : activeView === 'audit'
+              ? <AuditView job={job} />
+              : <SettingsView
+                version={healthQuery.data?.version ?? null}
+                update={updateQuery.data ?? null}
+                onCheckUpdate={checkForUpdate}
+                onApplyUpdate={applyUpdate}
+              />}
+      </div>
       <BottomPanel />
     </main>
     <StatusBar connected={connected} job={job} version={healthQuery.data?.version ?? null} />
