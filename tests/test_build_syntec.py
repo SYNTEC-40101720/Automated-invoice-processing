@@ -7,6 +7,21 @@ import zipfile
 import build_syntec
 
 
+def test_prepare_release_version_bumps_patch_version(monkeypatch):
+    captured = {}
+
+    def fake_update_version_files(version: str) -> None:
+        captured['version'] = version
+
+    monkeypatch.setattr(build_syntec, '__version__', '7.0.5')
+    monkeypatch.setattr(build_syntec, 'update_version_files', fake_update_version_files)
+
+    version = build_syntec.prepare_release_version()
+
+    assert version == '7.0.6'
+    assert captured['version'] == '7.0.6'
+
+
 def test_create_release_archive_contains_complete_install_directory(
     tmp_path,
     monkeypatch,

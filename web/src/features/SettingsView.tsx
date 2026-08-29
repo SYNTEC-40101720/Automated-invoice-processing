@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bot, Download, KeyRound, LoaderCircle, Mail, RefreshCw, Save, Settings2, ShieldCheck } from 'lucide-react'
+import { Bot, Download, ExternalLink, KeyRound, LoaderCircle, Mail, RefreshCw, Save, Settings2, ShieldCheck } from 'lucide-react'
 import { api } from '../api/client'
 import type { SettingsResponse, UpdateApplyResponse, UpdateResponse } from '../api/types'
 import type { SettingsSection } from '../stores/workbench'
@@ -202,6 +202,10 @@ export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate }: 
                 <Download size={14} className={applyingUpdate ? 'spin' : ''} /> {applyingUpdate ? '下载并安装中' : '立即更新'}
               </button>}
             </div>
+            {update?.release_url && <a className="update-release-link" href={update.release_url} target="_blank" rel="noopener noreferrer">
+              <span>打开 Release 页面</span>
+              <ExternalLink size={13} />
+            </a>}
             <p className="update-message">{updateMessage || '检测到新版本后，可由程序自动下载、替换并重启。'}</p>
             {update?.available && !update.installable && <p className="update-message warning">请在该 Release 上传 SYNTEC ZIP 打包文件。</p>}
           </div>

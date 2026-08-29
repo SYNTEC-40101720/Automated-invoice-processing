@@ -131,7 +131,7 @@ python bump_version.py minor   # 7.0.5 → 7.1.0
 python bump_version.py major   # 7.0.5 → 8.0.0
 ```
 
-普通测试和打包不会自动修改版本；正式发布前执行一次递增命令，再运行 `python build_syntec.py`。打包脚本会拒绝不一致的版本配置。
+普通测试不会自动修改版本；正式发布时运行 `python build_syntec.py` 会自动把补丁版本递增一次，并同步到运行时、前端元数据和 Windows 资源。打包脚本会拒绝不一致的版本配置。
 
 ## 自动更新检查
 

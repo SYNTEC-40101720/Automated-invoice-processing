@@ -131,6 +131,8 @@ h1 { margin: 10px 0 8px; color: var(--text); font-size: 30px; font-weight: 600; 
 .update-version strong { color: var(--teal); font: 18px "Cascadia Code", monospace; font-weight: 500; }
 .update-available { color: var(--amber); font-size: 11px; }
 .update-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.update-release-link { display: inline-flex; align-items: center; gap: 6px; width: fit-content; color: var(--teal); font-size: 11px; font-weight: 600; text-decoration: none; }
+.update-release-link:hover { text-decoration: underline; }
 .update-message { margin: 0; color: var(--text-muted); font-size: 11px; line-height: 1.6; }
 .update-message.warning { color: var(--amber); }
 

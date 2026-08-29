@@ -22,7 +22,26 @@ import sys
 import tomllib
 from pathlib import Path
 
+from bump_version import update_files as sync_version_files
 from src.version import __version__
+
+
+def bump_patch_version(version: str) -> str:
+    """返回递增后的补丁版本。"""
+    major, minor, patch = (int(part) for part in version.split('.'))
+    return f"{major}.{minor}.{patch + 1}"
+
+
+def update_version_files(version: str) -> None:
+    """同步更新运行时版本、项目元数据和打包资源版本。"""
+    sync_version_files(version)
+
+
+def prepare_release_version() -> str:
+    """为发布准备递增补丁版本并同步所有版本源。"""
+    version = bump_patch_version(__version__)
+    update_version_files(version)
+    return version
 
 # 强制 UTF-8 输出，避免 emoji 在 GBK 终端报错
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
@@ -198,6 +217,10 @@ def create_release_archive() -> Path:
 def main():
     if not WEB_DIR.exists():
         sys.exit("❌ 缺少 web/ 前端目录")
+
+    release_version = prepare_release_version()
+    global __version__
+    __version__ = release_version
 
     validate_version_sources()
     run([NPM_COMMAND, "--prefix", str(WEB_DIR), "run", "build"], "构建 Web 前端")
