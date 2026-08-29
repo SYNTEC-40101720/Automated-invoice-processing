@@ -127,7 +127,7 @@ def test_check_for_update_ignores_older_release_and_untrusted_url():
     assert result.checked is True
     assert result.available is False
     assert result.latest_version == '7.0.4'
-    assert result.release_url is None
+    assert result.release_url == GITHUB_RELEASES_URL
 
 
 def test_check_for_update_falls_back_to_known_release_url():
@@ -152,7 +152,7 @@ def test_check_for_update_does_not_fail_when_github_is_unreachable():
     assert result.checked is False
     assert result.available is False
     assert result.latest_version is None
-    assert result.release_url is None
+    assert result.release_url == GITHUB_RELEASES_URL
     assert GITHUB_RELEASES_URL.endswith('/releases/latest')
 
 

@@ -166,6 +166,7 @@ def check_for_update(
             current_version=current_version,
             checked=False,
             available=False,
+            release_url=GITHUB_RELEASES_URL,
         )
 
     request = Request(
@@ -185,6 +186,7 @@ def check_for_update(
             current_version=current_version,
             checked=False,
             available=False,
+            release_url=GITHUB_RELEASES_URL,
         )
 
     if not isinstance(payload, dict):
@@ -213,7 +215,7 @@ def check_for_update(
         checked=True,
         available=available,
         latest_version=latest_version,
-        release_url=_safe_release_url(payload.get('html_url')) if available else None,
+        release_url=GITHUB_RELEASES_URL,
         asset_name=asset.name if asset else None,
         asset_url=asset.url if asset else None,
         asset_digest=asset.digest if asset else None,

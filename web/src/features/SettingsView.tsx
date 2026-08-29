@@ -13,6 +13,8 @@ interface SettingsViewProps {
   onApplyUpdate: () => Promise<UpdateApplyResponse>
 }
 
+const DEFAULT_RELEASE_URL = 'https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/latest'
+
 const settingsSectionMeta: Record<SettingsSection, { label: string; eyebrow: string; description: string; icon: React.ReactNode }> = {
   business: {
     label: '业务规则',
@@ -202,10 +204,10 @@ export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate }: 
                 <Download size={14} className={applyingUpdate ? 'spin' : ''} /> {applyingUpdate ? '下载并安装中' : '立即更新'}
               </button>}
             </div>
-            {update?.release_url && <a className="update-release-link" href={update.release_url} target="_blank" rel="noopener noreferrer">
+            <a className="update-release-link" href={update?.release_url ?? DEFAULT_RELEASE_URL} target="_blank" rel="noopener noreferrer">
               <span>打开 Release 页面</span>
               <ExternalLink size={13} />
-            </a>}
+            </a>
             <p className="update-message">{updateMessage || '检测到新版本后，可由程序自动下载、替换并重启。'}</p>
             {update?.available && !update.installable && <p className="update-message warning">请在该 Release 上传 SYNTEC ZIP 打包文件。</p>}
           </div>
