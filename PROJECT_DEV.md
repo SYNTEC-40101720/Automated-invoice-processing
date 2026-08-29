@@ -153,6 +153,7 @@ web/
 
 ### 自动更新发布约定
 
+- 通用实施、发布和验收流程见 [GITHUB_RELEASE_UPDATE_SOP.md](GITHUB_RELEASE_UPDATE_SOP.md)；Copilot 可复用工作流见 [.github/skills/github-release-updater/SKILL.md](.github/skills/github-release-updater/SKILL.md)。
 - `build_syntec.py` 会在主程序和独立更新器构建、合规验证通过后生成 `dist/SYNTEC-Invoice-Processor-v{version}.zip`；Release 资产名使用 ASCII，避免 GitHub 自动重命名中文文件名。
 - ZIP 必须保留顶层 `SYNTEC-电子票据处理系统/` 目录，并包含主程序、`SYNTEC-电子票据更新器.exe` 和完整 `_internal/`。
 - 应用只接受目标 GitHub 仓库中版本更高的 Release；设置页点击更新后执行下载、大小限制、SHA-256（若 Release 提供）和安全解压校验。
