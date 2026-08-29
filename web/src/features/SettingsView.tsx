@@ -50,6 +50,8 @@ export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate }: 
   const [authCode, setAuthCode] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [message, setMessage] = useState('')
+  const [emailTestMessage, setEmailTestMessage] = useState('')
+  const [aiTestMessage, setAiTestMessage] = useState('')
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [applyingUpdate, setApplyingUpdate] = useState(false)
   const [updateMessage, setUpdateMessage] = useState('')
@@ -83,8 +85,9 @@ export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate }: 
       username: settings?.email.username,
       ...(authCode ? { auth_code: authCode } : {}),
     }),
-    onSuccess: (response) => setMessage(response.message),
-    onError: (error) => setMessage((error as Error).message),
+    onMutate: () => setEmailTestMessage('正在测试邮箱连接…'),
+    onSuccess: (response) => setEmailTestMessage(response.message),
+    onError: (error) => setEmailTestMessage((error as Error).message),
   })
 
   const testAi = useMutation({
@@ -94,8 +97,9 @@ export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate }: 
       timeout: settings?.ai.timeout,
       ...(apiKey ? { api_key: apiKey } : {}),
     }),
-    onSuccess: (response) => setMessage(response.message),
-    onError: (error) => setMessage((error as Error).message),
+    onMutate: () => setAiTestMessage('正在测试 AI 接口…'),
+    onSuccess: (response) => setAiTestMessage(response.message),
+    onError: (error) => setAiTestMessage((error as Error).message),
   })
 
   const checkUpdate = async () => {
@@ -168,14 +172,20 @@ export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate }: 
           <label>授权码<input type="password" placeholder={settings.email.auth_code_configured ? '已配置，留空保持不变' : '输入 IMAP 授权码'} value={authCode} onChange={(event) => setAuthCode(event.target.value)} /></label>
           <label>发件人白名单<textarea rows={5} value={settings.email.senders.join('\n')} onChange={(event) => setSettings({ ...settings, email: { ...settings.email, senders: event.target.value.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean) } })} placeholder="每行一个邮箱地址" /></label>
           <label>主题关键词白名单<textarea rows={4} value={settings.email.keywords.join('\n')} onChange={(event) => setSettings({ ...settings, email: { ...settings.email, keywords: event.target.value.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean) } })} placeholder="每行一个主题关键词" /></label>
-          <button className="secondary-button" onClick={() => testEmail.mutate()} disabled={testEmail.isPending}><KeyRound size={14} /> {testEmail.isPending ? '测试中' : '测试连接'}</button>
+          <div className="settings-action-row">
+            <button className="secondary-button" onClick={() => testEmail.mutate()} disabled={testEmail.isPending}><KeyRound size={14} /> {testEmail.isPending ? '测试中' : '测试连接'}</button>
+            {emailTestMessage && <p className={`settings-test-message ${testEmail.isError ? 'error' : 'success'}`}>{emailTestMessage}</p>}
+          </div>
         </SettingsCard>}
         {settingsSection === 'ai' && <SettingsCard icon={section.icon} title={section.label}>
           <label className="toggle-label"><input type="checkbox" checked={settings.ai.enabled} onChange={(event) => setSettings({ ...settings, ai: { ...settings.ai, enabled: event.target.checked } })} />启用 AI 审核</label>
           <label>接口地址<input value={settings.ai.api_base} onChange={(event) => setSettings({ ...settings, ai: { ...settings.ai, api_base: event.target.value } })} /></label>
           <label>模型<input value={settings.ai.model} onChange={(event) => setSettings({ ...settings, ai: { ...settings.ai, model: event.target.value } })} /></label>
           <label>API Key<input type="password" placeholder={settings.ai.api_key_configured ? '已配置，留空保持不变' : '输入 API Key'} value={apiKey} onChange={(event) => setApiKey(event.target.value)} /></label>
-          <button className="secondary-button" onClick={() => testAi.mutate()} disabled={testAi.isPending}><KeyRound size={14} /> {testAi.isPending ? '测试中' : '测试连接'}</button>
+          <div className="settings-action-row">
+            <button className="secondary-button" onClick={() => testAi.mutate()} disabled={testAi.isPending}><KeyRound size={14} /> {testAi.isPending ? '测试中' : '测试连接'}</button>
+            {aiTestMessage && <p className={`settings-test-message ${testAi.isError ? 'error' : 'success'}`}>{aiTestMessage}</p>}
+          </div>
         </SettingsCard>}
         {settingsSection === 'updates' && <SettingsCard icon={section.icon} title={section.label}>
           <div className="update-settings">
