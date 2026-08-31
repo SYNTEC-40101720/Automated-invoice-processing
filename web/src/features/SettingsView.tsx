@@ -160,7 +160,18 @@ export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate }: 
           </button>
         })}
       </nav>
-      <header className="view-header feature-header"><div><div className="eyebrow">{section.eyebrow}</div><h1>{section.label}</h1><p>{section.description}</p></div><button className="primary-button" onClick={() => save.mutate()} disabled={save.isPending}><Save size={15} /> {save.isPending ? '保存中' : '保存配置'}</button></header>
+      <header className="view-header feature-header">
+        <div>
+          <div className="eyebrow">{section.eyebrow}</div>
+          <h1>{section.label}</h1>
+          <p>{section.description}</p>
+        </div>
+        {settingsSection !== 'updates' && (
+          <button className="primary-button" onClick={() => save.mutate()} disabled={save.isPending}>
+            <Save size={15} /> {save.isPending ? '保存中' : '保存配置'}
+          </button>
+        )}
+      </header>
       {message && <div className={`feedback ${message.includes('失败') || message.includes('错误') ? 'error' : 'success'}`}>{message}</div>}
       <section className="settings-panel-shell">
         {settingsSection === 'business' && <SettingsCard icon={section.icon} title={section.label}>

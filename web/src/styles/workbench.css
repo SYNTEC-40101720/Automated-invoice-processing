@@ -1,8 +1,10 @@
- .inbox-config { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 0; overflow: hidden; }
- .inbox-directory-block, .inbox-automation-block, .inbox-processing-block { display: flex; align-items: center; gap: 13px; min-width: 0; padding: 18px; }
- .inbox-directory-block { border-right: 1px solid var(--line); }
+ .inbox-config { display: grid; grid-template-columns: 1fr; gap: 0; overflow: hidden; }
+ .inbox-directory-block, .inbox-action-row, .inbox-processing-block { display: flex; align-items: center; gap: 13px; min-width: 0; padding: 18px; }
+ .inbox-directory-block { grid-column: 1 / -1; border-bottom: 1px solid var(--line); }
  .inbox-directory-block .secondary-button { flex: 0 0 auto; }
- .inbox-automation-block { gap: 15px; }
+ .inbox-action-row { justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); }
+ .inbox-automation-block { display: flex; flex: 1; align-items: center; gap: 15px; min-width: 0; }
+ .inbox-pull-button { flex: 0 0 auto; }
  .inbox-processing-block { grid-column: 1 / -1; border-top: 1px solid var(--line); }
  .inbox-automation-copy, .inbox-processing-copy { min-width: 0; flex: 1; }
  .inbox-automation-copy strong, .inbox-processing-copy strong { display: block; color: var(--text); font-size: 13px; font-weight: 600; }
@@ -20,7 +22,7 @@
  .inbox-summary.is-active { color: var(--teal); }
  .inbox-summary.is-active .status-dot { background: var(--teal); box-shadow: 0 0 0 3px var(--teal-soft); }
  @media (max-width: 900px) { .inbox-config { grid-template-columns: 1fr; } .inbox-directory-block { border-right: 0; border-bottom: 1px solid var(--line); } }
- @media (max-width: 760px) { .inbox-directory-block, .inbox-automation-block, .inbox-processing-block { align-items: flex-start; flex-wrap: wrap; } .inbox-directory-block .source-copy { flex: 1 1 calc(100% - 56px); } .inbox-directory-block .secondary-button { margin-left: 52px; } .inbox-automation-copy, .inbox-processing-copy { flex-basis: calc(100% - 53px); } .inbox-automation-block .poll-interval { margin-left: 0; } }
+ @media (max-width: 760px) { .inbox-directory-block, .inbox-action-row, .inbox-automation-block, .inbox-processing-block { align-items: flex-start; flex-wrap: wrap; } .inbox-directory-block .source-copy { flex: 1 1 calc(100% - 56px); } .inbox-directory-block .secondary-button { margin-left: 52px; } .inbox-automation-copy, .inbox-processing-copy { flex-basis: calc(100% - 53px); } .inbox-automation-block .poll-interval { margin-left: 0; } .inbox-pull-button { width: 100%; justify-content: center; } }
 body {
   background:
     radial-gradient(circle at 75% -20%, rgba(19, 124, 116, .10), transparent 34%),
