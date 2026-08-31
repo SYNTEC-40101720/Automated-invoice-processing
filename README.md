@@ -120,7 +120,7 @@ python -m pytest tests/test_integration.py -v
 python -m ruff check src tests
 ```
 
-当前 v7.0.12 发布基线已验证 Python 测试 161 条通过、编译和依赖检查通过，前端类型检查和生产构建通过，`build_syntec.py` 已生成并完成 SYNTEC 域控合规校验，更新器成功提交和失败回滚冒烟均通过。真实旧版本 Release 检查、干净域控账户启动和目标机 WebView2 验收仍需单独执行。
+当前 v7.0.12 发布基线已验证 Python 测试 161 条通过、编译和依赖检查通过，前端类型检查和生产构建通过，`build_syntec.py` 已生成并完成 SYNTEC 域控合规校验，更新器成功提交和失败回滚冒烟均通过；真实 Releases API 的旧版本号/当前版本号检查均已通过。旧版 EXE 实际启动、干净域控账户启动和目标机 WebView2 验收仍需单独执行。
 
 ## 版本发布
 

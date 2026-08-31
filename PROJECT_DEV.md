@@ -192,7 +192,7 @@ python build_syntec.py
 
 ```
 
-截至 v7.0.12，本机 Windows 环境已验证：161 条 Python 测试通过，`compileall`、`pip check`、Ruff、前端 typecheck/build 和 SYNTEC PyInstaller 域控合规检查通过；本机发布包启动冒烟以及更新器成功提交、失败回滚冒烟均通过。真实旧版本 Release 检查、真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户启动以及目标机 WebView2/DPI 验收仍需在目标环境执行。
+截至 v7.0.12，本机 Windows 环境已验证：161 条 Python 测试通过，`compileall`、`pip check`、Ruff、前端 typecheck/build 和 SYNTEC PyInstaller 域控合规检查通过；本机发布包启动冒烟以及更新器成功提交、失败回滚冒烟均通过，真实 Releases API 的旧版本号/当前版本号检查均已通过。旧版 EXE 实际启动、真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户启动以及目标机 WebView2/DPI 验收仍需在目标环境执行。
 
 更新器冒烟脚本使用系统临时目录保存 PyInstaller 输出和替换现场，项目目录只保留脚本，不保留二进制测试产物：
 

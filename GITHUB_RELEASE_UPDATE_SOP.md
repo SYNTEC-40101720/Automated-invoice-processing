@@ -284,8 +284,9 @@ Windows 冒烟结果：
 - ZIP 结构：单一顶层目录，包含主程序、独立更新器和 `_internal/web/dist/index.html`
 - 完整 Python 测试：`161 passed`
 - 前端构建：`npm run build` 通过
-- 旧版检测、当前版检测：本次未执行真实旧安装目录检查
-- 配置、日志和业务数据保留：本次未执行 Windows 安装替换冒烟
+- Releases API 检查：传入 `7.0.11` 得到 `available=true`、`installable=true`；传入 `7.0.12` 得到 `available=false`
+- 旧版 EXE 实际启动检查：本次未执行
+- 配置、日志和业务数据保留：本机更新器冒烟已验证；真实 Windows 安装替换尚未执行
 - 未覆盖环境：真实域控机器、干净 Windows 环境和实际 GitHub Release 更新替换/回滚流程
 
 ### 本机更新器验收
@@ -309,4 +310,4 @@ Windows 冒烟结果：
 - 跨盘安装目录场景：`rename` 失败后的复制式替换尚未实现。
 - WebView2 真实页面加载失败或 EdgeChromium 初始化异常时的回滚。
 
-建议发布前至少补充：从旧版本 EXE 调用一次真实 Release 检查，并在目标域控机器上执行一次真实更新/回滚。
+后续目标环境验收建议：从旧版本 EXE 调用一次真实 Release 检查，并在目标域控机器上执行一次真实更新/回滚。
