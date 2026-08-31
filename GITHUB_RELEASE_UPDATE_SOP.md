@@ -68,7 +68,7 @@ GitHub 会自动重命名包含中文或部分特殊字符的 Release 资产名�
 因此新项目统一使用 ASCII 资产名，例如：
 
 ```text
-SYNTEC-Invoice-Processor-v7.0.5.zip
+SYNTEC-Invoice-Processor-vX.Y.Z.zip
 ProductName-v1.2.3.zip
 ```
 
@@ -268,32 +268,45 @@ Windows 冒烟结果：
 已知限制：
 ```
 
-## 11. 本项目落地示例
+## 11. 本项目交付基线
 
-本项目已在 2026-08-29 验证以下实现：
-
-- Release：`v7.0.5`
-- 资产：`SYNTEC-Invoice-Processor-v7.0.5.zip`
-- 资产 SHA-256：`08fe89c0e13e5b9029e103d6c56703e42fb1c15b1a4f13400894906d125d1895`
-- `7.0.4` 检测结果：发现 `7.0.5`，可安装
-- `7.0.5` 检测结果：无可用更新
-- 完整 Python 测试：`140 passed`
-- 额外修复：GitHub 中文资产名自动重命名；更新器改用 ASCII 资产名并兼容历史名称
-
-### 2026-08-31 发布记录：v7.0.11
+当前源码与发布流程对应 v7.0.12。历史版本说明保留在 README 的版本历史中，本节只保留当前交付所需的验收记录。
 
 - 应用：SYNTEC 电子票据处理系统
 - 仓库：`SYNTEC-40101720/Automated-invoice-processing`
-- 当前版本：`7.0.10`
-- 目标版本：`7.0.11`
-- Release URL：https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.0.11
-- 资产：`SYNTEC-Invoice-Processor-v7.0.11.zip`
-- 资产大小：`53,967,838` bytes（约 51.47 MiB）
-- 资产 SHA-256：`e5c9e26753e251bfa7640141d0bc641319f2e9c34d21d406ec742e15651df8f8`
-- 主程序/更新器版本资源：`7.0.11.0`；CompanyName 为 `SYNTEC`；语言为中性
+- 当前版本：`7.0.11`
+- 目标版本：`7.0.12`
+- Release URL：https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.0.12
+- 资产：`SYNTEC-Invoice-Processor-v7.0.12.zip`
+- 资产大小：`53,971,338` bytes（约 51.47 MiB）
+- 资产 SHA-256：`65e7c7942774592e770008202590dd3e9f84ffb6d9ad957adb9662eaa98b1ec7`
+- 主程序/更新器版本资源：`7.0.12.0`；CompanyName 为 `SYNTEC`；语言为中性
 - ZIP 结构：单一顶层目录，包含主程序、独立更新器和 `_internal/web/dist/index.html`
-- 完整 Python 测试：`144 passed`
+- 完整 Python 测试：`161 passed`
 - 前端构建：`npm run build` 通过
 - 旧版检测、当前版检测：本次未执行真实旧安装目录检查
 - 配置、日志和业务数据保留：本次未执行 Windows 安装替换冒烟
-- 未覆盖环境：真实域控机器、干净 Windows 环境和实际更新替换/回滚流程
+- 未覆盖环境：真实域控机器、干净 Windows 环境和实际 GitHub Release 更新替换/回滚流程
+
+### 本机更新器验收
+
+当前实现包含三层保护，并已通过单元测试和本地 EXE 冒烟：
+
+1. **回滚顺序保护**：`replace_install()` 显式跟踪旧安装是否已移动、新安装是否已就位；首次 `rename` 失败不再删除原安装目录。
+2. **包完整性校验**：`stage_update()` 在解压后校验主程序、独立更新器、`_internal/`、Python DLL、`_ctypes.pyd` 和 `web/dist/index.html`；缺项直接拒绝并清理 staging。
+3. **启动确认握手**：独立更新器通过 `SYNTEC_UPDATE_READY_FILE` 环境变量等待新应用 WebView `loaded` 事件写入确认文件；超时或进程提前退出则终止新进程并恢复旧版本，`terminate()` 超时后追加 `kill()`。
+
+本地端到端冒烟（使用真实 PyInstaller onedir EXE）：
+
+- `python smoke/run_success_smoke.py`：stub 主程序写入确认文件 → 新版本提交、旧备份和 staging 清理；构建输出全部位于系统临时目录。
+- `python smoke/run_failure_smoke.py`：stub 主程序不写确认文件直接退出 → 旧版本恢复、`update.log` 保留；构建输出全部位于系统临时目录。
+
+已知仍无法本地覆盖的风险：
+
+- 真实 GitHub Releases API 资产检测（含网络、重定向、中文资产名自动重命名）。
+- 真实 Windows 域控环境下的文件锁、UAC、Defender 扫描和权限差异。
+- 干净 Windows 环境（无开发工具、无 Python、无 WebView2 runtime）的首次安装与更新。
+- 跨盘安装目录场景：`rename` 失败后的复制式替换尚未实现。
+- WebView2 真实页面加载失败或 EdgeChromium 初始化异常时的回滚。
+
+建议发布前至少补充：从旧版本 EXE 调用一次真实 Release 检查，并在目标域控机器上执行一次真实更新/回滚。

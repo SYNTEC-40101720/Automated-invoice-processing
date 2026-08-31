@@ -293,6 +293,30 @@ def _find_package_dir(extracted_dir: Path) -> Path:
     raise UpdateError('更新压缩包内找不到 SYNTEC 主程序')
 
 
+def _validate_package_bundle(package_dir: Path) -> None:
+    internal_dir = package_dir / '_internal'
+    missing: list[str] = []
+    if not (package_dir / MAIN_EXECUTABLE_NAME).is_file():
+        missing.append(MAIN_EXECUTABLE_NAME)
+    if not (package_dir / UPDATE_HELPER_NAME).is_file():
+        missing.append(UPDATE_HELPER_NAME)
+    if not internal_dir.is_dir():
+        missing.append('_internal/')
+    else:
+        if not any(
+            path.is_file() for path in internal_dir.glob('python*.dll')
+        ):
+            missing.append('_internal/python*.dll')
+        if not (internal_dir / '_ctypes.pyd').is_file():
+            missing.append('_internal/_ctypes.pyd')
+        if not (internal_dir / 'web' / 'dist' / 'index.html').is_file():
+            missing.append('_internal/web/dist/index.html')
+    if missing:
+        raise UpdateError(
+            '更新压缩包缺少必备项: ' + ', '.join(missing)
+        )
+
+
 def stage_update(
     result: UpdateResult,
     *,
@@ -319,6 +343,7 @@ def stage_update(
         )
         _extract_zip_safely(archive_path, extracted_dir)
         package_dir = _find_package_dir(extracted_dir)
+        _validate_package_bundle(package_dir)
         return StagedUpdate(temporary_dir, package_dir)
     except (UpdateError, OSError, ValueError, zipfile.BadZipFile) as exc:
         shutil.rmtree(temporary_dir, ignore_errors=True)

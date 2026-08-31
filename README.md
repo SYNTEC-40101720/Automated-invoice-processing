@@ -1,4 +1,4 @@
-# SYNTEC 电子票据处理系统 v7.0.5
+# SYNTEC 电子票据处理系统 v7.0.12
 
 基于 Python 3.12+、FastAPI 的业务底层、React/Vite Web 工作台和 pywebview/WebView2 桌面壳，用于批量识别、重命名、校验与合并 PDF 电子发票。
 
@@ -54,7 +54,7 @@
 ├── pyproject.toml                # 项目元数据与工具配置
 ├── config.ini                    # 运行时用户配置（不入库，首次运行自动生成）
 ├── README.md                     # 项目说明
-├── PROJECT_DEV.md                # 开发文档（业务规则、架构、踩坑记录）
+├── PROJECT_DEV.md                # 项目维护说明（业务规则、架构约定）
 ├── src/                          # 源代码包
 │   ├── __init__.py
 │   ├── config.py                 # 业务配置常量（税号、线程数）
@@ -70,7 +70,8 @@
 ├── web/                          # React/Vite 工作台
 │   ├── src/                      # 视图、API 客户端、状态和样式
 │   └── package.json              # 前端脚本与依赖
-└── tests/                        # 核心、应用层和 API 契约测试
+├── tests/                        # 核心、应用层和 API 契约测试
+└── smoke/                        # 更新器发布前冒烟脚本（输出使用系统临时目录）
 ```
 
 ## 模块职责
@@ -119,7 +120,7 @@ python -m pytest tests/test_integration.py -v
 python -m ruff check src tests
 ```
 
-当前 Windows 开发环境已验证 Python 测试 143 条通过、编译和依赖检查通过，前端类型检查与生产构建通过，`build_syntec.py` 可生成并完成 SYNTEC 域控合规校验，本机正式发布包启动冒烟通过。真实浏览器 E2E、干净域控账户启动和目标机 WebView2 验收仍需单独执行。
+当前 v7.0.12 发布基线已验证 Python 测试 161 条通过、编译和依赖检查通过，前端类型检查和生产构建通过，`build_syntec.py` 已生成并完成 SYNTEC 域控合规校验，更新器成功提交和失败回滚冒烟均通过。真实旧版本 Release 检查、干净域控账户启动和目标机 WebView2 验收仍需单独执行。
 
 ## 版本发布
 
@@ -147,14 +148,16 @@ python bump_version.py major   # 7.0.5 → 8.0.0
 
 1. 执行 `python bump_version.py patch`（或 `minor`、`major`）。
 2. 执行 `python build_syntec.py`，生成新的 `dist/SYNTEC-电子票据处理系统/` 打包目录，其中包含主程序和 `SYNTEC-电子票据更新器.exe`。
-3. 将整个 `dist/SYNTEC-电子票据处理系统/` 目录压缩为以 `SYNTEC-电子票据处理系统` 开头、以 `.zip` 结尾的文件。
-4. 在 GitHub 创建 Release，标签使用 `v7.0.5` 这类格式，上传该 ZIP 并发布。
+3. `build_syntec.py` 会生成 `dist/SYNTEC-Invoice-Processor-vX.Y.Z.zip`，直接使用该 ASCII 文件名作为资产。
+4. 在 GitHub 创建 Release，标签使用 `vX.Y.Z` 格式，上传该 ZIP 并发布。
 5. 发布 Release 后，用户在设置页点击「检查更新」即可下载并完成更新；Release 标签版本必须高于软件当前版本。
 
 ## 版本历史
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v7.0.12 | 2026-09-01 | 完善自动更新启动确认、回滚保护、安装包完整性校验和发布前冒烟验证；隔离测试构建产物 |
+| v7.0.11 | 2026-08-31 | 完善 GitHub Release 自动更新的包完整性校验、启动确认、回滚保护和本地成功/失败冒烟验证 |
 | v7.0.5 | 2026-08-29 | 清理发布产物和冗余配置入口，补齐 README/版本信息并完成发布前静态验证与打包路径整理 |
 | v7.0.4 | 2026-08-23 | 收件箱独立指定并显示收件目录，增加自动收件开关与轮询间隔控制；处理工作区目录不再被替换；非发票凭证跳过税号校验，并补充 API 与处理器测试 |
 | v7.0.3 | 2026-08-23 | 清理未使用占位视图、孤立样式和空目录；更新运行时版本显示并完成发布验证 |

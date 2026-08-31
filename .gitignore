@@ -60,6 +60,13 @@ invoice_build/
 
 # 测试数据产物（含真实发票号/金额等敏感信息，严禁入库）
 tests/data/
+
+# 更新器本地冒烟测试输出
+smoke/build-smoke/
+smoke/staging/
+smoke/v1/
+smoke/v2/
+
 # 本地发票收件箱（运行时输入目录，含真实票据）
 发票收件箱/
 

@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import hashlib
 import io
+import re
 import zipfile
 from urllib.error import URLError
+
+import pytest
 
 from src.application.update_checker import (
     GITHUB_API_URL,
     GITHUB_RELEASES_URL,
     MAIN_EXECUTABLE_NAME,
+    UPDATE_HELPER_NAME,
     UpdateError,
     UpdateResult,
     check_for_update,
@@ -159,9 +163,14 @@ def test_check_for_update_does_not_fail_when_github_is_unreachable():
 def test_stage_update_downloads_and_extracts_zip(tmp_path):
     archive_buffer = io.BytesIO()
     with zipfile.ZipFile(archive_buffer, 'w') as archive:
+        package_root = 'SYNTEC-电子票据处理系统-v7.0.5'
+        archive.writestr(f'{package_root}/{MAIN_EXECUTABLE_NAME}', b'exe')
+        archive.writestr(f'{package_root}/{UPDATE_HELPER_NAME}', b'updater')
+        archive.writestr(f'{package_root}/_internal/python3.dll', b'python')
+        archive.writestr(f'{package_root}/_internal/_ctypes.pyd', b'ctypes')
         archive.writestr(
-            f'SYNTEC-电子票据处理系统-v7.0.5/{MAIN_EXECUTABLE_NAME}',
-            b'exe',
+            f'{package_root}/_internal/web/dist/index.html',
+            b'<html></html>',
         )
     archive_body = archive_buffer.getvalue()
     result = UpdateResult(
@@ -181,6 +190,100 @@ def test_stage_update_downloads_and_extracts_zip(tmp_path):
     )
 
     assert (staged.package_dir / MAIN_EXECUTABLE_NAME).read_bytes() == b'exe'
+
+
+@pytest.mark.parametrize(
+    ('missing_path', 'expected_text'),
+    [
+        (UPDATE_HELPER_NAME, UPDATE_HELPER_NAME),
+        ('_internal', '_internal/'),
+        ('_internal/python3.dll', '_internal/python*.dll'),
+        ('_internal/_ctypes.pyd', '_internal/_ctypes.pyd'),
+        ('_internal/web/dist/index.html', '_internal/web/dist/index.html'),
+    ],
+)
+def test_stage_update_rejects_incomplete_bundle_and_cleans_staging(
+    tmp_path,
+    missing_path,
+    expected_text,
+):
+    archive_buffer = io.BytesIO()
+    package_root = 'SYNTEC-电子票据处理系统-v7.0.5'
+    bundle_files = {
+        MAIN_EXECUTABLE_NAME: b'exe',
+        UPDATE_HELPER_NAME: b'updater',
+        '_internal/python3.dll': b'python',
+        '_internal/_ctypes.pyd': b'ctypes',
+        '_internal/web/dist/index.html': b'<html></html>',
+    }
+    if missing_path == '_internal':
+        bundle_files = {
+            path: content
+            for path, content in bundle_files.items()
+            if not path.startswith('_internal/')
+        }
+    else:
+        del bundle_files[missing_path]
+    with zipfile.ZipFile(archive_buffer, 'w') as archive:
+        for path, content in bundle_files.items():
+            archive.writestr(f'{package_root}/{path}', content)
+    archive_body = archive_buffer.getvalue()
+    result = UpdateResult(
+        current_version='7.0.4',
+        checked=True,
+        available=True,
+        latest_version='7.0.5',
+        asset_name='SYNTEC-电子票据处理系统-v7.0.5.zip',
+        asset_url='https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/download/v7.0.5/SYNTEC.zip',
+    )
+
+    with pytest.raises(UpdateError, match=re.escape(expected_text)):
+        stage_update(
+            result,
+            temporary_parent=tmp_path,
+            opener=lambda *_args, **_kwargs: RawResponse(archive_body),
+        )
+
+    assert not any(
+        path.name.startswith('.syntec-update-') for path in tmp_path.iterdir()
+    )
+
+
+def test_stage_update_rejects_python_dll_directory_and_cleans_staging(tmp_path):
+    archive_buffer = io.BytesIO()
+    package_root = 'SYNTEC-电子票据处理系统-v7.0.5'
+    with zipfile.ZipFile(archive_buffer, 'w') as archive:
+        archive.writestr(f'{package_root}/{MAIN_EXECUTABLE_NAME}', b'exe')
+        archive.writestr(f'{package_root}/{UPDATE_HELPER_NAME}', b'updater')
+        archive.writestr(
+            f'{package_root}/_internal/python-fake.dll/placeholder',
+            b'not a dll',
+        )
+        archive.writestr(f'{package_root}/_internal/_ctypes.pyd', b'ctypes')
+        archive.writestr(
+            f'{package_root}/_internal/web/dist/index.html',
+            b'<html></html>',
+        )
+    archive_body = archive_buffer.getvalue()
+    result = UpdateResult(
+        current_version='7.0.4',
+        checked=True,
+        available=True,
+        latest_version='7.0.5',
+        asset_name='SYNTEC-电子票据处理系统-v7.0.5.zip',
+        asset_url='https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/download/v7.0.5/SYNTEC.zip',
+    )
+
+    with pytest.raises(UpdateError, match=re.escape('_internal/python*.dll')):
+        stage_update(
+            result,
+            temporary_parent=tmp_path,
+            opener=lambda *_args, **_kwargs: RawResponse(archive_body),
+        )
+
+    assert not any(
+        path.name.startswith('.syntec-update-') for path in tmp_path.iterdir()
+    )
 
 
 def test_stage_update_rejects_zip_path_traversal(tmp_path):

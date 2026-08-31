@@ -11,10 +11,15 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+from .update_protocol import UPDATE_READY_ENV_VAR, UPDATE_READY_FILENAME
+
 MAIN_EXECUTABLE_NAME = 'SYNTEC-电子票据处理系统.exe'
 PRESERVED_ENTRIES = ('config.ini', 'logs', '发票收件箱')
 PROCESS_POLL_INTERVAL = 0.25
 PROCESS_WAIT_TIMEOUT = 60.0
+STARTUP_READY_POLL_INTERVAL = 0.25
+STARTUP_READY_TIMEOUT = 60.0
+STARTUP_PROCESS_WAIT_TIMEOUT = 5.0
 
 logger = logging.getLogger(__name__)
 
@@ -97,30 +102,108 @@ def replace_install(
         _remove_path(old_dir)
     old_dir.parent.mkdir(parents=True, exist_ok=True)
 
+    old_install_moved = False
+    new_install_moved = False
     try:
         target_dir.rename(old_dir)
+        old_install_moved = True
         source_dir.rename(target_dir)
+        new_install_moved = True
         _restore_user_data(old_dir, target_dir)
     except Exception:
-        if target_dir.exists():
+        if new_install_moved and target_dir.exists():
             _remove_path(target_dir)
-        if old_dir.exists() and not target_dir.exists():
+        if old_install_moved and old_dir.exists() and not target_dir.exists():
             old_dir.rename(target_dir)
         raise
     return old_dir
 
 
-def _start_application(target_dir: Path) -> None:
+def _start_application(target_dir: Path, ready_file: Path) -> subprocess.Popen:
     executable = target_dir / MAIN_EXECUTABLE_NAME
-    subprocess.Popen(
+    environment = os.environ.copy()
+    environment[UPDATE_READY_ENV_VAR] = str(ready_file.resolve())
+    return subprocess.Popen(
         [str(executable)],
         cwd=str(target_dir),
         close_fds=True,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        env=environment,
         creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
     )
+
+
+def _wait_for_startup_ready(
+    process: subprocess.Popen,
+    ready_file: Path,
+    *,
+    timeout: float | None = None,
+    poll_interval: float | None = None,
+) -> None:
+    timeout = STARTUP_READY_TIMEOUT if timeout is None else timeout
+    poll_interval = (
+        STARTUP_READY_POLL_INTERVAL if poll_interval is None else poll_interval
+    )
+    deadline = time.monotonic() + timeout
+    while True:
+        if ready_file.is_file():
+            return
+        if process.poll() is not None:
+            raise RuntimeError('新版本主程序在启动确认前退出')
+        if time.monotonic() >= deadline:
+            raise RuntimeError('等待新版本主程序启动确认超时')
+        time.sleep(poll_interval)
+
+
+def _stop_application(process: subprocess.Popen) -> None:
+    def kill_if_running() -> None:
+        try:
+            if process.poll() is None:
+                process.kill()
+        except Exception:
+            logger.exception('更新失败后强制终止新版本主程序失败')
+
+    try:
+        if process.poll() is None:
+            try:
+                process.terminate()
+            except Exception:
+                logger.exception('更新失败后终止新版本主程序失败')
+                kill_if_running()
+    except Exception:
+        logger.exception('更新失败后检查新版本主程序状态失败')
+    try:
+        process.wait(timeout=STARTUP_PROCESS_WAIT_TIMEOUT)
+    except (subprocess.TimeoutExpired, TimeoutError):
+        logger.exception('更新失败后等待新版本主程序退出超时')
+        kill_if_running()
+        try:
+            process.wait(timeout=STARTUP_PROCESS_WAIT_TIMEOUT)
+        except Exception:
+            logger.exception('更新失败后强制终止新版本主程序后等待退出失败')
+    except Exception:
+        logger.exception('更新失败后等待新版本主程序退出失败')
+        kill_if_running()
+        try:
+            process.wait(timeout=STARTUP_PROCESS_WAIT_TIMEOUT)
+        except Exception:
+            logger.exception('更新失败后强制终止新版本主程序后等待退出失败')
+
+
+def _rollback_install(old_dir: Path, target_dir: Path, update_error: Exception) -> None:
+    try:
+        if not old_dir.exists():
+            raise RuntimeError(f'旧版本备份目录不存在: {old_dir}')
+        if target_dir.exists():
+            _remove_path(target_dir)
+        old_dir.rename(target_dir)
+    except Exception as rollback_error:
+        logger.exception('自动更新失败后的安装目录回滚失败')
+        raise RuntimeError(
+            f'自动更新失败且回滚失败: {rollback_error}'
+        ) from update_error
 
 
 def run_update(
@@ -141,6 +224,7 @@ def run_update(
     logger.setLevel(logging.INFO)
     logger.addHandler(handler)
     old_dir: Path | None = None
+    new_process: subprocess.Popen | None = None
     succeeded = False
     try:
         wait_for_process_exit(pid)
@@ -149,14 +233,18 @@ def run_update(
             target_dir,
             backup_dir=cleanup_dir / 'old-install',
         )
-        _start_application(target_dir)
+        ready_file = cleanup_dir / UPDATE_READY_FILENAME
+        _remove_path(ready_file)
+        new_process = _start_application(target_dir, ready_file)
+        _wait_for_startup_ready(new_process, ready_file)
         _remove_path(old_dir)
         succeeded = True
-    except Exception:
+    except Exception as update_error:
         logger.exception('自动更新失败')
-        if old_dir and old_dir.exists() and target_dir.exists():
-            _remove_path(target_dir)
-            old_dir.rename(target_dir)
+        if new_process is not None:
+            _stop_application(new_process)
+        if old_dir is not None:
+            _rollback_install(old_dir, target_dir, update_error)
         raise
     finally:
         handler.flush()

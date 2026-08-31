@@ -1,6 +1,7 @@
-# 项目开发记录（PROJECT_DEV）
+# 项目维护说明（PROJECT_DEV）
 
 > 本文件记录发票处理系统的核心业务规则、技术约定与历史踩坑点。
+> 当前交付基线：v7.0.12。
 > **修改业务逻辑前，请先阅读本文件，避免重复踩坑。**
 
 ---
@@ -135,7 +136,7 @@ web/
 | 10 | 配置硬编码 | 税号写死在 config.py | `config_manager.py` 读写 INI + Web 设置视图 | 修改税号后下次处理生效 |
 | 11 | 类型路由 if-elif 难扩展 | 新增类型要改核心方法 | `@register_type` 装饰器 + `_TYPE_REGISTRY` 注册表 | 新增类型只加装饰器 |
 
-## 7. 已实施的改进（v7.0）
+## 7. 当前能力（v7.0.12）
 
 | # | 改进 | 实现位置 | 说明 |
 |---|---|---|---|
@@ -160,7 +161,7 @@ web/
 - 主程序退出后由临时目录中的独立更新器完成替换，更新器日志也写入临时目录，避免 Windows 目录句柄锁定；成功后保留 `config.ini`、`logs/` 和 `发票收件箱/`。
 - 没有更新器的旧安装包不能自更新，首次需要人工部署一次包含更新器的版本；安装目录还必须对当前用户可写。
 
-## 8. 开发检查清单
+## 8. 维护回归清单
 
 修改 `processor.py` 后请逐项确认：
 
@@ -191,7 +192,14 @@ python build_syntec.py
 
 ```
 
-截至 2026-08-23，本机 Windows 环境已验证：119 条 Python 测试通过，`compileall`、`pip check`、Ruff、前端 typecheck/build 和 SYNTEC PyInstaller 域控合规检查通过；本机正式发布包启动冒烟已通过（loopback 监听、首页 200、健康接口无令牌 401、进程树清理）。真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户启动以及目标机 WebView2/DPI 验收尚未执行。
+截至 v7.0.12，本机 Windows 环境已验证：161 条 Python 测试通过，`compileall`、`pip check`、Ruff、前端 typecheck/build 和 SYNTEC PyInstaller 域控合规检查通过；本机发布包启动冒烟以及更新器成功提交、失败回滚冒烟均通过。真实旧版本 Release 检查、真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户启动以及目标机 WebView2/DPI 验收仍需在目标环境执行。
+
+更新器冒烟脚本使用系统临时目录保存 PyInstaller 输出和替换现场，项目目录只保留脚本，不保留二进制测试产物：
+
+```bash
+python smoke/run_success_smoke.py
+python smoke/run_failure_smoke.py
+```
 
 测试文件：
 - `tests/test_processor.py`：核心逻辑单元测试
