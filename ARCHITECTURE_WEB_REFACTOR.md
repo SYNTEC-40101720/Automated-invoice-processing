@@ -382,7 +382,7 @@ Pydantic 模型是 API 单一事实源。CI 由 FastAPI OpenAPI 生成 TypeScrip
 
 | 层级 | 工具 | 必测内容 | v7.0 状态 |
 |---|---|---|---|
-| 核心回归 | pytest | 保留所有现有核心、邮箱、审核测试 | 已通过，161 条 |
+| 核心回归 | pytest | 保留所有现有核心、邮箱、审核测试 | 已通过，163 条 |
 | 应用层 | pytest + fake event bus/filesystem | 状态迁移、单任务互斥、取消、归档条件、事件顺序 | 已通过 |
 | API | FastAPI TestClient/httpx | DTO 校验、错误码、密钥脱敏、冲突与路径拒绝 | 已通过 |
 | WebSocket | pytest | 初始快照、事件顺序、断线重连校准、慢客户端策略 | 服务端契约已通过，真实浏览器重连待补 |
@@ -419,7 +419,7 @@ dist/SYNTEC-电子票据处理系统/
 
 ## 12. 交付状态与边界
 
-v7.0.12 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、邮箱自动收件、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 自动更新。核心 Python 测试、API 契约、前端生产构建、打包合规以及更新器成功/回滚冒烟已通过。
+v7.0.12 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、邮箱自动收件、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 自动更新。核心 Python 测试、API 契约、前端生产构建、打包合规以及更新器成功/回滚冒烟已通过；更新下载支持后台进度查询，完成校验后才进入整体替换。
 
 以下事项不属于当前版本功能，后续若实施必须同步补充测试和验收记录：
 

@@ -9,6 +9,7 @@ import type {
   LogEntry,
   SettingsResponse,
   UpdateApplyResponse,
+  UpdateProgress,
   UpdateResponse,
 } from './types'
 
@@ -41,6 +42,7 @@ export const api = {
   health: () => request<HealthResponse>('/system/health'),
   updateCheck: () => request<UpdateResponse>('/system/update'),
   applyUpdate: () => request<UpdateApplyResponse>('/system/update/apply', { method: 'POST' }),
+  updateProgress: () => request<UpdateProgress>('/system/update/progress'),
   currentJob: () => request<Job | null>('/jobs/current'),
   scanDirectory: (sourceDir: string) => request<{ source_dir: string; pdf_count: number }>('/jobs/scan', {
     method: 'POST', body: JSON.stringify({ source_dir: sourceDir }),

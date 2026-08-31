@@ -120,7 +120,7 @@ python -m pytest tests/test_integration.py -v
 python -m ruff check src tests
 ```
 
-当前 v7.0.12 发布基线已验证 Python 测试 161 条通过、编译和依赖检查通过，前端类型检查和生产构建通过，`build_syntec.py` 已生成并完成 SYNTEC 域控合规校验，更新器成功提交和失败回滚冒烟均通过；真实 Releases API 的旧版本号/当前版本号检查均已通过。旧版 EXE 实际启动、干净域控账户启动和目标机 WebView2 验收仍需单独执行。
+当前 v7.0.12 发布基线已验证 Python 测试 163 条通过、编译和依赖检查通过，前端类型检查和生产构建通过，`build_syntec.py` 已生成并完成 SYNTEC 域控合规校验，更新器成功提交和失败回滚冒烟均通过；真实 Releases API 的旧版本号/当前版本号检查均已通过。旧版 EXE 实际启动、干净域控账户启动和目标机 WebView2 验收仍需单独执行。
 
 ## 版本发布
 
@@ -140,7 +140,7 @@ python bump_version.py major   # 7.0.5 → 8.0.0
 [`SYNTEC-40101720/Automated-invoice-processing`](https://github.com/SYNTEC-40101720/Automated-invoice-processing)
 的公开 Releases API；网络不可用或 GitHub 暂时无法访问时，应用仍会正常启动。
 
-发现比当前版本更高且包含可安装 ZIP 的 Release 后，工作台顶部会提示更新，设置页会出现「立即更新」。点击后程序会在后台下载 ZIP，校验 GitHub 提供的 SHA-256 摘要（Release 未提供摘要时使用 HTTPS 和包结构校验），然后关闭当前窗口，由独立更新器替换安装目录并启动新版本。`config.ini`、`logs/` 和默认收件箱会从旧版本保留。
+发现比当前版本更高且包含可安装 ZIP 的 Release 后，工作台顶部会提示更新，设置页会出现「立即更新」。点击后程序会在后台下载完整 ZIP，设置页通过进度接口显示已下载大小、总大小和百分比；下载完成后再校验 GitHub 提供的 SHA-256 摘要（Release 未提供摘要时使用 HTTPS 和包结构校验），然后关闭当前窗口，由独立更新器整体替换安装目录并启动新版本。`config.ini`、`logs/` 和默认收件箱会从旧版本保留。下载期间不会覆盖现有安装目录。
 
 支持自动安装的第一版需要先人工部署一次，因为旧版本安装目录中没有独立更新器；从该版本开始，后续 Release 可以完全免人工下载。安装目录还必须对当前用户可写，否则更新器无法替换文件。
 

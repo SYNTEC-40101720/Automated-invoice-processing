@@ -124,6 +124,7 @@ def run_desktop() -> None:
         allowed_origins={f'http://127.0.0.1:{port}'},
         static_dir=_bundle_root() / 'web' / 'dist',
         update_apply=update_manager.apply,
+        update_progress=update_manager.progress,
     )
     job_service.start_background_tasks()
     config = uvicorn.Config(

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bot, Download, ExternalLink, KeyRound, LoaderCircle, Mail, RefreshCw, Save, ShieldCheck } from 'lucide-react'
 import { api } from '../api/client'
-import type { SettingsResponse, UpdateApplyResponse, UpdateResponse } from '../api/types'
+import type { SettingsResponse, UpdateApplyResponse, UpdateProgress, UpdateResponse } from '../api/types'
 import type { SettingsSection } from '../stores/workbench'
 import { useWorkbench } from '../stores/workbench'
 
@@ -57,6 +57,22 @@ export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate }: 
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [applyingUpdate, setApplyingUpdate] = useState(false)
   const [updateMessage, setUpdateMessage] = useState('')
+  const updateProgressQuery = useQuery({
+    queryKey: ['update-progress'],
+    queryFn: api.updateProgress,
+    enabled: applyingUpdate,
+    refetchInterval: applyingUpdate ? 500 : false,
+    retry: false,
+  })
+
+  useEffect(() => {
+    const progress = updateProgressQuery.data
+    if (!progress) return
+    if (progress.message) setUpdateMessage(progress.message)
+    if (progress.status === 'failed' || progress.status === 'unsupported' || progress.status === 'unavailable') {
+      setApplyingUpdate(false)
+    }
+  }, [updateProgressQuery.data])
 
   useEffect(() => {
     if (settingsQuery.data) setSettings(settingsQuery.data)
@@ -131,9 +147,9 @@ export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate }: 
     try {
       const result = await onApplyUpdate()
       setUpdateMessage(result.message)
+      if (result.status !== 'started') setApplyingUpdate(false)
     } catch (error) {
       setUpdateMessage((error as Error).message)
-    } finally {
       setApplyingUpdate(false)
     }
   }
@@ -218,6 +234,7 @@ export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate }: 
               <span>打开 Release 页面</span>
               <ExternalLink size={13} />
             </a>
+            {applyingUpdate && updateProgressQuery.data && <UpdateProgressPanel progress={updateProgressQuery.data} />}
             <p className="update-message">{updateMessage || '检测到新版本后，可由程序自动下载、替换并重启。'}</p>
             {update?.available && !update.installable && <p className="update-message warning">请在该 Release 上传 SYNTEC ZIP 打包文件。</p>}
           </div>
@@ -225,6 +242,36 @@ export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate }: 
       </section>
     </div>
   </div>
+}
+
+function UpdateProgressPanel({ progress }: { progress: UpdateProgress }) {
+  const hasTotal = progress.total_bytes !== null && progress.total_bytes > 0
+  const percent = progress.progress_percent ?? 0
+  return <div className="update-progress-panel" role="status" aria-live="polite">
+    <div className="update-progress-heading">
+      <span>{progress.status === 'downloading' ? '下载进度' : '更新进度'}</span>
+      <strong>{hasTotal ? `${percent.toFixed(1)}%` : formatBytes(progress.downloaded_bytes)}</strong>
+    </div>
+    <div className={`update-progress-track ${hasTotal ? '' : 'indeterminate'}`} aria-hidden="true">
+      <div className="update-progress-fill" style={hasTotal ? { width: `${percent}%` } : undefined} />
+    </div>
+    <div className="update-progress-meta">
+      <span>已下载 {formatBytes(progress.downloaded_bytes)}</span>
+      <span>{hasTotal ? `共 ${formatBytes(progress.total_bytes as number)}` : '总大小读取中'}</span>
+    </div>
+  </div>
+}
+
+function formatBytes(value: number): string {
+  if (value < 1024) return `${value} B`
+  const units = ['KB', 'MB', 'GB']
+  let amount = value
+  let unitIndex = -1
+  while (amount >= 1024 && unitIndex < units.length - 1) {
+    amount /= 1024
+    unitIndex += 1
+  }
+  return `${amount.toFixed(amount >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`
 }
 
 function SettingsCard({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {

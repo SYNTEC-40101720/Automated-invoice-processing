@@ -109,6 +109,15 @@ h1 { margin: 10px 0 8px; color: var(--text); font-size: 30px; font-weight: 600; 
 .update-release-link:hover { text-decoration: underline; }
 .update-message { margin: 0; color: var(--text-muted); font-size: 11px; line-height: 1.6; }
 .update-message.warning { color: var(--amber); }
+.update-progress-panel { display: grid; gap: 7px; padding: 10px 11px; border: 1px solid var(--teal-border); background: var(--teal-soft); }
+.update-progress-heading, .update-progress-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.update-progress-heading { color: var(--text); font-size: 11px; }
+.update-progress-heading strong { color: var(--teal); font: 12px "Cascadia Code", monospace; font-weight: 600; }
+.update-progress-track { height: 6px; overflow: hidden; background: var(--track); }
+.update-progress-fill { height: 100%; min-width: 0; background: linear-gradient(90deg, var(--teal-deep), var(--teal)); transition: width .25s ease; }
+.update-progress-track.indeterminate .update-progress-fill { width: 35%; animation: update-progress-slide 1.2s ease-in-out infinite; }
+.update-progress-meta { color: var(--text-subtle); font: 10px "Cascadia Code", monospace; }
+@keyframes update-progress-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
 
 .settings-panel-shell { width: 100%; max-width: 820px; margin: 0 auto; }
 .settings-panel-shell .settings-card { margin-bottom: 0; }

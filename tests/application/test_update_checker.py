@@ -93,6 +93,7 @@ def test_check_for_update_selects_installable_zip_asset():
                 'name': 'SYNTEC-Invoice-Processor-v7.0.5.zip',
                 'browser_download_url': 'https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/download/v7.0.5/SYNTEC.zip',
                 'digest': 'sha256:' + 'a' * 64,
+                'size': 12345,
             }],
         }),
     )
@@ -100,6 +101,7 @@ def test_check_for_update_selects_installable_zip_asset():
     assert result.installable is True
     assert result.asset_name == 'SYNTEC-Invoice-Processor-v7.0.5.zip'
     assert result.asset_digest == 'a' * 64
+    assert result.asset_size == 12345
 
 
 def test_check_for_update_accepts_github_normalised_legacy_asset():
@@ -181,15 +183,22 @@ def test_stage_update_downloads_and_extracts_zip(tmp_path):
         asset_name='SYNTEC-电子票据处理系统-v7.0.5.zip',
         asset_url='https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/download/v7.0.5/SYNTEC.zip',
         asset_digest=hashlib.sha256(archive_body).hexdigest(),
+        asset_size=len(archive_body),
     )
+    progress: list[tuple[int, int | None]] = []
 
     staged = stage_update(
         result,
         temporary_parent=tmp_path,
         opener=lambda *_args, **_kwargs: RawResponse(archive_body),
+        progress_callback=lambda downloaded, total: progress.append(
+            (downloaded, total)
+        ),
     )
 
     assert (staged.package_dir / MAIN_EXECUTABLE_NAME).read_bytes() == b'exe'
+    assert progress[0] == (0, len(archive_body))
+    assert progress[-1] == (len(archive_body), len(archive_body))
 
 
 @pytest.mark.parametrize(

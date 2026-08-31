@@ -158,6 +158,7 @@ web/
 - `build_syntec.py` 会在主程序和独立更新器构建、合规验证通过后生成 `dist/SYNTEC-Invoice-Processor-v{version}.zip`；Release 资产名使用 ASCII，避免 GitHub 自动重命名中文文件名。
 - ZIP 必须保留顶层 `SYNTEC-电子票据处理系统/` 目录，并包含主程序、`SYNTEC-电子票据更新器.exe` 和完整 `_internal/`。
 - 应用只接受目标 GitHub 仓库中版本更高的 Release；设置页点击更新后执行下载、大小限制、SHA-256（若 Release 提供）和安全解压校验。
+- 更新下载在后台执行，设置页通过 `/api/v1/system/update/progress` 显示已下载字节数、Release 声明的总大小和百分比；总大小未知时显示已下载量和不确定进度。
 - 主程序退出后由临时目录中的独立更新器完成替换，更新器日志也写入临时目录，避免 Windows 目录句柄锁定；成功后保留 `config.ini`、`logs/` 和 `发票收件箱/`。
 - 没有更新器的旧安装包不能自更新，首次需要人工部署一次包含更新器的版本；安装目录还必须对当前用户可写。
 
@@ -192,7 +193,7 @@ python build_syntec.py
 
 ```
 
-截至 v7.0.12，本机 Windows 环境已验证：161 条 Python 测试通过，`compileall`、`pip check`、Ruff、前端 typecheck/build 和 SYNTEC PyInstaller 域控合规检查通过；本机发布包启动冒烟以及更新器成功提交、失败回滚冒烟均通过，真实 Releases API 的旧版本号/当前版本号检查均已通过。旧版 EXE 实际启动、真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户启动以及目标机 WebView2/DPI 验收仍需在目标环境执行。
+截至 v7.0.12，本机 Windows 环境已验证：163 条 Python 测试通过，`compileall`、`pip check`、Ruff、前端 typecheck/build 和 SYNTEC PyInstaller 域控合规检查通过；本机发布包启动冒烟以及更新器成功提交、失败回滚冒烟均通过，真实 Releases API 的旧版本号/当前版本号检查均已通过。旧版 EXE 实际启动、真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户启动以及目标机 WebView2/DPI 验收仍需在目标环境执行。
 
 更新器冒烟脚本使用系统临时目录保存 PyInstaller 输出和替换现场，项目目录只保留脚本，不保留二进制测试产物：
 

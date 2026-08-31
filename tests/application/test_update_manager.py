@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 import sys
+import threading
 from pathlib import Path
 
 from src.application.update_checker import StagedUpdate, UpdateResult
@@ -31,6 +32,7 @@ def test_apply_downloads_and_launches_standalone_helper(tmp_path, monkeypatch):
         asset_url='https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/download/v7.0.5/SYNTEC.zip',
     )
     launched: list[tuple[list[str], dict]] = []
+    launch_finished = threading.Event()
     monkeypatch.setattr(sys, 'frozen', True, raising=False)
     monkeypatch.setattr(update_manager, 'check_for_update', lambda _version: result)
     monkeypatch.setattr(
@@ -41,7 +43,10 @@ def test_apply_downloads_and_launches_standalone_helper(tmp_path, monkeypatch):
     monkeypatch.setattr(
         update_manager.subprocess,
         'Popen',
-        lambda command, **kwargs: launched.append((command, kwargs)),
+        lambda command, **kwargs: (
+            launched.append((command, kwargs)),
+            launch_finished.set(),
+        )[0],
     )
 
     manager = DesktopUpdateManager(executable=executable, can_update=lambda: True)
@@ -49,7 +54,9 @@ def test_apply_downloads_and_launches_standalone_helper(tmp_path, monkeypatch):
 
     assert response.status == 'started'
     assert response.latest_version == '7.0.5'
+    assert launch_finished.wait(timeout=1)
     assert launched
+    assert manager.progress().status == 'starting'
     assert launched[0][0][0].endswith('SYNTEC-电子票据更新器.exe')
     assert '--source-dir' in launched[0][0]
     assert '--target-dir' in launched[0][0]

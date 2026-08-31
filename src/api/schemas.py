@@ -50,12 +50,22 @@ class UpdateResponse(BaseModel):
     release_url: str | None = None
     installable: bool
     asset_name: str | None = None
+    asset_size: int | None = None
 
 
 class UpdateApplyResponse(BaseModel):
     status: str
     message: str
     latest_version: str | None = None
+
+
+class UpdateProgressResponse(BaseModel):
+    status: str
+    downloaded_bytes: int
+    total_bytes: int | None = None
+    progress_percent: float | None = None
+    latest_version: str | None = None
+    message: str = ''
 
 
 class LogEntry(BaseModel):

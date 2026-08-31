@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from ..application.job_service import JobService
-from ..application.update_checker import UpdateApplyResult
+from ..application.update_checker import UpdateApplyResult, UpdateProgress
 from ..domain.errors import ApplicationError
 from ..version import __version__
 from .errors import application_error_handler
@@ -25,6 +25,7 @@ def create_app(
     static_dir: str | Path | None = None,
     allowed_origins: Iterable[str] | None = None,
     update_apply: Callable[[str], UpdateApplyResult] | None = None,
+    update_progress: Callable[[], UpdateProgress] | None = None,
 ) -> FastAPI:
     service = job_service or JobService()
     app = FastAPI(
@@ -43,6 +44,7 @@ def create_app(
     app.state.allowed_origins = frozenset(
         origin.rstrip('/') for origin in (allowed_origins or ())
     )
+    app.state.update_progress = update_progress
 
     @app.middleware('http')
     async def add_security_headers(request, call_next):

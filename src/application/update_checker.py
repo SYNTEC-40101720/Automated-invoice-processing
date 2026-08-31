@@ -50,6 +50,7 @@ class UpdateResult:
     asset_name: str | None = None
     asset_url: str | None = None
     asset_digest: str | None = None
+    asset_size: int | None = None
 
     @property
     def installable(self) -> bool:
@@ -64,10 +65,20 @@ class UpdateApplyResult:
 
 
 @dataclass(frozen=True)
+class UpdateProgress:
+    status: str = 'idle'
+    downloaded_bytes: int = 0
+    total_bytes: int | None = None
+    latest_version: str | None = None
+    message: str = ''
+
+
+@dataclass(frozen=True)
 class ReleaseAsset:
     name: str
     url: str
     digest: str | None = None
+    size: int | None = None
 
 
 @dataclass(frozen=True)
@@ -145,10 +156,21 @@ def _select_release_asset(payload: dict[str, Any]) -> ReleaseAsset | None:
         url = _safe_download_url(item.get('browser_download_url'))
         if url is None:
             continue
+        raw_size = item.get('size')
+        size = (
+            raw_size
+            if (
+                isinstance(raw_size, int)
+                and not isinstance(raw_size, bool)
+                and raw_size >= 0
+            )
+            else None
+        )
         return ReleaseAsset(
             name=name,
             url=url,
             digest=_normalise_digest(item.get('digest')),
+            size=size,
         )
     return None
 
@@ -219,6 +241,7 @@ def check_for_update(
         asset_name=asset.name if asset else None,
         asset_url=asset.url if asset else None,
         asset_digest=asset.digest if asset else None,
+        asset_size=asset.size if asset else None,
     )
 
 
@@ -228,6 +251,8 @@ def _download_asset(
     current_version: str,
     expected_digest: str | None,
     opener: Callable[..., Any] | None,
+    expected_size: int | None = None,
+    progress_callback: Callable[[int, int | None], None] | None = None,
 ) -> None:
     request = Request(
         asset_url,
@@ -244,6 +269,13 @@ def _download_asset(
             content_length = getattr(response, 'headers', {}).get('Content-Length')
             if content_length is not None and int(content_length) > MAX_UPDATE_BYTES:
                 raise UpdateError('更新文件超过 512 MB 限制')
+            total_size = expected_size
+            if total_size is None and content_length is not None:
+                total_size = int(content_length)
+            if total_size is not None and total_size > MAX_UPDATE_BYTES:
+                raise UpdateError('更新文件超过 512 MB 限制')
+            if progress_callback is not None:
+                progress_callback(0, total_size)
             with destination.open('wb') as output:
                 while chunk := response.read(DOWNLOAD_CHUNK_SIZE):
                     total += len(chunk)
@@ -251,6 +283,8 @@ def _download_asset(
                         raise UpdateError('更新文件超过 512 MB 限制')
                     digest.update(chunk)
                     output.write(chunk)
+                    if progress_callback is not None:
+                        progress_callback(total, total_size)
     except UpdateError:
         raise
     except (HTTPError, URLError, TimeoutError, OSError, TypeError, ValueError) as exc:
@@ -258,6 +292,8 @@ def _download_asset(
 
     if total == 0:
         raise UpdateError('下载的更新文件为空')
+    if total_size is not None and total != total_size:
+        raise UpdateError('下载文件大小校验失败')
     if expected_digest and digest.hexdigest().lower() != expected_digest.lower():
         raise UpdateError('更新文件校验失败')
 
@@ -322,6 +358,7 @@ def stage_update(
     *,
     temporary_parent: Path | None = None,
     opener: Callable[..., Any] | None = None,
+    progress_callback: Callable[[int, int | None], None] | None = None,
 ) -> StagedUpdate:
     """下载并解压更新包；返回供独立更新器使用的临时目录。"""
     if not result.installable or result.asset_name is None or result.asset_url is None:
@@ -340,6 +377,8 @@ def stage_update(
             result.current_version,
             result.asset_digest,
             opener,
+            expected_size=result.asset_size,
+            progress_callback=progress_callback,
         )
         _extract_zip_safely(archive_path, extracted_dir)
         package_dir = _find_package_dir(extracted_dir)
