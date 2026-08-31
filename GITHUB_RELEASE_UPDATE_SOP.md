@@ -279,3 +279,21 @@ Windows 冒烟结果：
 - `7.0.5` 检测结果：无可用更新
 - 完整 Python 测试：`140 passed`
 - 额外修复：GitHub 中文资产名自动重命名；更新器改用 ASCII 资产名并兼容历史名称
+
+### 2026-08-31 发布记录：v7.0.11
+
+- 应用：SYNTEC 电子票据处理系统
+- 仓库：`SYNTEC-40101720/Automated-invoice-processing`
+- 当前版本：`7.0.10`
+- 目标版本：`7.0.11`
+- Release URL：https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.0.11
+- 资产：`SYNTEC-Invoice-Processor-v7.0.11.zip`
+- 资产大小：`53,967,838` bytes（约 51.47 MiB）
+- 资产 SHA-256：`e5c9e26753e251bfa7640141d0bc641319f2e9c34d21d406ec742e15651df8f8`
+- 主程序/更新器版本资源：`7.0.11.0`；CompanyName 为 `SYNTEC`；语言为中性
+- ZIP 结构：单一顶层目录，包含主程序、独立更新器和 `_internal/web/dist/index.html`
+- 完整 Python 测试：`144 passed`
+- 前端构建：`npm run build` 通过
+- 旧版检测、当前版检测：本次未执行真实旧安装目录检查
+- 配置、日志和业务数据保留：本次未执行 Windows 安装替换冒烟
+- 未覆盖环境：真实域控机器、干净 Windows 环境和实际更新替换/回滚流程
