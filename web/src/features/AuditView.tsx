@@ -8,7 +8,6 @@ export function AuditView({ job }: { job: Job | null }) {
   ]
   return (
     <div className="editor-view feature-view">
-      <div className="editor-tabs"><div className="editor-tab active"><ScanSearch size={14} /> 审核中心</div></div>
       <div className="view-scroll feature-scroll">
         <header className="view-header feature-header"><div><div className="eyebrow">AUDIT / REVIEW</div><h1>审核中心</h1><p>{job ? `任务 ${job.id.slice(0, 8)} · ${job.message}` : '处理完成后，审核结果会在这里显示。'}</p></div></header>
         {!job?.result?.audit ? <div className="feature-section empty-feature"><ScanSearch size={20} /><span>暂无可查看的审核结果</span></div> : findings.length === 0 ? <div className="feature-section empty-feature success-text"><CheckCircle2 size={20} /><span>本次审核未发现问题</span></div> : <div className="finding-list">{findings.map((finding, index) => <Finding key={`${finding.file}-${index}`} finding={finding} />)}</div>}

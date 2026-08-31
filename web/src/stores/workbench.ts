@@ -2,17 +2,18 @@ import { create } from 'zustand'
 import type { DomainEvent, Job, LogEntry } from '../api/types'
 
 export type SettingsSection = 'business' | 'email' | 'ai' | 'updates'
+export type WorkbenchView = 'processing' | 'inbox' | 'audit' | 'settings'
 
 interface WorkbenchState {
   connected: boolean
   currentJob: Job | null
   logs: LogEntry[]
-  activeView: 'processing' | 'inbox' | 'audit' | 'settings'
+  activeView: WorkbenchView
   settingsSection: SettingsSection
   bottomPanel: 'output' | 'problems' | 'details'
   setConnected: (connected: boolean) => void
   setJob: (job: Job | null) => void
-  setView: (view: WorkbenchState['activeView']) => void
+  setView: (view: WorkbenchView) => void
   setSettingsSection: (section: SettingsSection) => void
   setBottomPanel: (panel: WorkbenchState['bottomPanel']) => void
   appendEvent: (event: DomainEvent) => void

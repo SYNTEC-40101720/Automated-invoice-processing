@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bot, Download, ExternalLink, KeyRound, LoaderCircle, Mail, RefreshCw, Save, Settings2, ShieldCheck } from 'lucide-react'
+import { Bot, Download, ExternalLink, KeyRound, LoaderCircle, Mail, RefreshCw, Save, ShieldCheck } from 'lucide-react'
 import { api } from '../api/client'
 import type { SettingsResponse, UpdateApplyResponse, UpdateResponse } from '../api/types'
 import type { SettingsSection } from '../stores/workbench'
@@ -144,9 +144,8 @@ export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate }: 
   const section = settingsSectionMeta[settingsSection]
 
   return <div className="editor-view feature-view">
-    <div className="editor-tabs"><div className="editor-tab active"><Settings2 size={14} /> 工作台设置 / {section.label}</div></div>
     <div className="view-scroll feature-scroll settings-scroll">
-      <nav className="settings-mobile-nav" aria-label="设置分类">
+      <nav className="settings-subnav" aria-label="设置分类">
         {settingsSectionOrder.map((sectionId) => {
           const item = settingsSectionMeta[sectionId]
           return <button

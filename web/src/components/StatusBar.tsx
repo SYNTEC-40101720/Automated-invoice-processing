@@ -35,7 +35,7 @@ export function StatusBar({ connected, job, version }: StatusBarProps) {
       <span className="status-divider" />
       <span>本地模式</span>
       <span className="status-divider" />
-      <span className="status-version">SYNTEC {version ?? '--'}</span>
+      <span className="status-version">ZySco {version ?? '--'}</span>
     </footer>
   )
 }

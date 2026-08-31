@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ActivityBar } from '../components/ActivityBar'
 import { BottomPanel } from '../components/BottomPanel'
 import { Sidebar } from '../components/Sidebar'
 import { StatusBar } from '../components/StatusBar'
@@ -23,6 +22,7 @@ export function App() {
   const setLogs = useWorkbench((state) => state.setLogs)
   const mergeLogs = useWorkbench((state) => state.mergeLogs)
   const [directory, setDirectory] = useState('')
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const lastEventId = useRef(0)
   const healthQuery = useQuery({ queryKey: ['health'], queryFn: api.health, retry: false })
@@ -121,6 +121,17 @@ export function App() {
     }).catch(() => undefined)
   }, [job?.id, mergeLogs, setLogs])
 
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'b') {
+        event.preventDefault()
+        setSidebarCollapsed((value) => !value)
+      }
+    }
+    window.addEventListener('keydown', handleShortcut)
+    return () => window.removeEventListener('keydown', handleShortcut)
+  }, [])
+
   const chooseDirectory = async () => {
     const value = window.pywebview?.api
       ? await window.pywebview.api.select_directory()
@@ -172,14 +183,12 @@ export function App() {
 
   const emailSettings = settingsQuery.data?.email ?? null
 
-  return <div className="workbench-shell">
-    <ActivityBar version={healthQuery.data?.version ?? null} />
+  return <div className={`workbench-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
     <Sidebar
       activeView={activeView}
-      job={job}
-      emailSettings={emailSettings}
-      onChooseDirectory={chooseDirectory}
-      onOpenInbox={() => setView('inbox')}
+      version={healthQuery.data?.version ?? null}
+      sidebarCollapsed={sidebarCollapsed}
+      onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
     />
     <main className={`main-column ${updateQuery.data?.available ? 'has-update' : ''}`}>
       {updateQuery.data?.available && <UpdateBanner update={updateQuery.data} onOpenSettings={() => setView('settings')} />}

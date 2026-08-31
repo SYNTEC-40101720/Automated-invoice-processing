@@ -22,10 +22,6 @@ export function ProcessingView({ job, onChooseDirectory, onStart, onCancel, onOp
   const percent = Math.round((job?.progress ?? 0) * 100)
   return (
     <div className="editor-view processing-view">
-      <div className="editor-tabs">
-        <div className="editor-tab active"><FolderOpen size={14} /> 处理概览 <span className="tab-close">×</span></div>
-        <div className="editor-tab-placeholder" />
-      </div>
       <div className="view-scroll">
         <header className="view-header">
           <div>

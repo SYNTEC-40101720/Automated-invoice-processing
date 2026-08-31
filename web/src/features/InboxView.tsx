@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { FolderOpen, Inbox, LoaderCircle, Power, RefreshCw } from 'lucide-react'
+import { FolderOpen, LoaderCircle, Power, RefreshCw } from 'lucide-react'
 import { api } from '../api/client'
 import type { EmailSettings, SettingsResponse } from '../api/types'
 import { useWorkbench } from '../stores/workbench'
@@ -84,7 +84,6 @@ export function InboxView({ emailSettings }: InboxViewProps) {
 
   return (
     <div className="editor-view feature-view">
-      <div className="editor-tabs"><div className="editor-tab active"><Inbox size={14} /> 发票收件箱</div></div>
       <div className="view-scroll feature-scroll">
         <header className="view-header feature-header">
           <div><div className="eyebrow">INBOX / EMAIL PULL</div><h1>发票收件箱</h1><p>从邮箱收取附件；是否自动创建处理任务由下方设置决定。</p></div>
