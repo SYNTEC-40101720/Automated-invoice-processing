@@ -9,7 +9,7 @@ import threading
 from collections.abc import Callable
 from concurrent.futures import CancelledError, ThreadPoolExecutor, as_completed
 
-from ..config_manager import get_max_workers
+from ..config_manager import get_inbox_dir, get_max_workers
 from ..core.processor import InvoiceProcessor
 from ..domain.errors import (
     ApplicationError,
@@ -146,6 +146,16 @@ class JobService:
                 and os.path.realpath(job.output_dir) == normalized
                 for job in self._jobs.values()
             )
+
+    def is_known_directory(self, path: str) -> bool:
+        """判断目录是否为配置的收件目录或任务输出目录。"""
+        normalized = os.path.realpath(os.path.abspath(os.path.expanduser(path)))
+        inbox_dir = os.path.realpath(
+            os.path.abspath(os.path.expanduser(get_inbox_dir()))
+        )
+        if normalized == inbox_dir:
+            return True
+        return self.is_known_output_directory(normalized)
 
     def wait_for_job(self, job_id: str, timeout: float | None = None) -> dict:
         with self._lock:

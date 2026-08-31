@@ -92,7 +92,7 @@ def run_desktop() -> None:
         except ImportError as exc:
             raise RuntimeError('缺少 pywebview，请安装桌面运行依赖') from exc
 
-        native_bridge = NativeBridge(job_service.is_known_output_directory)
+        native_bridge = NativeBridge(job_service.is_known_directory)
         window = webview.create_window(
             'SYNTEC · 电子票据工作台',
             f'{base_url}/?token={token}',

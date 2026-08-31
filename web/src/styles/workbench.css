@@ -180,12 +180,12 @@ body {
 }
 
 .main-column {
-  grid-template-rows: minmax(0, 1fr) 148px;
+  grid-template-rows: minmax(0, 1fr) 180px;
   background: #ffffff;
 }
 
 .main-column.has-update {
-  grid-template-rows: auto minmax(0, 1fr) 148px;
+  grid-template-rows: auto minmax(0, 1fr) 180px;
 }
 
 .editor-view {
@@ -538,7 +538,6 @@ h1 {
   min-height: 52px;
   margin-top: auto;
   padding: 8px 10px;
-  border-top: 1px solid #e1e4e8;
 }
 
 .sidebar-footer-avatar {

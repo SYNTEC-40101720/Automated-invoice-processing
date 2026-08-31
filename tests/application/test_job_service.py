@@ -89,6 +89,16 @@ def make_source(tmp_path, count=2):
     return source
 
 
+def test_known_directory_includes_configured_inbox(tmp_path, monkeypatch):
+    inbox = tmp_path / 'inbox'
+    inbox.mkdir()
+    monkeypatch.setattr('src.application.job_service.get_inbox_dir', lambda: str(inbox))
+    service, _ = make_service(tmp_path)
+
+    assert service.is_known_directory(str(inbox)) is True
+    assert service.is_known_directory(str(tmp_path / 'other')) is False
+
+
 def test_job_service_runs_pipeline_and_publishes_terminal_snapshot(tmp_path):
     event_bus = EventBus()
     service, processor = make_service(tmp_path, event_bus)
