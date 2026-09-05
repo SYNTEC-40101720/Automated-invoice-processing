@@ -104,7 +104,7 @@ export function Sidebar({
                 {!sidebarCollapsed && (
                   <span className="sidebar-nav-text">
                     <span className="sidebar-nav-title">发票收取</span>
-                    <span className="sidebar-nav-sub">邮箱与附件</span>
+                    <span className="sidebar-nav-sub">手动收取</span>
                   </span>
                 )}
               </button>

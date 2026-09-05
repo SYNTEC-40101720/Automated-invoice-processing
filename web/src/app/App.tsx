@@ -15,11 +15,15 @@ export function App() {
   const activeView = useWorkbench((state) => state.activeView)
   const connected = useWorkbench((state) => state.connected)
   const job = useWorkbench((state) => state.currentJob)
+  const bottomPanelOpen = useWorkbench((state) => state.bottomPanelOpen)
   const setView = useWorkbench((state) => state.setView)
+  const setSelectedTool = useWorkbench((state) => state.setSelectedTool)
   const setConnected = useWorkbench((state) => state.setConnected)
   const setJob = useWorkbench((state) => state.setJob)
   const appendEvent = useWorkbench((state) => state.appendEvent)
   const setLogs = useWorkbench((state) => state.setLogs)
+  const setBottomPanelOpen = useWorkbench((state) => state.setBottomPanelOpen)
+  const toggleBottomPanel = useWorkbench((state) => state.toggleBottomPanel)
   const mergeLogs = useWorkbench((state) => state.mergeLogs)
   const [directory, setDirectory] = useState('')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -46,6 +50,11 @@ export function App() {
   const settingsQuery = useQuery({ queryKey: ['settings'], queryFn: api.settings, retry: false })
   const currentJobQuery = useQuery({ queryKey: ['current-job'], queryFn: api.currentJob, retry: false })
   const toolsQuery = useQuery({ queryKey: ['tools'], queryFn: api.tools, retry: false })
+
+  useEffect(() => {
+    setSelectedTool('invoice_processing')
+    setView('processing')
+  }, [setSelectedTool, setView])
 
   useEffect(() => {
     const root = document.documentElement
@@ -198,11 +207,16 @@ export function App() {
   }
 
   const openOutput = async (path: string) => {
-    if (window.pywebview?.api) {
-      await window.pywebview.api.open_directory(path)
-      return
+    try {
+      const opened = window.pywebview?.api
+        ? await window.pywebview.api.open_directory(path)
+        : (await api.openDirectory(path)).opened
+      if (!opened) {
+        window.alert('无法打开输出目录，请检查路径是否存在且可访问')
+      }
+    } catch (error) {
+      window.alert((error as Error).message)
     }
-    window.alert(`输出目录：${path}`)
   }
 
   const start = () => {
@@ -262,7 +276,7 @@ export function App() {
       sidebarWidth={sidebarWidth}
       onDragStart={startSidebarDrag}
     />
-    <main className={`main-column ${updateQuery.data?.available ? 'has-update' : ''}`}>
+    <main className={`main-column ${updateQuery.data?.available ? 'has-update' : ''} ${bottomPanelOpen ? 'has-bottom-panel' : ''}`}>
       {updateQuery.data?.available && <UpdateBanner update={updateQuery.data} onOpenSettings={() => setView('settings')} />}
       <div className="main-content">
         {activeView === 'processing'
@@ -280,8 +294,14 @@ export function App() {
                 onThemeChange={setTheme}
               />}
       </div>
-      <BottomPanel />
+      {bottomPanelOpen && <BottomPanel onClose={() => setBottomPanelOpen(false)} />}
     </main>
-    <StatusBar connected={connected} job={job} version={healthQuery.data?.version ?? null} />
+    <StatusBar
+      connected={connected}
+      job={job}
+      version={healthQuery.data?.version ?? null}
+      onTogglePanel={toggleBottomPanel}
+      panelOpen={bottomPanelOpen}
+    />
   </div>
 }

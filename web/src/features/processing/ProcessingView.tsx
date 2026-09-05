@@ -1,4 +1,4 @@
-import { CheckCircle2, FolderOpen, Play, Square, TriangleAlert } from 'lucide-react'
+import { CheckCircle2, FolderOpen, LoaderCircle, Play, Square, TriangleAlert } from 'lucide-react'
 import type { Job } from '../../api/types'
 
 interface ProcessingViewProps {
@@ -20,14 +20,30 @@ export function ProcessingView({ job, onChooseDirectory, onStart, onCancel, onOp
   )
   const finished = job?.status === 'succeeded' || job?.status === 'completed_with_warnings'
   const percent = Math.round((job?.progress ?? 0) * 100)
+  const statusLabel = !job
+    ? '等待开始'
+    : active
+      ? job.status === 'queued' ? '等待处理' : '正在处理'
+      : finished
+        ? '处理完成'
+        : job.status === 'failed'
+          ? '处理失败'
+          : job.status === 'cancelled'
+            ? '已取消'
+            : '已就绪'
+  const statusTone = active ? 'working' : finished ? 'success' : job?.status === 'failed' ? 'error' : ''
   return (
     <div className="editor-view processing-view">
       <div className="view-scroll">
-        <header className="view-header">
+        <header className="view-header processing-header">
           <div>
             <div className="eyebrow">INVOICE PROCESSING / WORKSPACE</div>
             <h1>电子票据处理</h1>
             <p>把目录里的 PDF 变成可核验、可归档的报销资料。</p>
+          </div>
+          <div className={`state-badge ${statusTone}`}>
+            {active ? <LoaderCircle className="spin" size={14} /> : finished ? <CheckCircle2 size={14} /> : job?.status === 'failed' ? <TriangleAlert size={14} /> : <FolderOpen size={14} />}
+            <span>{statusLabel}</span>
           </div>
         </header>
 

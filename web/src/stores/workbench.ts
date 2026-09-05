@@ -8,6 +8,7 @@ interface WorkbenchState {
   connected: boolean
   currentJob: Job | null
   logs: LogEntry[]
+  bottomPanelOpen: boolean
   activeView: WorkbenchView
   selectedTool: string | null
   settingsSection: SettingsSection
@@ -16,6 +17,8 @@ interface WorkbenchState {
   setView: (view: WorkbenchView) => void
   setSelectedTool: (kind: string | null) => void
   setSettingsSection: (section: SettingsSection) => void
+  setBottomPanelOpen: (open: boolean) => void
+  toggleBottomPanel: () => void
   appendEvent: (event: DomainEvent) => void
   setLogs: (logs: LogEntry[]) => void
   mergeLogs: (logs: LogEntry[]) => void
@@ -26,14 +29,17 @@ export const useWorkbench = create<WorkbenchState>((set) => ({
   connected: false,
   currentJob: null,
   logs: [],
+  bottomPanelOpen: false,
   activeView: 'processing',
-  selectedTool: null,
+  selectedTool: 'invoice_processing',
   settingsSection: 'devbase',
   setConnected: (connected) => set({ connected }),
   setJob: (currentJob) => set({ currentJob }),
   setView: (activeView) => set({ activeView }),
   setSelectedTool: (selectedTool) => set({ selectedTool }),
   setSettingsSection: (settingsSection) => set({ settingsSection }),
+  setBottomPanelOpen: (bottomPanelOpen) => set({ bottomPanelOpen }),
+  toggleBottomPanel: () => set((state) => ({ bottomPanelOpen: !state.bottomPanelOpen })),
   appendEvent: (event) => set((state) => {
     if (event.type === 'job.snapshot') {
       return { currentJob: event.payload as unknown as Job }

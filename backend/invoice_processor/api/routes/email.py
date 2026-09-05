@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from ...application.job_service import JobService
 from ...config_manager import (
     get_email_auth_code,
-    get_email_auto_process,
     get_email_config,
     get_email_days_back,
     get_email_keywords,
@@ -17,8 +15,7 @@ from ...config_manager import (
 )
 from ...core.email_pull import pull_invoices
 from ...domain.errors import ApplicationError
-from ...domain.job import JobTrigger
-from ..dependencies import get_job_service, require_local_token
+from ..dependencies import require_local_token
 from ..schemas import EmailPullResponse
 
 router = APIRouter(
@@ -29,9 +26,7 @@ router = APIRouter(
 
 
 @router.post('/pull', response_model=EmailPullResponse)
-def pull_email(
-    service: JobService = Depends(get_job_service),
-) -> EmailPullResponse:
+def pull_email() -> EmailPullResponse:
     config = get_email_config()
     try:
         result = pull_invoices(
@@ -49,13 +44,4 @@ def pull_email(
     except Exception as exc:
         raise ApplicationError('EMAIL_PULL_FAILED', f'邮箱拉取失败: {exc}') from exc
 
-    job = None
-    if result.get('new_files') and get_email_auto_process():
-        try:
-            job = service.start_job(get_inbox_dir(), JobTrigger.EMAIL)
-        except ApplicationError as exc:
-            result = {**result, 'job_error': {
-                'code': exc.code,
-                'message': exc.message,
-            }}
-    return EmailPullResponse(pull=result, job=job)
+    return EmailPullResponse(pull=result, job=None)

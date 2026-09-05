@@ -54,12 +54,12 @@ class JobService:
         self._email_poller = EmailPoller(self.start_job)
 
     def start_background_tasks(self) -> None:
-        """启动桌面模式所需的后台任务。"""
-        self._email_poller.start()
+        """桌面模式不启动邮箱自动轮询，收取由用户手动触发。"""
+        return
 
     def wake_background_tasks(self) -> None:
-        """通知后台任务立即重读外部配置。"""
-        self._email_poller.wake()
+        """保留配置更新钩子；手动收取模式无需唤醒后台任务。"""
+        return
 
     def start_job(
         self,

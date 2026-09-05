@@ -48,6 +48,16 @@ class DirectoryScanResponse(BaseModel):
     pdf_count: int
 
 
+class OpenDirectoryRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    path: str = Field(min_length=1)
+
+
+class OpenDirectoryResponse(BaseModel):
+    opened: bool
+
+
 class CancelJobResponse(BaseModel):
     job: dict[str, Any]
 

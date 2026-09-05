@@ -118,7 +118,9 @@ def _get_config_store() -> ConfigManager:
 
 def _ensure_config_exists() -> None:
     """若 config.ini 不存在，从模板创建一份"""
-    _get_config_store().reload_config()
+    config_path = os.path.abspath(get_config_path())
+    if not os.path.isfile(config_path):
+        _get_config_store().reload_config()
 
 
 def load_config() -> configparser.ConfigParser:

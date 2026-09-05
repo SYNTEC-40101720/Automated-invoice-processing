@@ -50,6 +50,9 @@ export const api = {
   scanDirectory: (sourceDir: string) => request<{ source_dir: string; pdf_count: number }>('/jobs/scan', {
     method: 'POST', body: JSON.stringify({ source_dir: sourceDir }),
   }),
+  openDirectory: (path: string) => request<{ opened: boolean }>('/system/open-directory', {
+    method: 'POST', body: JSON.stringify({ path }),
+  }),
   startJob: async (sourceDir: string) => {
     const runtimeJob = await request<RuntimeJobResponse>('/jobs/start', {
       method: 'POST',

@@ -1,7 +1,11 @@
-import { ChevronUp, Download, Terminal, X } from 'lucide-react'
+import { ChevronDown, Download, Terminal, X } from 'lucide-react'
 import { useWorkbench } from '../stores/workbench'
 
-export function BottomPanel() {
+interface BottomPanelProps {
+  onClose: () => void
+}
+
+export function BottomPanel({ onClose }: BottomPanelProps) {
   const logs = useWorkbench((state) => state.logs)
   const clearLogs = useWorkbench((state) => state.clearLogs)
   const exportLogs = async () => {
@@ -38,7 +42,9 @@ export function BottomPanel() {
         <span className="panel-grow" />
         <button className="icon-button subtle" title="导出日志" aria-label="导出日志" onClick={() => void exportLogs()} disabled={logs.length === 0}><Download size={14} /></button>
         <button className="icon-button subtle" title="清空当前日志" onClick={clearLogs}><X size={14} /></button>
-        <ChevronUp size={15} className="panel-chevron" />
+        <button className="icon-button subtle" title="收起日志" aria-label="收起日志" onClick={onClose}>
+          <ChevronDown size={15} />
+        </button>
       </div>
       <div className="panel-content">
         {logs.length === 0

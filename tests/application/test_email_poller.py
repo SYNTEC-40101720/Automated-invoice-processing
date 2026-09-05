@@ -22,14 +22,11 @@ def test_disabled_email_poller_does_not_connect(monkeypatch):
     assert calls == []
 
 
-def test_email_poller_starts_email_job_for_new_files(monkeypatch, tmp_path):
+def test_email_poller_only_pulls_new_files(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setattr('invoice_processor.application.email_poller.get_email_enabled', lambda: True)
     monkeypatch.setattr(
         'invoice_processor.application.email_poller.get_email_poll_minutes', lambda: 5
-    )
-    monkeypatch.setattr(
-        'invoice_processor.application.email_poller.get_email_auto_process', lambda: True
     )
     monkeypatch.setattr(
         'invoice_processor.application.email_poller.get_inbox_dir', lambda: str(tmp_path)
@@ -64,28 +61,21 @@ def test_email_poller_starts_email_job_for_new_files(monkeypatch, tmp_path):
             'total_scanned': 1,
         }
 
-    def fake_start_job(source_dir, trigger):
-        calls.append(('job', source_dir, trigger))
-        return {'id': 'job-email'}
-
-    poller = EmailPoller(fake_start_job, fake_pull)
+    poller = EmailPoller(lambda *_: calls.append('job'), fake_pull)
     result = poller.poll_once()
 
     assert result['downloaded'] == 1
     assert calls[0][0] == 'pull'
     assert calls[0][1]['senders'] == ['trusted@example.com']
     assert calls[0][1]['keywords'] == ['差旅']
-    assert calls[1] == ('job', str(tmp_path), JobTrigger.EMAIL)
+    assert calls == [('pull', calls[0][1])]
 
 
-def test_email_poller_only_pulls_when_auto_process_disabled(monkeypatch, tmp_path):
+def test_email_poller_pulls_new_files_without_processing(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setattr('invoice_processor.application.email_poller.get_email_enabled', lambda: True)
     monkeypatch.setattr(
         'invoice_processor.application.email_poller.get_email_poll_minutes', lambda: 5
-    )
-    monkeypatch.setattr(
-        'invoice_processor.application.email_poller.get_email_auto_process', lambda: False
     )
     monkeypatch.setattr(
         'invoice_processor.application.email_poller.get_inbox_dir', lambda: str(tmp_path)

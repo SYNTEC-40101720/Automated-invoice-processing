@@ -62,7 +62,7 @@ def build_invoice_registry(service: JobService) -> ToolRegistry:
         ToolDescriptor(
             kind=INVOICE_TOOL_KIND,
             title="发票处理",
-            subtitle="PDF 处理",
+            subtitle="文件处理",
             group="invoice",
             glyph="receipt",
             supports_input=True,

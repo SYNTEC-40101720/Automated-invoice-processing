@@ -9,13 +9,12 @@ from fastapi.testclient import TestClient
 
 from devbase.domain.job import JobStatus
 from invoice_processor.api.app import create_app
-from invoice_processor.api.dependencies import get_job_service
 from invoice_processor.api.routes import email as email_route
 from invoice_processor.api.routes import settings as settings_route
+from invoice_processor.api.routes import system as system_route
 from invoice_processor.api.schemas import SettingsResponse
 from invoice_processor.application.event_bus import EventBus
 from invoice_processor.application.job_service import JobService
-from invoice_processor.domain.job import JobTrigger
 from invoice_processor.version import __version__
 
 
@@ -51,7 +50,7 @@ def test_tools_endpoint_exposes_invoice_descriptor(tmp_path):
     assert response.json()['tools'] == [{
         'kind': 'invoice_processing',
         'title': '发票处理',
-        'subtitle': 'PDF 处理',
+        'subtitle': '文件处理',
         'group': 'invoice',
         'glyph': 'receipt',
         'access_key': None,
@@ -160,6 +159,37 @@ def test_scan_directory_returns_top_level_pdf_count(tmp_path):
     assert response.status_code == 200
     assert response.json()['source_dir'] == str(tmp_path)
     assert response.json()['pdf_count'] == 2
+
+
+def test_open_directory_only_opens_known_directory(tmp_path, monkeypatch):
+    app = make_app(tmp_path)
+    service = app.state.job_service
+    opened_paths = []
+    monkeypatch.setattr(service, 'is_known_directory', lambda path: path == str(tmp_path))
+    monkeypatch.setattr(
+        system_route,
+        '_open_directory',
+        lambda path: opened_paths.append(path) or True,
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        '/api/v1/system/open-directory',
+        headers={'X-Local-Token': 'test-token'},
+        json={'path': str(tmp_path)},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {'opened': True}
+    assert opened_paths == [tmp_path]
+
+    unknown = client.post(
+        '/api/v1/system/open-directory',
+        headers={'X-Local-Token': 'test-token'},
+        json={'path': str(tmp_path.parent)},
+    )
+    assert unknown.status_code == 200
+    assert unknown.json() == {'opened': False}
 
 
 def test_websocket_sends_ready_and_current_snapshot(tmp_path):
@@ -306,16 +336,7 @@ def test_ai_test_rejects_missing_key(monkeypatch, tmp_path):
     assert response.json()['error']['code'] == 'AI_CONFIGURATION_INCOMPLETE'
 
 
-def test_email_pull_starts_email_job_for_downloaded_files(monkeypatch, tmp_path):
-    class FakeJobService:
-        def __init__(self):
-            self.arguments = None
-
-        def start_job(self, source_dir, trigger):
-            self.arguments = (source_dir, trigger)
-            return {'id': 'job-email', 'status': 'queued'}
-
-    fake_service = FakeJobService()
+def test_email_pull_only_downloads_files(monkeypatch, tmp_path):
     monkeypatch.setattr(email_route, 'get_email_config', lambda: {
         'imap_host': 'imap.example.com', 'imap_port': '993',
     })
@@ -323,49 +344,12 @@ def test_email_pull_starts_email_job_for_downloaded_files(monkeypatch, tmp_path)
     monkeypatch.setattr(email_route, 'get_email_auth_code', lambda: 'auth')
     monkeypatch.setattr(email_route, 'get_inbox_dir', lambda: str(tmp_path))
     monkeypatch.setattr(email_route, 'get_email_days_back', lambda: 30)
-    monkeypatch.setattr(email_route, 'get_email_auto_process', lambda: True)
     monkeypatch.setattr(email_route, 'pull_invoices', lambda **kwargs: {
         'downloaded': 1, 'new_files': [str(tmp_path / 'invoice.pdf')],
         'errors': [], 'total_scanned': 1,
     })
 
     app = make_app(tmp_path)
-    app.dependency_overrides[get_job_service] = lambda: fake_service
-    client = TestClient(app)
-    response = client.post(
-        '/api/v1/email/pull', headers={'X-Local-Token': 'test-token'}
-    )
-
-    assert response.status_code == 200
-    assert response.json()['job']['id'] == 'job-email'
-    assert fake_service.arguments == (str(tmp_path), JobTrigger.EMAIL)
-
-
-def test_email_pull_only_downloads_when_auto_process_disabled(monkeypatch, tmp_path):
-    class FakeJobService:
-        def __init__(self):
-            self.called = False
-
-        def start_job(self, source_dir, trigger):
-            self.called = True
-            return {'id': 'unexpected-job', 'status': 'queued'}
-
-    fake_service = FakeJobService()
-    monkeypatch.setattr(email_route, 'get_email_config', lambda: {
-        'imap_host': 'imap.example.com', 'imap_port': '993',
-    })
-    monkeypatch.setattr(email_route, 'get_email_username', lambda: 'user@example.com')
-    monkeypatch.setattr(email_route, 'get_email_auth_code', lambda: 'auth')
-    monkeypatch.setattr(email_route, 'get_inbox_dir', lambda: str(tmp_path))
-    monkeypatch.setattr(email_route, 'get_email_days_back', lambda: 30)
-    monkeypatch.setattr(email_route, 'get_email_auto_process', lambda: False)
-    monkeypatch.setattr(email_route, 'pull_invoices', lambda **kwargs: {
-        'downloaded': 1, 'new_files': [str(tmp_path / 'invoice.pdf')],
-        'errors': [], 'total_scanned': 1,
-    })
-
-    app = make_app(tmp_path)
-    app.dependency_overrides[get_job_service] = lambda: fake_service
     client = TestClient(app)
     response = client.post(
         '/api/v1/email/pull', headers={'X-Local-Token': 'test-token'}
@@ -373,7 +357,6 @@ def test_email_pull_only_downloads_when_auto_process_disabled(monkeypatch, tmp_p
 
     assert response.status_code == 200
     assert response.json()['job'] is None
-    assert fake_service.called is False
 
 
 def test_static_frontend_is_served_after_api_routes(tmp_path):

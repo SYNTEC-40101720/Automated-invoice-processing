@@ -1287,3 +1287,230 @@ body {
   background: var(--surface);
   color: var(--muted);
 }
+
+.main-column:not(.has-bottom-panel) {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.main-column.has-bottom-panel {
+  grid-template-rows: minmax(0, 1fr) 190px;
+}
+
+.main-column.has-update:not(.has-bottom-panel) {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.main-column.has-update.has-bottom-panel {
+  grid-template-rows: auto minmax(0, 1fr) 190px;
+}
+
+.status-connection {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 -4px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.status-connection:hover {
+  background: var(--surface-sunken);
+  color: var(--ink);
+}
+
+.status-connection.connection.connected {
+  color: var(--accent);
+}
+
+@media (max-width: 760px) {
+  .main-column.has-bottom-panel {
+    grid-template-rows: minmax(0, 1fr) 166px;
+  }
+
+  .main-column.has-update.has-bottom-panel {
+    grid-template-rows: auto minmax(0, 1fr) 166px;
+  }
+}
+
+.processing-header,
+.inbox-header,
+.audit-header {
+  align-items: center;
+  gap: 20px;
+}
+
+.processing-header > div:first-child,
+.inbox-header > div:first-child,
+.audit-header > div:first-child {
+  min-width: 0;
+}
+
+.processing-header .state-badge,
+.inbox-header .state-badge,
+.audit-header .state-badge {
+  flex: none;
+  margin-top: 0;
+  white-space: nowrap;
+}
+
+.state-badge.error {
+  border-color: var(--rose);
+  color: var(--rose);
+  background: var(--rose-soft);
+}
+
+.inbox-action-row {
+  align-items: center;
+  background: var(--surface-raised);
+}
+
+.inbox-directory-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.inbox-directory-block .inbox-directory-actions .secondary-button {
+  margin-left: 0;
+}
+
+.inbox-manual-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.inbox-automation-block {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.inbox-processing-block {
+  border-top: 0;
+  background: var(--surface);
+}
+
+.inbox-pull-button {
+  align-self: center;
+  min-width: 104px;
+  min-height: 38px;
+  padding-inline: 14px;
+}
+
+.inbox-result {
+  grid-template-columns: repeat(3, minmax(70px, 110px)) minmax(0, 1fr);
+}
+
+.audit-summary {
+  padding: 0;
+  overflow: hidden;
+}
+
+.audit-summary-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.audit-summary-heading strong {
+  display: block;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.feature-section-meta {
+  flex: none;
+  color: var(--muted);
+  font: 10px "Cascadia Code", monospace;
+}
+
+.audit-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.audit-stat {
+  display: flex;
+  min-height: 74px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 16px;
+  border-right: 1px solid var(--line);
+}
+
+.audit-stat:last-child {
+  border-right: 0;
+}
+
+.audit-stat span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.audit-stat strong {
+  color: var(--ink);
+  font: 22px "Cascadia Code", monospace;
+  font-weight: 500;
+}
+
+.audit-stat.has-findings strong {
+  color: var(--rose);
+}
+
+.audit-stat.is-clear strong {
+  color: var(--green);
+}
+
+@media (max-width: 760px) {
+  .processing-header,
+  .inbox-header,
+  .audit-header {
+    align-items: flex-start;
+  }
+
+  .inbox-automation-block {
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .inbox-automation-block .switch-control {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .inbox-automation-block .poll-interval {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .inbox-automation-block > .secondary-button {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .inbox-directory-block {
+    align-items: flex-start;
+  }
+
+  .inbox-directory-actions {
+    width: 100%;
+    margin-left: 52px;
+  }
+
+  .inbox-result {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

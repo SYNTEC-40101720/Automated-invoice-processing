@@ -9,7 +9,6 @@ from collections.abc import Callable
 
 from ..config_manager import (
     get_email_auth_code,
-    get_email_auto_process,
     get_email_config,
     get_email_days_back,
     get_email_enabled,
@@ -20,7 +19,6 @@ from ..config_manager import (
     get_inbox_dir,
 )
 from ..core.email_pull import DEFAULT_IMAP_TIMEOUT_SECONDS, pull_invoices
-from ..domain.errors import ApplicationError
 from ..domain.job import JobTrigger
 
 logger = logging.getLogger(__name__)
@@ -102,18 +100,6 @@ class EmailPoller:
                 keywords=get_email_keywords(),
                 timeout=self._imap_timeout,
             )
-            if (
-                result.get('new_files')
-                and get_email_auto_process()
-                and not self._stop_event.is_set()
-            ):
-                try:
-                    self._start_job(inbox_dir, JobTrigger.EMAIL)
-                except ApplicationError as exc:
-                    result = {**result, 'job_error': {
-                        'code': exc.code,
-                        'message': exc.message,
-                    }}
             return result
         finally:
             self._poll_lock.release()

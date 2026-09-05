@@ -5,6 +5,8 @@ interface StatusBarProps {
   connected: boolean
   job: Job | null
   version: string | null
+  onTogglePanel: () => void
+  panelOpen: boolean
 }
 
 const phaseLabels: Record<string, string> = {
@@ -17,14 +19,20 @@ const phaseLabels: Record<string, string> = {
   done: '已完成',
 }
 
-export function StatusBar({ connected, job, version }: StatusBarProps) {
+export function StatusBar({ connected, job, version, onTogglePanel, panelOpen }: StatusBarProps) {
   const running = job?.status === 'running' || job?.status === 'cancelling'
   return (
     <footer className="status-bar">
-      <span className={connected ? 'connection connected' : 'connection'}>
+      <button
+        type="button"
+        className={connected ? 'status-connection connection connected' : 'status-connection connection'}
+        onClick={onTogglePanel}
+        aria-expanded={panelOpen}
+        title="连接与日志"
+      >
         {connected ? <CircleCheck size={13} /> : <CircleX size={13} />}
         {connected ? '本地服务已连接' : '正在连接本地服务'}
-      </span>
+      </button>
       <span className="status-divider" />
       <span className="status-phase">
         {running && <LoaderCircle className="spin" size={13} />}
