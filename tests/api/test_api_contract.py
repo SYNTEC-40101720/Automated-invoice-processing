@@ -51,7 +51,7 @@ def test_tools_endpoint_exposes_invoice_descriptor(tmp_path):
     assert response.json()['tools'] == [{
         'kind': 'invoice_processing',
         'title': '发票处理',
-        'subtitle': '扫描、处理、审核并归档电子票据',
+        'subtitle': 'PDF 处理',
         'group': 'invoice',
         'glyph': 'receipt',
         'access_key': None,
