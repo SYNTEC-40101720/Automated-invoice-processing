@@ -1,4 +1,4 @@
-import { ArrowRight, FileCheck2, Inbox, LayoutGrid, PanelLeft, ScanSearch, Settings } from 'lucide-react'
+import { ArrowRight, FileCheck2, Inbox, PanelLeft, ScanSearch, Settings } from 'lucide-react'
 import type { PointerEventHandler, ReactNode } from 'react'
 import type { ToolDescriptor } from '../api/types'
 import type { WorkbenchView } from '../stores/workbench'
@@ -45,14 +45,8 @@ export function Sidebar({
   onDragStart,
 }: SidebarProps) {
   const setView = useWorkbench((state) => state.setView)
-  const selectedTool = useWorkbench((state) => state.selectedTool)
   const setSelectedTool = useWorkbench((state) => state.setSelectedTool)
   const invoiceTool = tools.find((tool) => tool.kind === 'invoice_processing')
-
-  const openWorkbench = () => {
-    setSelectedTool(null)
-    setView('processing')
-  }
 
   const openInvoiceTool = () => {
     setSelectedTool('invoice_processing')
@@ -69,7 +63,7 @@ export function Sidebar({
       <aside className={`side-bar sidebar${sidebarCollapsed ? ' is-collapsed' : ''}`}>
         <div className="sidebar-brand-row">
           {!sidebarCollapsed && (
-            <button type="button" className="sidebar-brand" title="SYNTEC" onClick={openWorkbench}>
+            <button type="button" className="sidebar-brand" title="SYNTEC" onClick={openInvoiceTool}>
               <img className="sidebar-brand-mark" src={appLogo} alt="SYNTEC" />
               <span className="sidebar-brand-name">SYNTEC</span>
             </button>
@@ -106,28 +100,10 @@ export function Sidebar({
             <li>
               <button
                 type="button"
-                className={`sidebar-nav-item${activeView === 'processing' && selectedTool === null ? ' is-selected' : ''}`}
-                title="工作台"
-                aria-label="工作台"
-                aria-current={activeView === 'processing' && selectedTool === null ? 'page' : undefined}
-                onClick={openWorkbench}
-              >
-                <span className="sidebar-nav-icon"><LayoutGrid size={18} strokeWidth={1.6} /></span>
-                {!sidebarCollapsed && (
-                  <span className="sidebar-nav-text">
-                    <span className="sidebar-nav-title">工作台</span>
-                    <span className="sidebar-nav-sub">{invoiceTool?.title ?? '起始页'}</span>
-                  </span>
-                )}
-              </button>
-            </li>
-            <li>
-              <button
-                type="button"
-                className={`sidebar-nav-item${activeView === 'processing' && selectedTool === 'invoice_processing' ? ' is-selected' : ''}`}
+                className={`sidebar-nav-item${activeView === 'processing' ? ' is-selected' : ''}`}
                 title={invoiceTool?.title ?? '发票处理'}
                 aria-label={invoiceTool?.title ?? '发票处理'}
-                aria-current={activeView === 'processing' && selectedTool === 'invoice_processing' ? 'page' : undefined}
+                aria-current={activeView === 'processing' ? 'page' : undefined}
                 onClick={openInvoiceTool}
               >
                 <span className="sidebar-nav-icon"><FileCheck2 size={18} strokeWidth={1.6} /></span>
