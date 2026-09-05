@@ -243,20 +243,9 @@ def main():
     # PyInstaller 打包命令（域控合规）
     cmd = [
         sys.executable, "-m", "PyInstaller",
-        "--onedir",
-        "--windowed",
-        "--name", APP_NAME,
-        # 🔴 exe 内嵌图标（资源管理器 + 任务栏）
-        "--icon", str(ROOT / "logo.ico"),
-        "--version-file", str(VERSION_FILE),
-        "--noupx",               # 🔴 域控禁止 UPX 压缩
+        str(ROOT / "invoice_processor.spec"),
+        "--noconfirm",
         "--clean",
-        "--paths", str(ROOT / "backend"),
-        # 运行时窗口图标（复制到 bundle 根目录）
-        "--add-data", f"logo.ico{os.pathsep}.",
-        "--add-data", f"{WEB_DIST_DIR}{os.pathsep}web/dist",
-        "--collect-all", "webview",
-        str(MAIN_SCRIPT),
     ]
 
     run(cmd, "PyInstaller 打包")

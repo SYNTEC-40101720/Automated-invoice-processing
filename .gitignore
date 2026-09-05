@@ -29,6 +29,7 @@ web/dist/
 build/
 dist/
 *.spec
+!invoice_processor.spec
 *.egg
 *.zip
 *.tmp

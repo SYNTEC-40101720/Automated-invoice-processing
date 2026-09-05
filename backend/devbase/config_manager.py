@@ -104,6 +104,18 @@ class ConfigManager:
             self._write_parser(parser)
             self._parser = parser
 
+    def replace(self, values: Mapping[str, Mapping[str, object]]) -> None:
+        """Atomically replace all sections with the supplied values."""
+        with self._guard():
+            parser = self._new_parser()
+            for section, options in values.items():
+                if not parser.has_section(section):
+                    parser.add_section(section)
+                for option, value in options.items():
+                    parser.set(section, option, str(value))
+            self._write_parser(parser)
+            self._parser = parser
+
     def reload_config(self) -> "ConfigManager":
         """Reload from disk and create the [app] template when absent."""
         with self._guard():

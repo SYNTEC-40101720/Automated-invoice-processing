@@ -16,6 +16,8 @@
 - 发票流水线增加同步执行入口，并注册为 `invoice_processing` Task
 - 发票应用工厂复用 DevBase 安全层、生命周期和静态资源能力
 - 标准 `/jobs/start`、`/jobs/cancel` 和运行时快照端点已接入
+- 发票配置读写复用 DevBase 文件锁/原子替换，密钥和日志复用 DevBase 公共实现
+- 主程序已新增 `invoice_processor.spec`，并通过实际 PyInstaller 构建
 - 根入口支持桌面/浏览器调试模式
 - NativeBridge 复用 DevBase 通用目录能力，保留发票专属方法
 - `/api/v1/tools` 和前端 Sidebar 已接入工具清单
@@ -25,7 +27,7 @@
 
 - 旧 `/jobs` 业务兼容 API 还未完全切换为 DevBase 标准 JobRuntime 契约
 - 发票事件总线与 DevBase 事件游标尚未统一
-- 更新器、配置和日志仍保留发票项目扩展实现，后续再抽取公共部分
+- 更新器仍保留发票项目资产命名和兼容旧 Release 的扩展实现，后续再抽取公共部分
 - 前端业务视图仍使用原有发票任务响应模型
 
 ---

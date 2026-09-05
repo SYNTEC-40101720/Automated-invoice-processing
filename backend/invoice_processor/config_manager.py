@@ -8,13 +8,15 @@ import configparser
 import logging
 import os
 import sys
-import tempfile
 import threading
+
+from devbase.config_manager import ConfigManager
 
 from .secret_store import PREFIX, decrypt, encrypt
 
 logger = logging.getLogger(__name__)
 _CONFIG_LOCK = threading.RLock()
+_CONFIG_STORES: dict[str, ConfigManager] = {}
 
 # 默认配置（与原 config.py 硬编码值一致，保证向后兼容）
 _DEFAULTS = {
@@ -104,16 +106,19 @@ def get_config_path() -> str:
     return os.path.join(_get_program_dir(), 'config.ini')
 
 
+def _get_config_store() -> ConfigManager:
+    path = os.path.abspath(get_config_path())
+    with _CONFIG_LOCK:
+        store = _CONFIG_STORES.get(path)
+        if store is None:
+            store = ConfigManager(path, defaults=_DEFAULTS)
+            _CONFIG_STORES[path] = store
+        return store
+
+
 def _ensure_config_exists() -> None:
     """若 config.ini 不存在，从模板创建一份"""
-    path = get_config_path()
-    if not os.path.exists(path):
-        try:
-            with open(path, 'w', encoding='utf-8') as f:
-                f.write(_TEMPLATE)
-            logger.info(f"已生成配置文件: {path}")
-        except OSError as e:
-            logger.warning(f"无法创建配置文件 {path}: {e}，将使用默认配置")
+    _get_config_store().reload_config()
 
 
 def load_config() -> configparser.ConfigParser:
@@ -135,29 +140,15 @@ def load_config() -> configparser.ConfigParser:
 
 def save_config(cfg: configparser.ConfigParser) -> None:
     """保存配置到 config.ini"""
-    path = get_config_path()
-    temp_path = None
-    try:
-        directory = os.path.dirname(path) or '.'
-        fd, temp_path = tempfile.mkstemp(
-            prefix='.config-', suffix='.tmp', dir=directory,
-        )
-        with os.fdopen(fd, 'w', encoding='utf-8') as f:
-            cfg.write(f)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(temp_path, path)
-        temp_path = None
-        logger.info(f"配置已保存: {path}")
-    except OSError as e:
-        logger.error(f"保存配置失败: {e}")
-        raise
-    finally:
-        if temp_path:
-            try:
-                os.remove(temp_path)
-            except OSError:
-                pass
+    values = {
+        section: {
+            option: value
+            for option, value in cfg.items(section, raw=True)
+        }
+        for section in cfg.sections()
+    }
+    _get_config_store().replace(values)
+    logger.info('配置已保存: %s', get_config_path())
 
 
 def _set_section_values(

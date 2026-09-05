@@ -55,6 +55,7 @@ def setup_logging(
     *,
     level: int = logging.INFO,
     base_dir: str | Path | None = None,
+    logger_name: str | None = "devbase",
 ) -> Path:
     """Configure rotating file logging.
 
@@ -63,6 +64,7 @@ def setup_logging(
         level: log level (default: ``logging.INFO``).
         base_dir: override the base directory; defaults to the PyInstaller
             or project root.  Useful for tests.
+        logger_name: logger to configure; ``None`` configures the root logger.
 
     Returns:
         The resolved path to the log file.
@@ -72,7 +74,7 @@ def setup_logging(
     logs_dir = _ensure_logs_dir(base_dir)
     log_file_path = logs_dir / log_name
 
-    logger = logging.getLogger("devbase")
+    logger = logging.getLogger(logger_name)
     logger.setLevel(level)
 
     if _already_configured(logger, log_file_path):
