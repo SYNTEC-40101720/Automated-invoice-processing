@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from types import SimpleNamespace
+
 from fastapi.testclient import TestClient
 
+from devbase.domain.job import JobStatus
 from invoice_processor.api.app import create_app
 from invoice_processor.api.dependencies import get_job_service
 from invoice_processor.api.routes import email as email_route
@@ -70,6 +74,31 @@ def test_runtime_start_endpoint_uses_devbase_task_registry(tmp_path):
 
     assert response.status_code == 201
     assert response.json()['kind'] == 'invoice_processing'
+
+
+def test_runtime_cancel_endpoint_returns_runtime_snapshot(tmp_path):
+    app = make_app(tmp_path)
+    app.state.devbase_runtime = SimpleNamespace(
+        cancel_current=lambda: SimpleNamespace(
+            job_id='runtime-job',
+            kind='invoice_processing',
+            status=JobStatus.CANCELLING,
+            progress=35,
+            message='正在停止',
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        '/api/v1/jobs/cancel',
+        headers={'X-Local-Token': 'test-token'},
+    )
+
+    assert response.status_code == 200
+    assert response.json()['id'] == 'runtime-job'
+    assert response.json()['status'] == 'cancelling'
 
 
 def test_api_rejects_untrusted_origin_and_sets_security_headers(tmp_path):

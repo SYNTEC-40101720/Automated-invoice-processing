@@ -214,9 +214,20 @@ export function App() {
     api.startJob(sourceDir).then((nextJob) => setJob(nextJob)).catch((error: Error) => window.alert(error.message))
   }
 
-  const cancel = () => {
+  const cancel = async () => {
     if (!job?.id) return
-    api.cancelJob(job.id).then((nextJob) => setJob(nextJob)).catch((error: Error) => window.alert(error.message))
+    try {
+      await api.cancelRuntimeJob()
+      const nextJob = await api.currentJob()
+      if (nextJob) setJob(nextJob)
+    } catch {
+      try {
+        const nextJob = await api.cancelJob(job.id)
+        setJob(nextJob)
+      } catch (error) {
+        window.alert((error as Error).message)
+      }
+    }
   }
 
   const checkForUpdate = async () => {

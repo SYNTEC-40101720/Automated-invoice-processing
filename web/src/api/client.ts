@@ -76,6 +76,9 @@ export const api = {
       result: null,
     }
   },
+  cancelRuntimeJob: () => request<RuntimeJobResponse>('/jobs/cancel', {
+    method: 'POST',
+  }),
   cancelJob: (jobId: string) => request<Job>(`/jobs/${jobId}/cancel`, {
     method: 'POST',
   }),
