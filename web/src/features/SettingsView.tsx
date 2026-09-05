@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bot, Download, ExternalLink, KeyRound, LoaderCircle, Mail, RefreshCw, Save, ShieldCheck } from 'lucide-react'
+import { Bot, Download, ExternalLink, KeyRound, LoaderCircle, Mail, Monitor, Moon, RefreshCw, Save, ShieldCheck, Sun } from 'lucide-react'
 import { api } from '../api/client'
 import type { SettingsResponse, UpdateApplyResponse, UpdateProgress, UpdateResponse } from '../api/types'
 import type { SettingsSection } from '../stores/workbench'
@@ -11,7 +11,11 @@ interface SettingsViewProps {
   update: UpdateResponse | null
   onCheckUpdate: () => Promise<UpdateResponse | null>
   onApplyUpdate: () => Promise<UpdateApplyResponse>
+  theme: ThemeMode
+  onThemeChange: (theme: ThemeMode) => void
 }
+
+export type ThemeMode = 'system' | 'light' | 'dark'
 
 const DEFAULT_RELEASE_URL = 'https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/latest'
 
@@ -43,7 +47,7 @@ const settingsSectionMeta: Record<SettingsSection, { label: string; eyebrow: str
 }
 const settingsSectionOrder: SettingsSection[] = ['business', 'email', 'ai', 'updates']
 
-export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate }: SettingsViewProps) {
+export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate, theme, onThemeChange }: SettingsViewProps) {
   const queryClient = useQueryClient()
   const settingsSection = useWorkbench((state) => state.settingsSection)
   const setSettingsSection = useWorkbench((state) => state.setSettingsSection)
@@ -188,6 +192,26 @@ export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate }: 
         )}
       </header>
       {message && <div className={`feedback ${message.includes('失败') || message.includes('错误') ? 'error' : 'success'}`}>{message}</div>}
+      <SettingsCard icon={<Sun size={17} />} title="外观">
+        <div className="theme-options" role="radiogroup" aria-label="主题模式">
+          {([
+            ['system', '跟随系统', <Monitor size={14} />],
+            ['light', '浅色', <Sun size={14} />],
+            ['dark', '暗色', <Moon size={14} />],
+          ] as const).map(([value, label, icon]) => (
+            <button
+              key={value}
+              type="button"
+              className={`theme-option ${theme === value ? 'is-active' : ''}`}
+              role="radio"
+              aria-checked={theme === value}
+              onClick={() => onThemeChange(value)}
+            >
+              {icon}<span>{label}</span>
+            </button>
+          ))}
+        </div>
+      </SettingsCard>
       <section className="settings-panel-shell">
         {settingsSection === 'business' && <SettingsCard icon={section.icon} title={section.label}>
           <label>购买方税号<input value={settings.business.target_tax_id} onChange={(event) => setSettings({ ...settings, business: { ...settings.business, target_tax_id: event.target.value } })} /></label>

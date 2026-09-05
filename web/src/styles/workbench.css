@@ -684,3 +684,81 @@ h1 {
     grid-column: 2;
   }
 }
+
+/* DevBase shell alignment while business feature views remain project-owned. */
+.workbench-shell {
+  position: relative;
+  grid-template-columns: 236px minmax(0, 1fr);
+  transition: grid-template-columns 180ms ease;
+}
+
+.workbench-shell[data-dragging] {
+  transition: none;
+  user-select: none;
+}
+
+.workbench-shell.sidebar-collapsed {
+  grid-template-columns: 56px minmax(0, 1fr);
+}
+
+.workbench-shell.sidebar-collapsed .side-bar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sidebar-drag-handle {
+  position: absolute;
+  top: 0;
+  bottom: 24px;
+  z-index: 5;
+  width: 8px;
+  cursor: col-resize;
+  transform: translateX(-50%);
+}
+
+.sidebar-drag-handle:hover {
+  background: var(--teal-border);
+}
+
+.theme-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.theme-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--button-bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.theme-option:hover,
+.theme-option.is-active {
+  border-color: var(--teal-border);
+  background: var(--teal-soft);
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .side-bar,
+:root[data-theme="dark"] .status-bar {
+  background: var(--sidebar-bg);
+  border-color: var(--line);
+}
+
+:root[data-theme="dark"] .main-column,
+:root[data-theme="dark"] .view-scroll {
+  background: var(--main-bg);
+}
+
+:root[data-theme="dark"] .brand-mark {
+  color: var(--text);
+  background: #30373d;
+}

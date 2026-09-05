@@ -20,6 +20,8 @@
 - 主程序已新增 `invoice_processor.spec`，并通过实际 PyInstaller 构建
 - 更新器 ZIP 安全解压已复用 DevBase，发票 Release 命名和完整性校验保持业务扩展
 - 前端处理工作台的启动动作已切换到 DevBase `/jobs/start`，详情和日志暂由兼容层提供
+- 前端工作台已同步 DevBase 壳体验：可调宽/折叠侧栏、工具描述导航、system/light/dark 主题
+- 浏览器模式同源 WebSocket Origin 已修复，预览服务健康检查和事件流可用
 - 事件模型完成边界评估：DevBase 运行时负责任务生命周期，发票 EventBus 保留日志、统计和业务阶段事件，避免把业务字段硬塞进通用事件值对象
 - 根入口支持桌面/浏览器调试模式
 - NativeBridge 复用 DevBase 通用目录能力，保留发票专属方法

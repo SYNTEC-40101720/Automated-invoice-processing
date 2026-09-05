@@ -47,3 +47,34 @@
 body { margin: 0; min-width: 0; min-height: 100vh; overflow: hidden; }
 button, input { font: inherit; }
 button { color: inherit; }
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ink-950: #f0f2f4;
+  --ink-900: #e6e9ec;
+  --ink-850: #d0d6dc;
+  --ink-800: #b8c0c8;
+  --ink-750: #9da7b1;
+  --canvas-start: #202428;
+  --canvas-mid: #1b1f23;
+  --canvas-end: #15181b;
+  --line: rgba(230, 233, 236, .14);
+  --line-strong: rgba(230, 233, 236, .28);
+  --text: #e6e9ec;
+  --text-muted: #b8c0c8;
+  --text-subtle: #9da7b1;
+  --teal: #7cc7b9;
+  --teal-deep: #4f958a;
+  --surface-panel: rgba(31, 36, 41, .98);
+  --sidebar-bg: #202428;
+  --main-bg: #181c20;
+  --panel-bg: #1d2227;
+  --button-bg: #252b31;
+  --hover-bg: rgba(230, 233, 236, .08);
+  --active-bg: rgba(124, 199, 185, .14);
+  --teal-soft: rgba(124, 199, 185, .14);
+  --teal-border: rgba(124, 199, 185, .42);
+  --track: #3a424a;
+  --status-bg: #202428;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .28);
+}

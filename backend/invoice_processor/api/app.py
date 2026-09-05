@@ -42,7 +42,7 @@ def create_app(
         local_token=local_token,
         static_dir=static_dir,
         lifecycle_policy=None,
-        allowed_origins=allowed_origins,
+        allowed_origins=allowed_origins if allowed_origins is not None else (),
         include_default_routes=False,
         defer_static_mount=True,
     )

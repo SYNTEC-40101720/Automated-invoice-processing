@@ -8,7 +8,7 @@ import { api, connectEvents } from '../api/client'
 import { ProcessingView } from '../features/processing/ProcessingView'
 import { AuditView } from '../features/AuditView'
 import { InboxView } from '../features/InboxView'
-import { SettingsView } from '../features/SettingsView'
+import { SettingsView, type ThemeMode } from '../features/SettingsView'
 import { useWorkbench } from '../stores/workbench'
 
 export function App() {
@@ -23,6 +23,17 @@ export function App() {
   const mergeLogs = useWorkbench((state) => state.mergeLogs)
   const [directory, setDirectory] = useState('')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const stored = Number(localStorage.getItem('sidebar-width'))
+    return Number.isFinite(stored) && stored >= 232 && stored <= 360 ? stored : 236
+  })
+  const [theme, setTheme] = useState<ThemeMode>(() => {
+    const stored = localStorage.getItem('theme')
+    return stored === 'light' || stored === 'dark' ? stored : 'system'
+  })
+  const [draggingSidebar, setDraggingSidebar] = useState(false)
+  const dragStartX = useRef(0)
+  const dragStartWidth = useRef(sidebarWidth)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const lastEventId = useRef(0)
   const healthQuery = useQuery({ queryKey: ['health'], queryFn: api.health, retry: false })
@@ -35,6 +46,40 @@ export function App() {
   const settingsQuery = useQuery({ queryKey: ['settings'], queryFn: api.settings, retry: false })
   const currentJobQuery = useQuery({ queryKey: ['current-job'], queryFn: api.currentJob, retry: false })
   const toolsQuery = useQuery({ queryKey: ['tools'], queryFn: api.tools, retry: false })
+
+  useEffect(() => {
+    const root = document.documentElement
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const applyTheme = () => {
+      const dark = theme === 'dark' || (theme === 'system' && media.matches)
+      if (dark) root.dataset.theme = 'dark'
+      else delete root.dataset.theme
+    }
+    applyTheme()
+    if (theme === 'system') media.addEventListener('change', applyTheme)
+    if (theme === 'system') localStorage.removeItem('theme')
+    else localStorage.setItem('theme', theme)
+    return () => media.removeEventListener('change', applyTheme)
+  }, [theme])
+
+  useEffect(() => {
+    localStorage.setItem('sidebar-width', String(sidebarWidth))
+  }, [sidebarWidth])
+
+  useEffect(() => {
+    if (!draggingSidebar) return
+    const onPointerMove = (event: PointerEvent) => {
+      const width = dragStartWidth.current + event.clientX - dragStartX.current
+      setSidebarWidth(Math.min(360, Math.max(232, width)))
+    }
+    const onPointerUp = () => setDraggingSidebar(false)
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+    }
+  }, [draggingSidebar])
 
   useEffect(() => {
     if (currentJobQuery.data) {
@@ -182,15 +227,30 @@ export function App() {
 
   const applyUpdate = () => api.applyUpdate()
 
+  const startSidebarDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    dragStartX.current = event.clientX
+    dragStartWidth.current = sidebarWidth
+    setDraggingSidebar(true)
+  }
+
   const emailSettings = settingsQuery.data?.email ?? null
 
-  return <div className={`workbench-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+  const activeSidebarWidth = sidebarCollapsed ? 56 : sidebarWidth
+
+  return <div
+    className={`workbench-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}
+    style={{ gridTemplateColumns: `${activeSidebarWidth}px minmax(0, 1fr)` }}
+    data-dragging={draggingSidebar || undefined}
+  >
     <Sidebar
       activeView={activeView}
       version={healthQuery.data?.version ?? null}
       sidebarCollapsed={sidebarCollapsed}
       onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
       tools={toolsQuery.data?.tools ?? []}
+      sidebarWidth={sidebarWidth}
+      onDragStart={startSidebarDrag}
     />
     <main className={`main-column ${updateQuery.data?.available ? 'has-update' : ''}`}>
       {updateQuery.data?.available && <UpdateBanner update={updateQuery.data} onOpenSettings={() => setView('settings')} />}
@@ -206,6 +266,8 @@ export function App() {
                 update={updateQuery.data ?? null}
                 onCheckUpdate={checkForUpdate}
                 onApplyUpdate={applyUpdate}
+                theme={theme}
+                onThemeChange={setTheme}
               />}
       </div>
       <BottomPanel />
