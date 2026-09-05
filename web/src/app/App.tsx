@@ -1,5 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches)
+  useEffect(() => {
+    const mql = window.matchMedia(query)
+    const handler = (e: MediaQueryListEvent) => setMatches(e.matches)
+    mql.addEventListener('change', handler)
+    return () => mql.removeEventListener('change', handler)
+  }, [query])
+  return matches
+}
 import { BottomPanel } from '../components/BottomPanel'
 import { Sidebar } from '../components/Sidebar'
 import { StatusBar } from '../components/StatusBar'
@@ -26,11 +37,12 @@ export function App() {
   const toggleBottomPanel = useWorkbench((state) => state.toggleBottomPanel)
   const mergeLogs = useWorkbench((state) => state.mergeLogs)
   const [directory, setDirectory] = useState('')
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const stored = Number(localStorage.getItem('sidebar-width'))
     return Number.isFinite(stored) && stored >= 232 && stored <= 360 ? stored : 236
   })
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const isNarrowVp = useMediaQuery('(max-width: 760px)')
   const [theme, setTheme] = useState<ThemeMode>(() => {
     const stored = localStorage.getItem('theme')
     return stored === 'light' || stored === 'dark' ? stored : 'system'
@@ -55,6 +67,13 @@ export function App() {
     setSelectedTool(null)
     setView('inbox')
   }, [setSelectedTool, setView])
+
+  // Auto-collapse sidebar when entering narrow viewport; auto-expand when leaving.
+  // Does not override the user's manual toggle during the same narrow/width phase.
+  useEffect(() => {
+    if (isNarrowVp) setSidebarCollapsed(true)
+    else setSidebarCollapsed(false)
+  }, [isNarrowVp])
 
   useEffect(() => {
     const root = document.documentElement
@@ -263,6 +282,10 @@ export function App() {
 
   const activeSidebarWidth = sidebarCollapsed ? 56 : sidebarWidth
 
+  const toggleSidebar = () => {
+    setSidebarCollapsed((value) => !value)
+  }
+
   return <div
     className={`workbench-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}
     style={{ '--sidebar-width': `${activeSidebarWidth}px` } as React.CSSProperties}
@@ -271,7 +294,7 @@ export function App() {
     <Sidebar
       activeView={activeView}
       sidebarCollapsed={sidebarCollapsed}
-      onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
+      onToggleCollapsed={toggleSidebar}
       tools={toolsQuery.data?.tools ?? []}
       sidebarWidth={sidebarWidth}
       onDragStart={startSidebarDrag}

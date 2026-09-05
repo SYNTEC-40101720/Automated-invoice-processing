@@ -678,42 +678,6 @@ h1 {
 }
 
 @media (max-width: 760px) {
-  .workbench-shell {
-    grid-template-columns: 52px minmax(0, 1fr);
-  }
-
-  .side-bar {
-    width: 52px;
-  }
-
-  .sidebar-brand-row {
-    justify-content: center;
-    padding: 0;
-  }
-
-  .sidebar-brand-name,
-  .sidebar-footer-copy {
-    display: none;
-  }
-
-  .sidebar-primary-nav {
-    padding: 10px 6px;
-  }
-
-  .sidebar-primary-item {
-    justify-content: center;
-    padding: 0;
-  }
-
-  .sidebar-primary-item > span:last-child {
-    display: none;
-  }
-
-  .sidebar-footer {
-    justify-content: center;
-    padding: 8px 0;
-  }
-
   .status-bar {
     grid-column: 2;
   }
@@ -1357,6 +1321,29 @@ body {
   flex: none;
   margin-top: 0;
   white-space: nowrap;
+}
+
+/* ── Responsive: collapse sidebar at narrow widths ──
+   The DevBase !important rule above locks the grid to var(--sidebar-width);
+   override it here so the sidebar visually collapses below 760px. */
+/* Narrow-viewport: let .sidebar-collapsed / .is-collapsed control the UI;
+   only override the !important grid lock so collapsed state works below 760px. */
+@media (max-width: 760px) {
+  .workbench-shell.sidebar-collapsed {
+    grid-template-columns: 52px minmax(0, 1fr) !important;
+  }
+
+  .side-bar.sidebar {
+    padding: 6px 8px;
+  }
+
+  .sidebar-drag-handle {
+    display: none;
+  }
+
+  .feature-scroll {
+    padding: 24px 16px 32px;
+  }
 }
 
 .state-badge.error {

@@ -89,11 +89,7 @@
 **DevBase 目标文件**：`main.py`（根目录）
 
 **验收标准**：
-- [ ] `python main.py` 默认桌面模式（pywebview）
-- [ ] `python main.py --browser` 浏览器调试模式
-- [ ] `python main.py --browser --reload` 配合 Vite 热更新
-- [ ] `python main.py --no-browser` 启动服务不开浏览器
-- [ ] `--host` / `--port` 可覆盖默认监听地址
+- [ ] `python main.py` 桌面窗口模式（默认）
 - [ ] `PLATFORM_HOST` / `PLATFORM_PORT` 环境变量支持
 - [ ] 缺少 `web/dist/index.html` 时提前报错提示构建前端
 - [ ] 服务就绪后才打开窗口（轮询 HTTP 200）

@@ -43,14 +43,6 @@
    python scripts/build_syntec.py
    ```
 
-浏览器调试模式：
-
-```
-python main.py --browser
-python main.py --browser --reload
-python main.py --browser --no-browser
-```
-
 ## 项目结构
 
 ```
