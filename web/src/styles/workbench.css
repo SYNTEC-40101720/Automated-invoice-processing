@@ -794,7 +794,7 @@ h1 {
   height: 60px;
   margin-bottom: 8px;
   padding: 8px 0 8px 4px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 0;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -857,7 +857,7 @@ h1 {
   height: 60px;
   margin: 0 0 8px;
   padding: 8px 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 0;
   justify-content: center;
 }
 
