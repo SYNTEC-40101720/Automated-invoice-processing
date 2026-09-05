@@ -12,6 +12,7 @@ import type {
   UpdateProgress,
   UpdateResponse,
   ToolListResponse,
+  RuntimeJobResponse,
 } from './types'
 
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
@@ -49,10 +50,32 @@ export const api = {
   scanDirectory: (sourceDir: string) => request<{ source_dir: string; pdf_count: number }>('/jobs/scan', {
     method: 'POST', body: JSON.stringify({ source_dir: sourceDir }),
   }),
-  startJob: (sourceDir: string) => request<Job>('/jobs', {
-    method: 'POST',
-    body: JSON.stringify({ source_dir: sourceDir, trigger: 'manual' }),
-  }),
+  startJob: async (sourceDir: string) => {
+    const runtimeJob = await request<RuntimeJobResponse>('/jobs/start', {
+      method: 'POST',
+      body: JSON.stringify({
+        kind: 'invoice_processing',
+        input: { source_dir: sourceDir, trigger: 'manual' },
+      }),
+    })
+    return {
+      id: runtimeJob.id,
+      source_dir: sourceDir,
+      output_dir: null,
+      trigger: 'manual' as const,
+      status: runtimeJob.status,
+      phase: 'scan' as const,
+      progress: runtimeJob.progress / 100,
+      message: runtimeJob.message,
+      stats: { total: 0, success: 0, failure: 0, tax_issues: 0 },
+      started_at: runtimeJob.created_at,
+      finished_at: null,
+      cancel_requested: false,
+      error_code: null,
+      error_message: null,
+      result: null,
+    }
+  },
   cancelJob: (jobId: string) => request<Job>(`/jobs/${jobId}/cancel`, {
     method: 'POST',
   }),

@@ -19,6 +19,7 @@
 - 发票配置读写复用 DevBase 文件锁/原子替换，密钥和日志复用 DevBase 公共实现
 - 主程序已新增 `invoice_processor.spec`，并通过实际 PyInstaller 构建
 - 更新器 ZIP 安全解压已复用 DevBase，发票 Release 命名和完整性校验保持业务扩展
+- 前端处理工作台的启动动作已切换到 DevBase `/jobs/start`，详情和日志暂由兼容层提供
 - 根入口支持桌面/浏览器调试模式
 - NativeBridge 复用 DevBase 通用目录能力，保留发票专属方法
 - `/api/v1/tools` 和前端 Sidebar 已接入工具清单

@@ -170,3 +170,13 @@ export interface ToolDescriptor {
 export interface ToolListResponse {
   tools: ToolDescriptor[]
 }
+
+export interface RuntimeJobResponse {
+  id: string
+  kind: string
+  status: JobStatus
+  progress: number
+  message: string
+  created_at: string
+  updated_at: string
+}
