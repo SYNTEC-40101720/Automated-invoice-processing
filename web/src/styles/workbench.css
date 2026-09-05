@@ -1006,11 +1006,20 @@ h1 {
 .sidebar.is-collapsed .sidebar-nav-item,
 .sidebar.is-collapsed .sidebar-settings-btn {
   justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
   padding: 0;
 }
 
 .sidebar.is-collapsed .sidebar-nav-item.is-selected::before {
   display: none;
+}
+
+.sidebar.is-collapsed .sidebar-nav-icon {
+  width: 20px;
+  height: 20px;
+  flex-basis: 20px;
 }
 
 .sidebar.is-collapsed .sidebar-foot {
