@@ -8,7 +8,6 @@ from devbase.api.schemas import (
     snapshot_response,
 )
 from devbase.application.job_runtime import JobRuntime
-from devbase.application.task import TaskNotFoundError
 
 router = APIRouter(
     prefix="/jobs",

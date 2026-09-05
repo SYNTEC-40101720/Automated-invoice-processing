@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends
 
 from devbase.api.dependencies import get_runtime, require_local_token
 from devbase.api.schemas import (
-    ToolDescriptorResponse,
     ToolListResponse,
     tool_descriptor_response,
 )

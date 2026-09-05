@@ -11,7 +11,6 @@ the executable; otherwise it is relative to the project root.
 from __future__ import annotations
 
 import logging
-import os
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path

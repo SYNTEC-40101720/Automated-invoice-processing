@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from invoice_processor.application.email_poller import EmailPoller
-from invoice_processor.domain.job import JobTrigger
 
 
 def test_disabled_email_poller_does_not_connect(monkeypatch):
