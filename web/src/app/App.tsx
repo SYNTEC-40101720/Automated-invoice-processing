@@ -52,8 +52,8 @@ export function App() {
   const toolsQuery = useQuery({ queryKey: ['tools'], queryFn: api.tools, retry: false })
 
   useEffect(() => {
-    setSelectedTool('invoice_processing')
-    setView('processing')
+    setSelectedTool(null)
+    setView('inbox')
   }, [setSelectedTool, setView])
 
   useEffect(() => {
