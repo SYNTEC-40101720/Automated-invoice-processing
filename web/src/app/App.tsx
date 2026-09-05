@@ -251,7 +251,7 @@ export function App() {
 
   return <div
     className={`workbench-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}
-    style={{ gridTemplateColumns: `${activeSidebarWidth}px minmax(0, 1fr)` }}
+    style={{ '--sidebar-width': `${activeSidebarWidth}px` } as React.CSSProperties}
     data-dragging={draggingSidebar || undefined}
   >
     <Sidebar

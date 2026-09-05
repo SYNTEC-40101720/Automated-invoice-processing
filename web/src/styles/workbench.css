@@ -688,7 +688,7 @@ h1 {
 /* DevBase shell alignment while business feature views remain project-owned. */
 .workbench-shell {
   position: relative;
-  grid-template-columns: 236px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width, 236px) minmax(0, 1fr) !important;
   transition: grid-template-columns 180ms ease;
 }
 
@@ -698,7 +698,7 @@ h1 {
 }
 
 .workbench-shell.sidebar-collapsed {
-  grid-template-columns: 56px minmax(0, 1fr);
+  grid-template-columns: 56px minmax(0, 1fr) !important;
 }
 
 .workbench-shell.sidebar-collapsed .side-bar {
@@ -773,6 +773,256 @@ h1 {
 .sidebar-primary-item .sidebar-primary-icon,
 .sidebar-primary-item.is-active .sidebar-primary-icon {
   color: currentColor;
+}
+
+/* DevBase navigation hierarchy: workbench, registered tools, business extensions, settings. */
+.side-bar.sidebar {
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+.sidebar.is-collapsed {
+  align-items: center;
+  padding: 12px 10px;
+}
+
+.sidebar-brand-row {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: 52px;
+  margin-bottom: 8px;
+  padding: 8px 0 8px 4px;
+  overflow: hidden;
+}
+
+.sidebar-brand {
+  display: inline-flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 9px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sidebar-brand-mark {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  color: var(--text);
+  background: var(--button-bg);
+  font: 600 14px "Segoe UI Variable", "Microsoft YaHei UI", sans-serif;
+}
+
+.sidebar-brand-name {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-toggle {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+}
+
+.sidebar-toggle:hover {
+  background: var(--hover-bg);
+  color: var(--text);
+}
+
+.sidebar.is-collapsed .sidebar-brand-row {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  margin: 0 auto 12px;
+  padding: 0;
+  justify-content: center;
+}
+
+.sidebar.is-collapsed .sidebar-brand-mark,
+.sidebar.is-collapsed .sidebar-toggle-rail {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.sidebar.is-collapsed .sidebar-toggle-rail {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sidebar.is-collapsed .sidebar-brand-row:hover .sidebar-brand-mark {
+  opacity: 0;
+}
+
+.sidebar.is-collapsed .sidebar-brand-row:hover .sidebar-toggle-rail {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sidebar-region {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.sidebar-region::-webkit-scrollbar {
+  display: none;
+}
+
+.sidebar-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sidebar-nav-item {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.sidebar-nav-item:hover {
+  background: var(--hover-bg);
+  color: var(--text);
+}
+
+.sidebar-nav-item.is-selected {
+  background: var(--active-bg);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.sidebar-nav-item.is-selected::before {
+  position: absolute;
+  top: 9px;
+  bottom: 9px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--blue);
+  content: "";
+}
+
+.sidebar-nav-icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  place-items: center;
+  color: currentColor;
+}
+
+.sidebar-nav-text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-nav-title,
+.sidebar-nav-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-nav-title {
+  font-size: 12px;
+}
+
+.sidebar-nav-sub {
+  color: var(--text-subtle);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.sidebar-foot {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 12px;
+}
+
+.sidebar-settings-btn {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.sidebar-settings-btn:hover,
+.sidebar-settings-btn.is-active {
+  background: var(--hover-bg);
+  color: var(--text);
+}
+
+.sidebar-settings-label {
+  font-size: 12px;
+}
+
+.sidebar-version {
+  padding: 0 9px;
+  color: var(--text-subtle);
+  font: 10px "Cascadia Code", monospace;
+}
+
+.sidebar.is-collapsed .sidebar-nav-item,
+.sidebar.is-collapsed .sidebar-settings-btn {
+  justify-content: center;
+  padding: 0;
+}
+
+.sidebar.is-collapsed .sidebar-nav-item.is-selected::before {
+  top: 8px;
+  bottom: 8px;
+}
+
+.sidebar.is-collapsed .sidebar-foot {
+  width: 36px;
 }
 
 :root[data-theme="dark"] .side-bar,

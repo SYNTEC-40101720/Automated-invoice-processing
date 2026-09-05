@@ -9,10 +9,12 @@ interface WorkbenchState {
   currentJob: Job | null
   logs: LogEntry[]
   activeView: WorkbenchView
+  selectedTool: string | null
   settingsSection: SettingsSection
   setConnected: (connected: boolean) => void
   setJob: (job: Job | null) => void
   setView: (view: WorkbenchView) => void
+  setSelectedTool: (kind: string | null) => void
   setSettingsSection: (section: SettingsSection) => void
   appendEvent: (event: DomainEvent) => void
   setLogs: (logs: LogEntry[]) => void
@@ -25,10 +27,12 @@ export const useWorkbench = create<WorkbenchState>((set) => ({
   currentJob: null,
   logs: [],
   activeView: 'processing',
+  selectedTool: null,
   settingsSection: 'business',
   setConnected: (connected) => set({ connected }),
   setJob: (currentJob) => set({ currentJob }),
   setView: (activeView) => set({ activeView }),
+  setSelectedTool: (selectedTool) => set({ selectedTool }),
   setSettingsSection: (settingsSection) => set({ settingsSection }),
   appendEvent: (event) => set((state) => {
     if (event.type === 'job.snapshot') {

@@ -1,4 +1,4 @@
-import { FileCheck2, Inbox, PanelLeft, ScanSearch, Settings } from 'lucide-react'
+import { ArrowRight, FileCheck2, Inbox, LayoutGrid, PanelLeft, ScanSearch, Settings } from 'lucide-react'
 import type { PointerEventHandler, ReactNode } from 'react'
 import type { ToolDescriptor } from '../api/types'
 import type { WorkbenchView } from '../stores/workbench'
@@ -14,78 +14,181 @@ interface SidebarProps {
   onDragStart: PointerEventHandler<HTMLDivElement>
 }
 
-type PrimaryView = Exclude<WorkbenchView, 'settings'>
+interface NavigationItem {
+  id: WorkbenchView
+  label: string
+  subtitle: string
+  icon: ReactNode
+}
 
-const mainItems: { id: PrimaryView; label: string; icon: ReactNode }[] = [
-  { id: 'processing', label: '处理工作台', icon: <FileCheck2 size={16} /> },
-  { id: 'inbox', label: '发票收件箱', icon: <Inbox size={16} /> },
-  { id: 'audit', label: '审核中心', icon: <ScanSearch size={16} /> },
+const businessItems: NavigationItem[] = [
+  {
+    id: 'inbox',
+    label: '发票收件箱',
+    subtitle: '邮箱与附件',
+    icon: <Inbox size={18} strokeWidth={1.6} />,
+  },
+  {
+    id: 'audit',
+    label: '审核中心',
+    subtitle: '异常与核验',
+    icon: <ScanSearch size={18} strokeWidth={1.6} />,
+  },
 ]
 
-export function Sidebar({ activeView, version, sidebarCollapsed, onToggleCollapsed, tools, sidebarWidth, onDragStart }: SidebarProps) {
+export function Sidebar({
+  activeView,
+  version,
+  sidebarCollapsed,
+  onToggleCollapsed,
+  tools,
+  sidebarWidth,
+  onDragStart,
+}: SidebarProps) {
   const setView = useWorkbench((state) => state.setView)
+  const selectedTool = useWorkbench((state) => state.selectedTool)
+  const setSelectedTool = useWorkbench((state) => state.setSelectedTool)
   const invoiceTool = tools.find((tool) => tool.kind === 'invoice_processing')
-  const items = mainItems.map((item) => (
-    item.id === 'processing' && invoiceTool
-      ? { ...item, label: invoiceTool.title }
-      : item
-  ))
+
+  const openWorkbench = () => {
+    setSelectedTool(null)
+    setView('processing')
+  }
+
+  const openInvoiceTool = () => {
+    setSelectedTool('invoice_processing')
+    setView('processing')
+  }
+
+  const openBusinessView = (view: WorkbenchView) => {
+    setSelectedTool(null)
+    setView(view)
+  }
 
   return (
     <>
-    <aside className="side-bar">
-      <div className="sidebar-brand-row">
-        <div className="brand-mark" aria-label="SYNTEC">S</div>
-        {!sidebarCollapsed && <span className="sidebar-brand-name">SYNTEC</span>}
-        <button
-          className="icon-button sidebar-toolbar-button"
-          title={sidebarCollapsed ? '展开侧栏' : '收起侧栏'}
-          aria-label={sidebarCollapsed ? '展开侧栏' : '收起侧栏'}
-          onClick={onToggleCollapsed}
-        >
-          <PanelLeft size={15} />
-        </button>
-      </div>
-      <nav className="sidebar-primary-nav" aria-label="主导航">
-        {items.map((item) => (
+      <aside className={`side-bar sidebar${sidebarCollapsed ? ' is-collapsed' : ''}`}>
+        <div className="sidebar-brand-row">
+          {!sidebarCollapsed && (
+            <button type="button" className="sidebar-brand" title="SYNTEC" onClick={openWorkbench}>
+              <span className="sidebar-brand-mark">S</span>
+              <span className="sidebar-brand-name">SYNTEC</span>
+            </button>
+          )}
+          {sidebarCollapsed && (
+            <>
+              <span className="sidebar-brand-mark" title="SYNTEC">S</span>
+              <button
+                type="button"
+                className="sidebar-toggle sidebar-toggle-rail"
+                aria-label="展开侧栏"
+                title="展开侧栏"
+                onClick={onToggleCollapsed}
+              >
+                <ArrowRight size={18} strokeWidth={1.6} />
+              </button>
+            </>
+          )}
+          {!sidebarCollapsed && (
+            <button
+              type="button"
+              className="sidebar-toggle"
+              aria-label="收起侧栏"
+              title="收起侧栏"
+              onClick={onToggleCollapsed}
+            >
+              <PanelLeft size={16} strokeWidth={1.6} />
+            </button>
+          )}
+        </div>
+
+        <div className="sidebar-region" role="navigation">
+          <ul className="sidebar-nav-list">
+            <li>
+              <button
+                type="button"
+                className={`sidebar-nav-item${activeView === 'processing' && selectedTool === null ? ' is-selected' : ''}`}
+                title="工作台"
+                aria-label="工作台"
+                aria-current={activeView === 'processing' && selectedTool === null ? 'page' : undefined}
+                onClick={openWorkbench}
+              >
+                <span className="sidebar-nav-icon"><LayoutGrid size={18} strokeWidth={1.6} /></span>
+                {!sidebarCollapsed && (
+                  <span className="sidebar-nav-text">
+                    <span className="sidebar-nav-title">工作台</span>
+                    <span className="sidebar-nav-sub">{invoiceTool?.title ?? '起始页'}</span>
+                  </span>
+                )}
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                className={`sidebar-nav-item${activeView === 'processing' && selectedTool === 'invoice_processing' ? ' is-selected' : ''}`}
+                title={invoiceTool?.title ?? '发票处理'}
+                aria-label={invoiceTool?.title ?? '发票处理'}
+                aria-current={activeView === 'processing' && selectedTool === 'invoice_processing' ? 'page' : undefined}
+                onClick={openInvoiceTool}
+              >
+                <span className="sidebar-nav-icon"><FileCheck2 size={18} strokeWidth={1.6} /></span>
+                {!sidebarCollapsed && (
+                  <span className="sidebar-nav-text">
+                    <span className="sidebar-nav-title">{invoiceTool?.title ?? '发票处理'}</span>
+                    <span className="sidebar-nav-sub">{invoiceTool?.subtitle ?? '扫描与归档'}</span>
+                  </span>
+                )}
+              </button>
+            </li>
+            {businessItems.map((item) => (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  className={`sidebar-nav-item${activeView === item.id ? ' is-selected' : ''}`}
+                  title={item.label}
+                  aria-label={item.label}
+                  aria-current={activeView === item.id ? 'page' : undefined}
+                  onClick={() => openBusinessView(item.id)}
+                >
+                  <span className="sidebar-nav-icon">{item.icon}</span>
+                  {!sidebarCollapsed && (
+                    <span className="sidebar-nav-text">
+                      <span className="sidebar-nav-title">{item.label}</span>
+                      <span className="sidebar-nav-sub">{item.subtitle}</span>
+                    </span>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="sidebar-foot">
           <button
-            key={item.id}
-            className={`sidebar-primary-item ${activeView === item.id ? 'is-active' : ''}`}
-            title={item.label}
-            aria-label={item.label}
-            onClick={() => setView(item.id)}
-            aria-current={activeView === item.id ? 'page' : undefined}
+            type="button"
+            className={`sidebar-settings-btn${activeView === 'settings' ? ' is-active' : ''}`}
+            title="设置"
+            aria-label="设置"
+            aria-current={activeView === 'settings' ? 'page' : undefined}
+            onClick={() => {
+              setSelectedTool(null)
+              setView('settings')
+            }}
           >
-            <span className="sidebar-primary-icon">{item.icon}</span>
-            {!sidebarCollapsed && <span>{item.label}</span>}
+            <Settings size={sidebarCollapsed ? 18 : 16} strokeWidth={1.6} />
+            {!sidebarCollapsed && <span className="sidebar-settings-label">设置</span>}
           </button>
-        ))}
-      </nav>
-      <div className="sidebar-footer">
-        <div className="sidebar-footer-avatar">S</div>
-        {!sidebarCollapsed && <div className="sidebar-footer-copy">
-          <strong>SYNTEC</strong>
-          <span>本地模式 · v{version ?? '--'}</span>
-        </div>}
-        <button
-          className={`icon-button sidebar-toolbar-button ${activeView === 'settings' ? 'is-active' : ''}`}
-          title={activeView === 'settings' ? '当前设置' : '打开设置'}
-          aria-label={activeView === 'settings' ? '当前设置' : '打开设置'}
-          aria-current={activeView === 'settings' ? 'page' : undefined}
-          onClick={() => setView('settings')}
-        >
-          <Settings size={15} />
-        </button>
-      </div>
-    </aside>
-    {!sidebarCollapsed && (
-      <div
-        className="sidebar-drag-handle"
-        style={{ left: sidebarWidth - 4 }}
-        onPointerDown={onDragStart}
-        aria-hidden="true"
-      />
-    )}
+          {!sidebarCollapsed && <span className="sidebar-version">本地模式 · v{version ?? '--'}</span>}
+        </div>
+      </aside>
+      {!sidebarCollapsed && (
+        <div
+          className="sidebar-drag-handle"
+          style={{ left: sidebarWidth - 4 }}
+          onPointerDown={onDragStart}
+          aria-hidden="true"
+        />
+      )}
     </>
   )
 }
