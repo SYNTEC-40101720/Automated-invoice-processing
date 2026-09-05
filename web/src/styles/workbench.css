@@ -1183,3 +1183,107 @@ body {
   border-color: var(--line-strong);
   background: var(--accent-soft);
 }
+
+/* Keep legacy invoice feature rules readable when the DevBase dark theme is active. */
+:root[data-theme="dark"] body {
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+:root[data-theme="dark"] .side-bar,
+:root[data-theme="dark"] .side-bar.sidebar {
+  background: var(--surface);
+  border-right-color: var(--line);
+}
+
+:root[data-theme="dark"] .main-column,
+:root[data-theme="dark"] .view-scroll {
+  background: var(--canvas);
+}
+
+:root[data-theme="dark"] .view-header h1,
+:root[data-theme="dark"] .source-copy strong,
+:root[data-theme="dark"] .metric-card strong,
+:root[data-theme="dark"] .section-heading strong,
+:root[data-theme="dark"] .sidebar-brand-name,
+:root[data-theme="dark"] .sidebar-footer-copy strong,
+:root[data-theme="dark"] .panel-tab.active,
+:root[data-theme="dark"] .panel-tab:hover {
+  color: var(--ink);
+}
+
+:root[data-theme="dark"] .view-header p,
+:root[data-theme="dark"] .metric-card span,
+:root[data-theme="dark"] .progress-meta,
+:root[data-theme="dark"] .panel-content,
+:root[data-theme="dark"] .panel-tab,
+:root[data-theme="dark"] .field-label,
+:root[data-theme="dark"] .sidebar-footer-copy span,
+:root[data-theme="dark"] .eyebrow {
+  color: var(--ink-soft);
+}
+
+:root[data-theme="dark"] .source-strip,
+:root[data-theme="dark"] .progress-section,
+:root[data-theme="dark"] .result-strip,
+:root[data-theme="dark"] .metric-card,
+:root[data-theme="dark"] .feature-section,
+:root[data-theme="dark"] .settings-card {
+  border-color: var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+:root[data-theme="dark"] .state-badge,
+:root[data-theme="dark"] .source-icon,
+:root[data-theme="dark"] .secondary-button,
+:root[data-theme="dark"] .settings-fields input:not([type="checkbox"]),
+:root[data-theme="dark"] .settings-fields textarea {
+  border-color: var(--line-strong);
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+
+:root[data-theme="dark"] .state-badge,
+:root[data-theme="dark"] .source-icon {
+  color: var(--ink-soft);
+}
+
+:root[data-theme="dark"] .secondary-button:hover,
+:root[data-theme="dark"] .sidebar-toolbar-button:hover {
+  background: var(--surface-sunken);
+  color: var(--ink);
+}
+
+:root[data-theme="dark"] .primary-button {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+:root[data-theme="dark"] .primary-button:hover {
+  background: var(--accent-hover);
+}
+
+:root[data-theme="dark"] .progress-track {
+  background: var(--line-strong);
+}
+
+:root[data-theme="dark"] .progress-fill {
+  background: var(--accent);
+}
+
+:root[data-theme="dark"] .bottom-panel {
+  border-top-color: var(--line);
+  background: var(--surface-raised);
+}
+
+:root[data-theme="dark"] .panel-tabs {
+  border-bottom-color: var(--line);
+}
+
+:root[data-theme="dark"] .status-bar {
+  border-top-color: var(--line);
+  background: var(--surface);
+  color: var(--muted);
+}
