@@ -6,7 +6,6 @@ import { useWorkbench } from '../stores/workbench'
 
 interface SidebarProps {
   activeView: WorkbenchView
-  version: string | null
   sidebarCollapsed: boolean
   onToggleCollapsed: () => void
   tools: ToolDescriptor[]
@@ -38,7 +37,6 @@ const businessItems: NavigationItem[] = [
 
 export function Sidebar({
   activeView,
-  version,
   sidebarCollapsed,
   onToggleCollapsed,
   tools,
@@ -178,7 +176,6 @@ export function Sidebar({
             <Settings size={sidebarCollapsed ? 18 : 16} strokeWidth={1.6} />
             {!sidebarCollapsed && <span className="sidebar-settings-label">设置</span>}
           </button>
-          {!sidebarCollapsed && <span className="sidebar-version">本地模式 · v{version ?? '--'}</span>}
         </div>
       </aside>
       {!sidebarCollapsed && (

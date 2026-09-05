@@ -256,7 +256,6 @@ export function App() {
   >
     <Sidebar
       activeView={activeView}
-      version={healthQuery.data?.version ?? null}
       sidebarCollapsed={sidebarCollapsed}
       onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
       tools={toolsQuery.data?.tools ?? []}

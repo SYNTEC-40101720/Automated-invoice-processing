@@ -1000,12 +1000,6 @@ h1 {
   font-size: 12px;
 }
 
-.sidebar-version {
-  padding: 0 9px;
-  color: var(--text-subtle);
-  font: 10px "Cascadia Code", monospace;
-}
-
 .sidebar.is-collapsed .sidebar-nav-item,
 .sidebar.is-collapsed .sidebar-settings-btn {
   justify-content: center;
