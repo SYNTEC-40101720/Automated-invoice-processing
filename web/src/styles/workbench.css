@@ -1036,5 +1036,117 @@ h1 {
 
 :root[data-theme="dark"] .brand-mark {
   color: var(--text);
-  background: #30373d;
+  background: var(--surface-fill);
+}
+
+/* Zy-DevBase v0.3.3 Fluent palette overrides for the invoice features. */
+body {
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+.workbench-shell {
+  background: var(--canvas);
+}
+
+.side-bar.sidebar {
+  background: var(--surface);
+  border-right-color: var(--line);
+}
+
+.main-column,
+.view-scroll {
+  background: var(--canvas);
+}
+
+.status-bar {
+  background: var(--surface);
+  border-top-color: var(--line);
+  color: var(--muted);
+}
+
+.sidebar-brand-mark {
+  border-color: var(--line-strong);
+  color: var(--ink);
+  background: var(--surface-raised);
+}
+
+.sidebar-toggle:hover,
+.sidebar-nav-item:hover,
+.sidebar-settings-btn:hover {
+  background: var(--surface-sunken);
+}
+
+.sidebar-nav-item.is-selected,
+.sidebar-settings-btn.is-active {
+  background: var(--surface-fill);
+}
+
+.sidebar-nav-item.is-selected .sidebar-nav-icon {
+  color: var(--accent);
+}
+
+.sidebar-nav-item.is-selected .sidebar-nav-title {
+  color: var(--accent-ink);
+}
+
+.sidebar-drag-handle:hover {
+  background: var(--accent);
+}
+
+.source-strip,
+.progress-section,
+.result-strip,
+.feature-section,
+.settings-card,
+.metric-card {
+  border-color: var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.secondary-button {
+  border-color: var(--line-strong);
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+
+.secondary-button:hover {
+  background: var(--surface-sunken);
+}
+
+.primary-button {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.primary-button:hover {
+  background: var(--accent-hover);
+}
+
+.danger-button {
+  border-color: var(--rose);
+  background: var(--rose-soft);
+  color: var(--rose);
+}
+
+.progress-fill,
+.update-progress-fill {
+  background: var(--accent);
+}
+
+.bottom-panel {
+  border-top-color: var(--line);
+  background: var(--surface-raised);
+}
+
+.update-banner {
+  border-bottom-color: var(--line);
+  background: var(--accent-soft);
+}
+
+.update-progress-panel {
+  border-color: var(--line-strong);
+  background: var(--accent-soft);
 }
