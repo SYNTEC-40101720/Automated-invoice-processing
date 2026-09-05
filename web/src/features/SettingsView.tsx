@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bot, Download, ExternalLink, KeyRound, LoaderCircle, Mail, Monitor, Moon, RefreshCw, Save, ShieldCheck, Sun } from 'lucide-react'
+import { Bot, Download, ExternalLink, KeyRound, LayoutGrid, LoaderCircle, Mail, Monitor, Moon, RefreshCw, Save, ShieldCheck, Sun } from 'lucide-react'
 import { api } from '../api/client'
 import type { SettingsResponse, UpdateApplyResponse, UpdateProgress, UpdateResponse } from '../api/types'
 import type { SettingsSection } from '../stores/workbench'
@@ -20,6 +20,12 @@ export type ThemeMode = 'system' | 'light' | 'dark'
 const DEFAULT_RELEASE_URL = 'https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/latest'
 
 const settingsSectionMeta: Record<SettingsSection, { label: string; eyebrow: string; description: string; icon: React.ReactNode }> = {
+  devbase: {
+    label: 'DevBase 基础',
+    eyebrow: 'DEVBASE / SETTINGS',
+    description: '管理工作台外观、运行版本和基础框架能力。',
+    icon: <LayoutGrid size={17} />,
+  },
   business: {
     label: '业务规则',
     eyebrow: 'WORKBENCH / SETTINGS / BUSINESS',
@@ -38,14 +44,8 @@ const settingsSectionMeta: Record<SettingsSection, { label: string; eyebrow: str
     description: '配置智能审核服务，并在保存前测试接口连通性。',
     icon: <Bot size={17} />,
   },
-  updates: {
-    label: '软件更新',
-    eyebrow: 'WORKBENCH / SETTINGS / UPDATES',
-    description: '检查当前版本，并在有可用版本时执行更新。',
-    icon: <RefreshCw size={17} />,
-  },
 }
-const settingsSectionOrder: SettingsSection[] = ['business', 'email', 'ai', 'updates']
+const invoiceSettingsOrder: SettingsSection[] = ['business', 'email', 'ai']
 
 export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate, theme, onThemeChange }: SettingsViewProps) {
   const queryClient = useQueryClient()
@@ -166,18 +166,32 @@ export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate, th
   return <div className="editor-view feature-view">
     <div className="view-scroll feature-scroll settings-scroll">
       <nav className="settings-subnav" aria-label="设置分类">
-        {settingsSectionOrder.map((sectionId) => {
-          const item = settingsSectionMeta[sectionId]
-          return <button
-            key={sectionId}
-            className={settingsSection === sectionId ? 'is-active' : ''}
-            onClick={() => setSettingsSection(sectionId)}
-            aria-current={settingsSection === sectionId ? 'page' : undefined}
+        <div className="settings-subnav-group">
+          <span className="settings-subnav-label">DevBase</span>
+          <button
+            className={settingsSection === 'devbase' ? 'is-active' : ''}
+            onClick={() => setSettingsSection('devbase')}
+            aria-current={settingsSection === 'devbase' ? 'page' : undefined}
           >
-            {item.icon}
-            <span>{item.label}</span>
+            {settingsSectionMeta.devbase.icon}
+            <span>基础设置</span>
           </button>
-        })}
+        </div>
+        <div className="settings-subnav-group settings-subnav-group-invoice">
+          <span className="settings-subnav-label">发票业务</span>
+          {invoiceSettingsOrder.map((sectionId) => {
+            const item = settingsSectionMeta[sectionId]
+            return <button
+              key={sectionId}
+              className={settingsSection === sectionId ? 'is-active' : ''}
+              onClick={() => setSettingsSection(sectionId)}
+              aria-current={settingsSection === sectionId ? 'page' : undefined}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </button>
+          })}
+        </div>
       </nav>
       <header className="view-header feature-header">
         <div>
@@ -185,33 +199,68 @@ export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate, th
           <h1>{section.label}</h1>
           <p>{section.description}</p>
         </div>
-        {settingsSection !== 'updates' && (
+        {settingsSection !== 'devbase' && (
           <button className="primary-button" onClick={() => save.mutate()} disabled={save.isPending}>
             <Save size={15} /> {save.isPending ? '保存中' : '保存配置'}
           </button>
         )}
       </header>
       {message && <div className={`feedback ${message.includes('失败') || message.includes('错误') ? 'error' : 'success'}`}>{message}</div>}
-      <SettingsCard icon={<Sun size={17} />} title="外观">
-        <div className="theme-options" role="radiogroup" aria-label="主题模式">
-          {([
-            ['system', '跟随系统', <Monitor size={14} />],
-            ['light', '浅色', <Sun size={14} />],
-            ['dark', '暗色', <Moon size={14} />],
-          ] as const).map(([value, label, icon]) => (
-            <button
-              key={value}
-              type="button"
-              className={`theme-option ${theme === value ? 'is-active' : ''}`}
-              role="radio"
-              aria-checked={theme === value}
-              onClick={() => onThemeChange(value)}
-            >
-              {icon}<span>{label}</span>
-            </button>
-          ))}
-        </div>
-      </SettingsCard>
+      {settingsSection === 'devbase' && <div className="settings-panel-stack">
+        <SettingsCard icon={<Sun size={17} />} title="外观">
+          <div className="theme-options" role="radiogroup" aria-label="主题模式">
+            {([
+              ['system', '跟随系统', <Monitor size={14} />],
+              ['light', '浅色', <Sun size={14} />],
+              ['dark', '暗色', <Moon size={14} />],
+            ] as const).map(([value, label, icon]) => (
+              <button
+                key={value}
+                type="button"
+                className={`theme-option ${theme === value ? 'is-active' : ''}`}
+                role="radio"
+                aria-checked={theme === value}
+                onClick={() => onThemeChange(value)}
+              >
+                {icon}<span>{label}</span>
+              </button>
+            ))}
+          </div>
+        </SettingsCard>
+
+        <SettingsCard icon={<LayoutGrid size={17} />} title="关于 DevBase">
+          <div className="settings-about-grid">
+            <div><span className="field-label">名称</span><strong>SYNTEC Invoice Workbench</strong></div>
+            <div><span className="field-label">基础版本</span><strong>DevBase 0.3.3</strong></div>
+            <div><span className="field-label">技术栈</span><strong>Python · FastAPI · React · Vite</strong></div>
+          </div>
+        </SettingsCard>
+
+        <SettingsCard icon={<RefreshCw size={17} />} title="软件更新">
+          <div className="update-settings">
+            <div className="update-version">
+              <span className="field-label">当前版本</span>
+              <strong>v{update?.current_version ?? version ?? '--'}</strong>
+              {update?.available && <span className="update-available">发现 v{update.latest_version ?? '--'}</span>}
+            </div>
+            <div className="update-actions">
+              <button className="secondary-button" onClick={() => void checkUpdate()} disabled={checkingUpdate || applyingUpdate}>
+                <RefreshCw size={14} className={checkingUpdate ? 'spin' : ''} /> {checkingUpdate ? '检查中' : '检查更新'}
+              </button>
+              {update?.available && update.installable && <button className="primary-button" onClick={() => void applyUpdate()} disabled={checkingUpdate || applyingUpdate}>
+                <Download size={14} className={applyingUpdate ? 'spin' : ''} /> {applyingUpdate ? '下载并安装中' : '立即更新'}
+              </button>}
+            </div>
+            <a className="update-release-link" href={update?.release_url ?? DEFAULT_RELEASE_URL} target="_blank" rel="noopener noreferrer">
+              <span>打开 Release 页面</span>
+              <ExternalLink size={13} />
+            </a>
+            {applyingUpdate && updateProgressQuery.data && <UpdateProgressPanel progress={updateProgressQuery.data} />}
+            <p className="update-message">{updateMessage || '检测到新版本后，可由程序自动下载、替换并重启。'}</p>
+            {update?.available && !update.installable && <p className="update-message warning">请在该 Release 上传 SYNTEC ZIP 打包文件。</p>}
+          </div>
+        </SettingsCard>
+      </div>}
       <section className="settings-panel-shell">
         {settingsSection === 'business' && <SettingsCard icon={section.icon} title={section.label}>
           <label>购买方税号<input value={settings.business.target_tax_id} onChange={(event) => setSettings({ ...settings, business: { ...settings.business, target_tax_id: event.target.value } })} /></label>
@@ -237,30 +286,6 @@ export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate, th
           <div className="settings-action-row">
             <button className="secondary-button" onClick={() => testAi.mutate()} disabled={testAi.isPending}><KeyRound size={14} /> {testAi.isPending ? '测试中' : '测试连接'}</button>
             {aiTestMessage && <p className={`settings-test-message ${testAi.isError ? 'error' : 'success'}`}>{aiTestMessage}</p>}
-          </div>
-        </SettingsCard>}
-        {settingsSection === 'updates' && <SettingsCard icon={section.icon} title={section.label}>
-          <div className="update-settings">
-            <div className="update-version">
-              <span className="field-label">当前版本</span>
-              <strong>v{update?.current_version ?? version ?? '--'}</strong>
-              {update?.available && <span className="update-available">发现 v{update.latest_version ?? '--'}</span>}
-            </div>
-            <div className="update-actions">
-              <button className="secondary-button" onClick={() => void checkUpdate()} disabled={checkingUpdate || applyingUpdate}>
-                <RefreshCw size={14} className={checkingUpdate ? 'spin' : ''} /> {checkingUpdate ? '检查中' : '检查更新'}
-              </button>
-              {update?.available && update.installable && <button className="primary-button" onClick={() => void applyUpdate()} disabled={checkingUpdate || applyingUpdate}>
-                <Download size={14} className={applyingUpdate ? 'spin' : ''} /> {applyingUpdate ? '下载并安装中' : '立即更新'}
-              </button>}
-            </div>
-            <a className="update-release-link" href={update?.release_url ?? DEFAULT_RELEASE_URL} target="_blank" rel="noopener noreferrer">
-              <span>打开 Release 页面</span>
-              <ExternalLink size={13} />
-            </a>
-            {applyingUpdate && updateProgressQuery.data && <UpdateProgressPanel progress={updateProgressQuery.data} />}
-            <p className="update-message">{updateMessage || '检测到新版本后，可由程序自动下载、替换并重启。'}</p>
-            {update?.available && !update.installable && <p className="update-message warning">请在该 Release 上传 SYNTEC ZIP 打包文件。</p>}
           </div>
         </SettingsCard>}
       </section>

@@ -127,9 +127,62 @@ h1 { margin: 10px 0 8px; color: var(--text); font-size: 30px; font-weight: 600; 
 .settings-subnav button:hover, .settings-subnav button.is-active { border-bottom-color: var(--teal); color: var(--text); }
 .settings-subnav button.is-active { font-weight: 600; }
 
+.settings-subnav {
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.settings-subnav-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.settings-subnav-group-invoice {
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+}
+
+.settings-subnav-label {
+  margin-right: 2px;
+  color: var(--text-subtle);
+  font: 10px "Cascadia Code", monospace;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.settings-panel-stack {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  max-width: 820px;
+  margin: 0 auto 14px;
+}
+
+.settings-about-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.settings-about-grid > div {
+  min-width: 0;
+}
+
+.settings-about-grid strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 760px) {
   .settings-subnav { justify-content: flex-start; max-width: none; margin: 0 0 20px; }
   .settings-panel-shell { max-width: none; }
+  .settings-about-grid { grid-template-columns: 1fr; }
 }
 
 body {
