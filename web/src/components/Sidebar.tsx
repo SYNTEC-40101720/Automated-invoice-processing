@@ -23,12 +23,6 @@ interface NavigationItem {
 
 const businessItems: NavigationItem[] = [
   {
-    id: 'inbox',
-    label: '发票收件箱',
-    subtitle: '邮箱与附件',
-    icon: <Inbox size={18} strokeWidth={1.6} />,
-  },
-  {
     id: 'audit',
     label: '审核中心',
     subtitle: '异常与核验',
@@ -97,6 +91,24 @@ export function Sidebar({
 
         <div className="sidebar-region" role="navigation">
           <ul className="sidebar-nav-list">
+            <li>
+              <button
+                type="button"
+                className={`sidebar-nav-item${activeView === 'inbox' ? ' is-selected' : ''}`}
+                title="发票收取"
+                aria-label="发票收取"
+                aria-current={activeView === 'inbox' ? 'page' : undefined}
+                onClick={() => openBusinessView('inbox')}
+              >
+                <span className="sidebar-nav-icon"><Inbox size={18} strokeWidth={1.6} /></span>
+                {!sidebarCollapsed && (
+                  <span className="sidebar-nav-text">
+                    <span className="sidebar-nav-title">发票收取</span>
+                    <span className="sidebar-nav-sub">邮箱与附件</span>
+                  </span>
+                )}
+              </button>
+            </li>
             <li>
               <button
                 type="button"
