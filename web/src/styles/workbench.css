@@ -928,14 +928,7 @@ h1 {
 }
 
 .sidebar-nav-item.is-selected::before {
-  position: absolute;
-  top: 9px;
-  bottom: 9px;
-  left: 0;
-  width: 3px;
-  border-radius: 0 3px 3px 0;
-  background: var(--blue);
-  content: "";
+  display: none;
 }
 
 .sidebar-nav-icon {
@@ -1017,8 +1010,7 @@ h1 {
 }
 
 .sidebar.is-collapsed .sidebar-nav-item.is-selected::before {
-  top: 8px;
-  bottom: 8px;
+  display: none;
 }
 
 .sidebar.is-collapsed .sidebar-foot {
