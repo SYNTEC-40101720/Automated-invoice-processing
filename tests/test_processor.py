@@ -9,7 +9,7 @@ import threading
 import pytest
 
 # 静态方法可直接测试，无需实例化
-from src.core.processor import _PREFIX_SUFFIX, InvoiceProcessor
+from invoice_processor.core.processor import _PREFIX_SUFFIX, InvoiceProcessor
 
 # ═══════════════════════════════════════════════════════════
 # 税号提取

@@ -22,8 +22,12 @@ import sys
 import tomllib
 from pathlib import Path
 
+BACKEND_DIR = Path(__file__).resolve().parent / "backend"
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
 from bump_version import update_files as sync_version_files
-from src.version import __version__
+from invoice_processor.version import __version__
 
 
 def bump_patch_version(version: str) -> str:
@@ -55,7 +59,7 @@ PYPROJECT_FILE = ROOT / "pyproject.toml"
 WEB_PACKAGE_FILE = ROOT / "web" / "package.json"
 WEB_LOCK_FILE = ROOT / "web" / "package-lock.json"
 MAIN_SCRIPT = ROOT / "main.py"
-UPDATER_SCRIPT = ROOT / "src" / "desktop" / "update_helper.py"
+UPDATER_SCRIPT = ROOT / "backend" / "invoice_processor" / "desktop" / "update_helper.py"
 WEB_DIR = ROOT / "web"
 WEB_DIST_DIR = WEB_DIR / "dist"
 DIST_DIR = ROOT / "dist"
@@ -247,6 +251,7 @@ def main():
         "--version-file", str(VERSION_FILE),
         "--noupx",               # 🔴 域控禁止 UPX 压缩
         "--clean",
+        "--paths", str(ROOT / "backend"),
         # 运行时窗口图标（复制到 bundle 根目录）
         "--add-data", f"logo.ico{os.pathsep}.",
         "--add-data", f"{WEB_DIST_DIR}{os.pathsep}web/dist",

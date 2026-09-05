@@ -50,6 +50,7 @@ class JobService:
         self._current_job_id: str | None = None
         self._cancel_events: dict[str, threading.Event] = {}
         self._threads: dict[str, threading.Thread] = {}
+        self._progress_callbacks: dict[str, Callable[[float, str], None]] = {}
         self._email_poller = EmailPoller(self.start_job)
 
     def start_background_tasks(self) -> None:
@@ -65,26 +66,7 @@ class JobService:
         source_dir: str,
         trigger: JobTrigger | str = JobTrigger.MANUAL,
     ) -> dict:
-        scanned = self.scan_directory(source_dir)
-        normalized = scanned['source_dir']
-        pdf_files = self._list_pdf_files(normalized)
-        if not pdf_files:
-            raise NoPdfFiles(normalized)
-
-        job = Job(
-            source_dir=normalized,
-            trigger=JobTrigger(trigger),
-        )
-        job.stats.total = len(pdf_files)
-        with self._lock:
-            if self._current_job_id:
-                current = self._jobs.get(self._current_job_id)
-                if current and not current.status.is_terminal:
-                    raise JobAlreadyRunning(current.id)
-            self._jobs[job.id] = job
-            self._current_job_id = job.id
-            self._cancel_events[job.id] = threading.Event()
-            snapshot = job.to_dict()
+        job, pdf_files, snapshot = self._prepare_job(source_dir, trigger)
 
         self._publish_snapshot(job)
         thread = threading.Thread(
@@ -98,6 +80,38 @@ class JobService:
         thread.start()
         return snapshot
 
+    def run_job_sync(
+        self,
+        source_dir: str,
+        trigger: JobTrigger | str = JobTrigger.MANUAL,
+        *,
+        job_id: str | None = None,
+        cancellation_event: threading.Event | None = None,
+        progress_callback: Callable[[float, str], None] | None = None,
+    ) -> dict:
+        """Run one invoice pipeline synchronously for a host runtime task.
+
+        DevBase owns the worker thread. This method only prepares the business
+        job and executes the existing pipeline in the caller's thread, so the
+        invoice service does not create a second task thread.
+        """
+        job, pdf_files, _snapshot = self._prepare_job(
+            source_dir,
+            trigger,
+            job_id=job_id,
+            cancellation_event=cancellation_event,
+        )
+        if progress_callback is not None:
+            with self._lock:
+                self._progress_callbacks[job.id] = progress_callback
+        self._publish_snapshot(job)
+        try:
+            self._run_job(job.id, pdf_files)
+        finally:
+            with self._lock:
+                self._progress_callbacks.pop(job.id, None)
+        return self.get_job(job.id)
+
     def scan_directory(self, source_dir: str) -> dict[str, str | int]:
         normalized = os.path.abspath(os.path.expanduser(source_dir))
         if not os.path.isdir(normalized) or not os.access(normalized, os.R_OK):
@@ -106,6 +120,43 @@ class JobService:
             'source_dir': normalized,
             'pdf_count': len(self._list_pdf_files(normalized)),
         }
+
+    def _prepare_job(
+        self,
+        source_dir: str,
+        trigger: JobTrigger | str,
+        *,
+        job_id: str | None = None,
+        cancellation_event: threading.Event | None = None,
+    ) -> tuple[Job, tuple[str, ...], dict]:
+        scanned = self.scan_directory(source_dir)
+        normalized = scanned['source_dir']
+        pdf_files = self._list_pdf_files(normalized)
+        if not pdf_files:
+            raise NoPdfFiles(normalized)
+
+        job_kwargs = {
+            'source_dir': normalized,
+            'trigger': JobTrigger(trigger),
+        }
+        if job_id is not None:
+            job_kwargs['id'] = job_id
+        job = Job(**job_kwargs)
+        job.stats.total = len(pdf_files)
+        with self._lock:
+            if self._current_job_id:
+                current = self._jobs.get(self._current_job_id)
+                if current and not current.status.is_terminal:
+                    raise JobAlreadyRunning(current.id)
+            self._jobs[job.id] = job
+            self._current_job_id = job.id
+            self._cancel_events[job.id] = (
+                cancellation_event
+                if cancellation_event is not None
+                else threading.Event()
+            )
+            snapshot = job.to_dict()
+        return job, tuple(pdf_files), snapshot
 
     def cancel_job(self, job_id: str) -> dict:
         with self._lock:
@@ -441,9 +492,16 @@ class JobService:
             job.set_progress(ratio)
             progress = job.progress
             phase = job.phase.value
+            message = job.message
+            callback = self._progress_callbacks.get(job.id)
         self.events.publish(
             'job.progress', {'progress': progress, 'phase': phase}, job.id
         )
+        if callback is not None:
+            try:
+                callback(progress, message)
+            except Exception:
+                logger.exception('外部进度回调失败: %s', job.id)
 
     def _publish_stats(self, job: Job) -> None:
         with self._lock:

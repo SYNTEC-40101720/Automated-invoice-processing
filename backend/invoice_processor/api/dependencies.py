@@ -4,11 +4,17 @@ from __future__ import annotations
 
 from fastapi import Header, HTTPException, Request, WebSocket
 
+from devbase.application.job_runtime import JobRuntime
+
 from ..application.job_service import JobService
 
 
 def get_job_service(request: Request) -> JobService:
     return request.app.state.job_service
+
+
+def get_devbase_runtime(request: Request) -> JobRuntime:
+    return request.app.state.devbase_runtime
 
 
 def _origin_is_allowed(app, origin: str | None, same_origin: str) -> bool:

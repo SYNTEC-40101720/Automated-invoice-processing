@@ -34,6 +34,7 @@ export function App() {
   })
   const settingsQuery = useQuery({ queryKey: ['settings'], queryFn: api.settings, retry: false })
   const currentJobQuery = useQuery({ queryKey: ['current-job'], queryFn: api.currentJob, retry: false })
+  const toolsQuery = useQuery({ queryKey: ['tools'], queryFn: api.tools, retry: false })
 
   useEffect(() => {
     if (currentJobQuery.data) {
@@ -189,6 +190,7 @@ export function App() {
       version={healthQuery.data?.version ?? null}
       sidebarCollapsed={sidebarCollapsed}
       onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
+      tools={toolsQuery.data?.tools ?? []}
     />
     <main className={`main-column ${updateQuery.data?.available ? 'has-update' : ''}`}>
       {updateQuery.data?.available && <UpdateBanner update={updateQuery.data} onOpenSettings={() => setView('settings')} />}

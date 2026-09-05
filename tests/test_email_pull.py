@@ -7,8 +7,8 @@ import os
 import zipfile
 from email.message import EmailMessage
 
-from src import config_manager
-from src.core.email_pull import (
+from invoice_processor import config_manager
+from invoice_processor.core.email_pull import (
     DEFAULT_KEYWORDS,
     DEFAULT_SENDERS,
     _decode,
@@ -143,7 +143,7 @@ def test_pull_invoices_passes_bounded_timeout_to_imap(monkeypatch, tmp_path):
         captured.update(host=host, port=port, timeout=timeout)
         return FakeMail()
 
-    monkeypatch.setattr('src.core.email_pull.imaplib.IMAP4_SSL', fake_imap)
+    monkeypatch.setattr('invoice_processor.core.email_pull.imaplib.IMAP4_SSL', fake_imap)
     result = pull_invoices(
         host='imap.example.com',
         port=993,

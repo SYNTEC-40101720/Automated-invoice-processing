@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from src.desktop.update_helper import (
+from invoice_processor.desktop.update_helper import (
     MAIN_EXECUTABLE_NAME,
     replace_install,
     wait_for_process_exit,
@@ -112,7 +112,7 @@ def test_replace_install_restores_old_install_when_new_move_fails(
 def test_wait_for_process_exit_stops_after_process_disappears(monkeypatch):
     states = iter((True, False))
     monkeypatch.setattr(
-        'src.desktop.update_helper.PROCESS_POLL_INTERVAL',
+        'invoice_processor.desktop.update_helper.PROCESS_POLL_INTERVAL',
         0,
     )
 
@@ -124,7 +124,7 @@ def test_wait_for_process_exit_stops_after_process_disappears(monkeypatch):
 
 
 def test_run_update_keeps_log_outside_install_directory(tmp_path, monkeypatch):
-    from src.desktop import update_helper
+    from invoice_processor.desktop import update_helper
 
     target_dir = tmp_path / 'installed'
     cleanup_dir = tmp_path / 'staging'
@@ -158,7 +158,7 @@ def test_run_update_keeps_log_outside_install_directory(tmp_path, monkeypatch):
 def test_run_update_commits_when_ready_file_exists_before_process_poll(
     tmp_path, monkeypatch
 ):
-    from src.desktop import update_helper
+    from invoice_processor.desktop import update_helper
 
     target_dir = tmp_path / 'installed'
     cleanup_dir = tmp_path / 'staging'
@@ -188,7 +188,7 @@ def test_run_update_commits_when_ready_file_exists_before_process_poll(
 def test_run_update_rolls_back_after_startup_confirmation_timeout(
     tmp_path, monkeypatch
 ):
-    from src.desktop import update_helper
+    from invoice_processor.desktop import update_helper
 
     target_dir = tmp_path / 'installed'
     cleanup_dir = tmp_path / 'staging'
@@ -239,7 +239,7 @@ def test_run_update_rolls_back_after_startup_confirmation_timeout(
 def test_run_update_kills_process_before_rollback_after_wait_timeout(
     tmp_path, monkeypatch
 ):
-    from src.desktop import update_helper
+    from invoice_processor.desktop import update_helper
 
     target_dir = tmp_path / 'installed'
     cleanup_dir = tmp_path / 'staging'
@@ -301,7 +301,7 @@ def test_run_update_kills_process_before_rollback_after_wait_timeout(
 
 
 def test_run_update_rolls_back_when_new_process_exits_early(tmp_path, monkeypatch):
-    from src.desktop import update_helper
+    from invoice_processor.desktop import update_helper
 
     target_dir = tmp_path / 'installed'
     cleanup_dir = tmp_path / 'staging'

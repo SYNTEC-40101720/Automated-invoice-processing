@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from src.application.email_poller import EmailPoller
-from src.domain.job import JobTrigger
+from invoice_processor.application.email_poller import EmailPoller
+from invoice_processor.domain.job import JobTrigger
 
 
 def test_disabled_email_poller_does_not_connect(monkeypatch):
     calls = []
-    monkeypatch.setattr('src.application.email_poller.get_email_enabled', lambda: False)
+    monkeypatch.setattr('invoice_processor.application.email_poller.get_email_enabled', lambda: False)
     monkeypatch.setattr(
-        'src.application.email_poller.get_email_poll_minutes', lambda: 5
+        'invoice_processor.application.email_poller.get_email_poll_minutes', lambda: 5
     )
 
     poller = EmailPoller(
@@ -24,34 +24,34 @@ def test_disabled_email_poller_does_not_connect(monkeypatch):
 
 def test_email_poller_starts_email_job_for_new_files(monkeypatch, tmp_path):
     calls = []
-    monkeypatch.setattr('src.application.email_poller.get_email_enabled', lambda: True)
+    monkeypatch.setattr('invoice_processor.application.email_poller.get_email_enabled', lambda: True)
     monkeypatch.setattr(
-        'src.application.email_poller.get_email_poll_minutes', lambda: 5
+        'invoice_processor.application.email_poller.get_email_poll_minutes', lambda: 5
     )
     monkeypatch.setattr(
-        'src.application.email_poller.get_email_auto_process', lambda: True
+        'invoice_processor.application.email_poller.get_email_auto_process', lambda: True
     )
     monkeypatch.setattr(
-        'src.application.email_poller.get_inbox_dir', lambda: str(tmp_path)
+        'invoice_processor.application.email_poller.get_inbox_dir', lambda: str(tmp_path)
     )
-    monkeypatch.setattr('src.application.email_poller.get_email_config', lambda: {
+    monkeypatch.setattr('invoice_processor.application.email_poller.get_email_config', lambda: {
         'imap_host': 'imap.example.com',
         'imap_port': '993',
     })
     monkeypatch.setattr(
-        'src.application.email_poller.get_email_username',
+        'invoice_processor.application.email_poller.get_email_username',
         lambda: 'user@example.com',
     )
     monkeypatch.setattr(
-        'src.application.email_poller.get_email_auth_code', lambda: 'auth'
+        'invoice_processor.application.email_poller.get_email_auth_code', lambda: 'auth'
     )
-    monkeypatch.setattr('src.application.email_poller.get_email_days_back', lambda: 30)
+    monkeypatch.setattr('invoice_processor.application.email_poller.get_email_days_back', lambda: 30)
     monkeypatch.setattr(
-        'src.application.email_poller.get_email_senders',
+        'invoice_processor.application.email_poller.get_email_senders',
         lambda: ['trusted@example.com'],
     )
     monkeypatch.setattr(
-        'src.application.email_poller.get_email_keywords',
+        'invoice_processor.application.email_poller.get_email_keywords',
         lambda: ['差旅'],
     )
 
@@ -80,31 +80,31 @@ def test_email_poller_starts_email_job_for_new_files(monkeypatch, tmp_path):
 
 def test_email_poller_only_pulls_when_auto_process_disabled(monkeypatch, tmp_path):
     calls = []
-    monkeypatch.setattr('src.application.email_poller.get_email_enabled', lambda: True)
+    monkeypatch.setattr('invoice_processor.application.email_poller.get_email_enabled', lambda: True)
     monkeypatch.setattr(
-        'src.application.email_poller.get_email_poll_minutes', lambda: 5
+        'invoice_processor.application.email_poller.get_email_poll_minutes', lambda: 5
     )
     monkeypatch.setattr(
-        'src.application.email_poller.get_email_auto_process', lambda: False
+        'invoice_processor.application.email_poller.get_email_auto_process', lambda: False
     )
     monkeypatch.setattr(
-        'src.application.email_poller.get_inbox_dir', lambda: str(tmp_path)
+        'invoice_processor.application.email_poller.get_inbox_dir', lambda: str(tmp_path)
     )
-    monkeypatch.setattr('src.application.email_poller.get_email_config', lambda: {
+    monkeypatch.setattr('invoice_processor.application.email_poller.get_email_config', lambda: {
         'imap_host': 'imap.example.com', 'imap_port': '993',
     })
     monkeypatch.setattr(
-        'src.application.email_poller.get_email_username', lambda: 'user'
+        'invoice_processor.application.email_poller.get_email_username', lambda: 'user'
     )
     monkeypatch.setattr(
-        'src.application.email_poller.get_email_auth_code', lambda: 'auth'
+        'invoice_processor.application.email_poller.get_email_auth_code', lambda: 'auth'
     )
-    monkeypatch.setattr('src.application.email_poller.get_email_days_back', lambda: 30)
+    monkeypatch.setattr('invoice_processor.application.email_poller.get_email_days_back', lambda: 30)
     monkeypatch.setattr(
-        'src.application.email_poller.get_email_senders', lambda: []
+        'invoice_processor.application.email_poller.get_email_senders', lambda: []
     )
     monkeypatch.setattr(
-        'src.application.email_poller.get_email_keywords', lambda: []
+        'invoice_processor.application.email_poller.get_email_keywords', lambda: []
     )
 
     def fake_pull(**_):
@@ -124,9 +124,9 @@ def test_email_poller_only_pulls_when_auto_process_disabled(monkeypatch, tmp_pat
 
 
 def test_email_poller_stop_wakes_disabled_wait(monkeypatch):
-    monkeypatch.setattr('src.application.email_poller.get_email_enabled', lambda: False)
+    monkeypatch.setattr('invoice_processor.application.email_poller.get_email_enabled', lambda: False)
     monkeypatch.setattr(
-        'src.application.email_poller.get_email_poll_minutes', lambda: 5
+        'invoice_processor.application.email_poller.get_email_poll_minutes', lambda: 5
     )
 
     poller = EmailPoller(lambda *_: None)
@@ -139,23 +139,23 @@ def test_email_poller_stop_wakes_disabled_wait(monkeypatch):
 
 def test_email_poller_does_not_start_job_after_stop(monkeypatch, tmp_path):
     calls = []
-    monkeypatch.setattr('src.application.email_poller.get_email_enabled', lambda: True)
+    monkeypatch.setattr('invoice_processor.application.email_poller.get_email_enabled', lambda: True)
     monkeypatch.setattr(
-        'src.application.email_poller.get_email_poll_minutes', lambda: 5
+        'invoice_processor.application.email_poller.get_email_poll_minutes', lambda: 5
     )
     monkeypatch.setattr(
-        'src.application.email_poller.get_inbox_dir', lambda: str(tmp_path)
+        'invoice_processor.application.email_poller.get_inbox_dir', lambda: str(tmp_path)
     )
-    monkeypatch.setattr('src.application.email_poller.get_email_config', lambda: {
+    monkeypatch.setattr('invoice_processor.application.email_poller.get_email_config', lambda: {
         'imap_host': 'imap.example.com', 'imap_port': '993',
     })
     monkeypatch.setattr(
-        'src.application.email_poller.get_email_username', lambda: 'user'
+        'invoice_processor.application.email_poller.get_email_username', lambda: 'user'
     )
     monkeypatch.setattr(
-        'src.application.email_poller.get_email_auth_code', lambda: 'auth'
+        'invoice_processor.application.email_poller.get_email_auth_code', lambda: 'auth'
     )
-    monkeypatch.setattr('src.application.email_poller.get_email_days_back', lambda: 30)
+    monkeypatch.setattr('invoice_processor.application.email_poller.get_email_days_back', lambda: 30)
 
     poller = EmailPoller(
         lambda *_: calls.append('job'),

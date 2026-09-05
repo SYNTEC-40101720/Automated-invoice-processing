@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, status
 
+from devbase.application.job_runtime import JobRuntime
+
 from ...application.job_service import JobService
-from ..dependencies import get_job_service, require_local_token
+from ..dependencies import get_devbase_runtime, get_job_service, require_local_token
 from ..schemas import (
     DirectoryScanResponse,
     LogEntry,
     LogListResponse,
+    RuntimeJobResponse,
+    RuntimeJobStartRequest,
     StartJobRequest,
 )
 
@@ -40,6 +44,57 @@ def start_job(
     service: JobService = Depends(get_job_service),
 ) -> dict:
     return service.start_job(request.source_dir, request.trigger)
+
+
+@router.post('/start', response_model=RuntimeJobResponse, status_code=status.HTTP_201_CREATED)
+def start_runtime_job(
+    request: RuntimeJobStartRequest,
+    runtime: JobRuntime = Depends(get_devbase_runtime),
+) -> RuntimeJobResponse:
+    snapshot = runtime.start(request.kind, input=request.input)
+    return RuntimeJobResponse(
+        id=snapshot.job_id,
+        kind=snapshot.kind,
+        status=snapshot.status.value,
+        progress=snapshot.progress,
+        message=snapshot.message,
+        created_at=snapshot.created_at.isoformat(),
+        updated_at=snapshot.updated_at.isoformat(),
+    )
+
+
+@router.post('/cancel', response_model=RuntimeJobResponse)
+def cancel_runtime_job(
+    runtime: JobRuntime = Depends(get_devbase_runtime),
+) -> RuntimeJobResponse:
+    snapshot = runtime.cancel_current()
+    return RuntimeJobResponse(
+        id=snapshot.job_id,
+        kind=snapshot.kind,
+        status=snapshot.status.value,
+        progress=snapshot.progress,
+        message=snapshot.message,
+        created_at=snapshot.created_at.isoformat(),
+        updated_at=snapshot.updated_at.isoformat(),
+    )
+
+
+@router.get('/runtime/current', response_model=RuntimeJobResponse | None)
+def current_runtime_job(
+    runtime: JobRuntime = Depends(get_devbase_runtime),
+) -> RuntimeJobResponse | None:
+    snapshot = runtime.current_job()
+    if snapshot is None:
+        return None
+    return RuntimeJobResponse(
+        id=snapshot.job_id,
+        kind=snapshot.kind,
+        status=snapshot.status.value,
+        progress=snapshot.progress,
+        message=snapshot.message,
+        created_at=snapshot.created_at.isoformat(),
+        updated_at=snapshot.updated_at.isoformat(),
+    )
 
 
 @router.get('/{job_id}', response_model=dict)

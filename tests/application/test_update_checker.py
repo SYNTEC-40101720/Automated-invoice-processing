@@ -10,7 +10,7 @@ from urllib.error import URLError
 
 import pytest
 
-from src.application.update_checker import (
+from invoice_processor.application.update_checker import (
     GITHUB_API_URL,
     GITHUB_RELEASES_URL,
     MAIN_EXECUTABLE_NAME,

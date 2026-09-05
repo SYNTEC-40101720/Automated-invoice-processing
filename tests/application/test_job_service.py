@@ -7,11 +7,11 @@ import threading
 
 import pytest
 
-from src.application.event_bus import EventBus
-from src.application.invoice_file_service import FileProcessResult
-from src.application.job_service import JobService
-from src.domain.errors import JobAlreadyRunning, NoPdfFiles
-from src.domain.job import JobStatus, JobTrigger
+from invoice_processor.application.event_bus import EventBus
+from invoice_processor.application.invoice_file_service import FileProcessResult
+from invoice_processor.application.job_service import JobService
+from invoice_processor.domain.errors import JobAlreadyRunning, NoPdfFiles
+from invoice_processor.domain.job import JobStatus, JobTrigger
 
 
 class FakeProcessor:
@@ -92,7 +92,7 @@ def make_source(tmp_path, count=2):
 def test_known_directory_includes_configured_inbox(tmp_path, monkeypatch):
     inbox = tmp_path / 'inbox'
     inbox.mkdir()
-    monkeypatch.setattr('src.application.job_service.get_inbox_dir', lambda: str(inbox))
+    monkeypatch.setattr('invoice_processor.application.job_service.get_inbox_dir', lambda: str(inbox))
     service, _ = make_service(tmp_path)
 
     assert service.is_known_directory(str(inbox)) is True
@@ -114,6 +114,25 @@ def test_job_service_runs_pipeline_and_publishes_terminal_snapshot(tmp_path):
     assert processor.clear_called is True
     assert processor.files == ['invoice-0.pdf', 'invoice-1.pdf']
     assert any(event.type == 'job.completed' for event in event_bus.history())
+
+
+def test_run_job_sync_runs_pipeline_for_host_runtime(tmp_path):
+    service, processor = make_service(tmp_path)
+    source = make_source(tmp_path)
+    progress = []
+
+    result = service.run_job_sync(
+        str(source),
+        job_id='runtime-job',
+        progress_callback=lambda ratio, message: progress.append((ratio, message)),
+    )
+
+    assert result['status'] == JobStatus.SUCCEEDED.value
+    assert result['id'] == 'runtime-job'
+    assert result['stats']['success'] == 2
+    assert progress
+    assert progress[-1][0] == 1.0
+    assert processor.clear_called is True
 
 
 def test_processor_factory_failure_marks_job_failed(tmp_path):

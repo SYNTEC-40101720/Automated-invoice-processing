@@ -1,6 +1,6 @@
 """原生桥路径边界测试。"""
 
-from src.desktop.native_bridge import NativeBridge
+from invoice_processor.desktop.native_bridge import NativeBridge
 
 
 def test_open_directory_requires_backend_approval(tmp_path):
@@ -22,7 +22,7 @@ def test_write_log_only_uses_path_selected_by_save_dialog(tmp_path, monkeypatch)
         staticmethod(lambda: FakeRoot()),
     )
     monkeypatch.setattr(
-        'src.desktop.native_bridge.filedialog.asksaveasfilename',
+        'invoice_processor.desktop.native_bridge.filedialog.asksaveasfilename',
         lambda **_: str(target),
     )
     bridge = NativeBridge()

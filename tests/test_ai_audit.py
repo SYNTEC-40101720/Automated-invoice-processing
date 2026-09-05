@@ -5,8 +5,8 @@
 import json
 import urllib.request
 
-from src.core.ai_audit import build_prompt, parse_findings
-from src.core.ai_audit import test_connection as check_ai_connection
+from invoice_processor.core.ai_audit import build_prompt, parse_findings
+from invoice_processor.core.ai_audit import test_connection as check_ai_connection
 
 
 class FakeResponse:

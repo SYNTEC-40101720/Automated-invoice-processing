@@ -26,6 +26,23 @@ class StartJobRequest(BaseModel):
     trigger: JobTrigger = JobTrigger.MANUAL
 
 
+class RuntimeJobStartRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    kind: str = 'invoice_processing'
+    input: dict[str, Any] = Field(default_factory=dict)
+
+
+class RuntimeJobResponse(BaseModel):
+    id: str
+    kind: str
+    status: str
+    progress: int
+    message: str
+    created_at: str
+    updated_at: str
+
+
 class DirectoryScanResponse(BaseModel):
     source_dir: str
     pdf_count: int
@@ -78,6 +95,21 @@ class LogEntry(BaseModel):
 class LogListResponse(BaseModel):
     items: list[LogEntry]
     next_event_id: int | None = None
+
+
+class ToolDescriptorResponse(BaseModel):
+    kind: str
+    title: str
+    subtitle: str | None = None
+    group: str
+    glyph: str
+    access_key: str | None = None
+    supports_input: bool = False
+    mode: str = 'oneshot'
+
+
+class ToolListResponse(BaseModel):
+    tools: list[ToolDescriptorResponse]
 
 
 class EventEnvelope(BaseModel):

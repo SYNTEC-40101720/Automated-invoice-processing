@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 def _bundle_root() -> Path:
     if getattr(sys, 'frozen', False):
         return Path(getattr(sys, '_MEIPASS'))
-    return Path(__file__).resolve().parents[2]
+    return Path(__file__).resolve().parents[3]
 
 
 def _find_free_port() -> int:
@@ -101,9 +101,14 @@ def _attach_startup_ready_handler(window, ready_file: Path | None) -> None:
     window.events.loaded += confirm_startup
 
 
-def run_desktop() -> None:
+def run_desktop(
+    *,
+    host: str = '127.0.0.1',
+    port: int | None = None,
+    static_dir: str | Path | None = None,
+) -> None:
     """启动桌面应用；pywebview 只在真正进入桌面模式时导入。"""
-    port = _find_free_port()
+    port = port or _find_free_port()
     token = secrets.token_urlsafe(32)
     job_service = JobService()
     terminal_statuses = {
@@ -121,15 +126,15 @@ def run_desktop() -> None:
     app = create_app(
         job_service,
         local_token=token,
-        allowed_origins={f'http://127.0.0.1:{port}'},
-        static_dir=_bundle_root() / 'web' / 'dist',
+        allowed_origins={f'http://{host}:{port}'},
+        static_dir=static_dir or _bundle_root() / 'web' / 'dist',
         update_apply=update_manager.apply,
         update_progress=update_manager.progress,
     )
     job_service.start_background_tasks()
     config = uvicorn.Config(
         app,
-        host='127.0.0.1',
+        host=host,
         port=port,
         log_level='warning',
         access_log=False,
@@ -138,7 +143,7 @@ def run_desktop() -> None:
     server = uvicorn.Server(config)
     server_thread = threading.Thread(target=server.run, name='local-api', daemon=True)
     server_thread.start()
-    base_url = f'http://127.0.0.1:{port}'
+    base_url = f'http://{host}:{port}'
     try:
         _wait_until_ready(f'{base_url}/api/v1/system/health', token)
         try:

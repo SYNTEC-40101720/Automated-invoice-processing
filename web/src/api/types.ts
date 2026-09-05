@@ -155,3 +155,18 @@ export interface EmailPullResponse {
   }
   job: Job | null
 }
+
+export interface ToolDescriptor {
+  kind: string
+  title: string
+  subtitle: string | null
+  group: string
+  glyph: string
+  access_key: string | null
+  supports_input: boolean
+  mode: string
+}
+
+export interface ToolListResponse {
+  tools: ToolDescriptor[]
+}

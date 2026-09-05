@@ -72,7 +72,7 @@ def main() -> int:
         )
         try:
             result = subprocess.run([
-                sys.executable, '-m', 'src.desktop.update_helper',
+                sys.executable, '-m', 'invoice_processor.desktop.update_helper',
                 '--source-dir', str(v2),
                 '--target-dir', str(v1),
                 '--cleanup-dir', str(staging),

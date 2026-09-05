@@ -9,13 +9,16 @@ from collections.abc import Callable
 from pathlib import Path
 from tkinter import filedialog
 
+from devbase.desktop.native_bridge import NativeBridge as DevBaseNativeBridge
+
 from ..version import __version__
 
 
-class NativeBridge:
+class NativeBridge(DevBaseNativeBridge):
     """只提供文件选择和打开目录，不承载业务编排。"""
 
     def __init__(self, directory_checker: Callable[[str], bool] | None = None):
+        super().__init__(platform_name=sys.platform)
         self._directory_checker = directory_checker
         self._selected_log_path: Path | None = None
 
@@ -71,20 +74,14 @@ class NativeBridge:
         return True
 
     def open_directory(self, path: str) -> bool:
-        target = Path(path).expanduser().resolve()
-        if not target.is_dir():
-            return False
-        if self._directory_checker and not self._directory_checker(str(target)):
-            return False
-        if os.name == 'nt':
-            os.startfile(str(target))
-        else:
-            raise OSError('打开目录仅支持 Windows 桌面壳')
-        return True
+        checker = None
+        if self._directory_checker is not None:
+            checker = lambda target: self._directory_checker(str(target))
+        return super().open_directory(path, checker=checker)
 
-    @staticmethod
-    def get_runtime_info() -> dict[str, str | bool]:
+    def get_runtime_info(self) -> dict[str, str | bool]:
         return {
+            **super().get_runtime_info(),
             'platform': sys.platform,
             'webview2': os.name == 'nt',
             'version': __version__,

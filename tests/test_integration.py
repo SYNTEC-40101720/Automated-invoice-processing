@@ -5,14 +5,14 @@
 import re
 import threading
 
-from src.config_manager import (
+from invoice_processor.config_manager import (
     get_max_workers,
     get_target_tax_id,
     load_config,
     set_business_config,
 )
-from src.core.pdf_text import PdfTextExtractor
-from src.core.processor import _TYPE_REGISTRY, InvoiceProcessor
+from invoice_processor.core.pdf_text import PdfTextExtractor
+from invoice_processor.core.processor import _TYPE_REGISTRY, InvoiceProcessor
 
 # ═══════════════════════════════════════════════════════════
 # 改进 7: 内容哈希去重
@@ -208,7 +208,7 @@ class TestPDFExceptionClassification:
 
 
 def test_pdf_cache_parses_same_path_once_concurrently(monkeypatch, tmp_path):
-    import src.core.pdf_text as pdf_text_module
+    import invoice_processor.core.pdf_text as pdf_text_module
 
     parse_started = threading.Event()
     release_parse = threading.Event()

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from src.desktop import launcher
-from src.desktop.update_protocol import (
+from invoice_processor.desktop import launcher
+from invoice_processor.desktop.update_protocol import (
     UPDATE_READY_ENV_VAR,
     UPDATE_READY_FILENAME,
 )

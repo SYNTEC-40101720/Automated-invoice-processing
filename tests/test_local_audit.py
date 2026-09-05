@@ -6,7 +6,7 @@ import base64
 
 import pytest
 
-from src.core.local_audit import check_filenames, check_rows
+from invoice_processor.core.local_audit import check_filenames, check_rows
 
 
 class TestCheckFilenames:
@@ -184,8 +184,8 @@ class TestRunLocalAuditIntegration:
     """在合成 PDF 目录上实跑（真实 InvoiceProcessor 解析，无真实发票数据）"""
 
     def test_runs_on_synthetic_dir(self, synthetic_output_dir):
-        from src.core.local_audit import run_local_audit
-        from src.core.processor import InvoiceProcessor
+        from invoice_processor.core.local_audit import run_local_audit
+        from invoice_processor.core.processor import InvoiceProcessor
 
         proc = InvoiceProcessor()
         findings = run_local_audit(str(synthetic_output_dir), proc)

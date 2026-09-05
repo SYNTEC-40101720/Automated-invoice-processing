@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from src.api.app import create_app
-from src.api.dependencies import get_job_service
-from src.api.routes import email as email_route
-from src.api.routes import settings as settings_route
-from src.api.schemas import SettingsResponse
-from src.application.event_bus import EventBus
-from src.application.job_service import JobService
-from src.domain.job import JobTrigger
-from src.version import __version__
+from invoice_processor.api.app import create_app
+from invoice_processor.api.dependencies import get_job_service
+from invoice_processor.api.routes import email as email_route
+from invoice_processor.api.routes import settings as settings_route
+from invoice_processor.api.schemas import SettingsResponse
+from invoice_processor.application.event_bus import EventBus
+from invoice_processor.application.job_service import JobService
+from invoice_processor.domain.job import JobTrigger
+from invoice_processor.version import __version__
 
 
 def make_app(tmp_path):
@@ -33,6 +33,43 @@ def test_health_requires_local_token_and_returns_version(tmp_path):
     assert response.status_code == 200
     assert response.json()['status'] == 'ok'
     assert response.json()['mode'] == 'local'
+
+
+def test_tools_endpoint_exposes_invoice_descriptor(tmp_path):
+    client = TestClient(make_app(tmp_path))
+
+    response = client.get(
+        '/api/v1/tools',
+        headers={'X-Local-Token': 'test-token'},
+    )
+
+    assert response.status_code == 200
+    assert response.json()['tools'] == [{
+        'kind': 'invoice_processing',
+        'title': '发票处理',
+        'subtitle': '扫描、处理、审核并归档电子票据',
+        'group': 'invoice',
+        'glyph': 'receipt',
+        'access_key': None,
+        'supports_input': True,
+        'mode': 'oneshot',
+    }]
+
+
+def test_runtime_start_endpoint_uses_devbase_task_registry(tmp_path):
+    client = TestClient(make_app(tmp_path))
+
+    response = client.post(
+        '/api/v1/jobs/start',
+        headers={'X-Local-Token': 'test-token'},
+        json={
+            'kind': 'invoice_processing',
+            'input': {'source_dir': str(tmp_path)},
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()['kind'] == 'invoice_processing'
 
 
 def test_api_rejects_untrusted_origin_and_sets_security_headers(tmp_path):
@@ -117,7 +154,7 @@ def test_job_logs_endpoint_returns_only_job_logs(tmp_path):
     )
 
     # 注入一个已知任务，绕过启动线程，只测试日志过滤协议。
-    from src.domain.job import Job
+    from invoice_processor.domain.job import Job
     service._jobs['job-1'] = Job(source_dir=str(tmp_path), id='job-1')
 
     response = client.get(
@@ -139,7 +176,7 @@ def test_job_logs_endpoint_supports_event_cursor(tmp_path):
         'job.log_appended', {'level': 'info', 'message': 'second'}, 'job-1'
     )
 
-    from src.domain.job import Job
+    from invoice_processor.domain.job import Job
     service._jobs['job-1'] = Job(source_dir=str(tmp_path), id='job-1')
 
     response = client.get(

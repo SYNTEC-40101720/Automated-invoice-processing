@@ -9,7 +9,7 @@ from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-SOURCE_FILE = ROOT / 'src' / 'version.py'
+SOURCE_FILE = ROOT / 'backend' / 'invoice_processor' / 'version.py'
 PYPROJECT_FILE = ROOT / 'pyproject.toml'
 WEB_PACKAGE_FILE = ROOT / 'web' / 'package.json'
 WEB_LOCK_FILE = ROOT / 'web' / 'package-lock.json'

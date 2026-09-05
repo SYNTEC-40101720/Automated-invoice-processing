@@ -2,19 +2,22 @@
 
 from __future__ import annotations
 
-import secrets
+import os
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 
+from devbase.application.job_runtime import JobRuntime
+from devbase.api.app import create_app as create_devbase_app
+
+from ..application.invoice_task import build_invoice_registry
 from ..application.job_service import JobService
 from ..application.update_checker import UpdateApplyResult, UpdateProgress
 from ..domain.errors import ApplicationError
 from ..version import __version__
 from .errors import application_error_handler
-from .routes import email, events, jobs, settings, system
+from .routes import email, events, jobs, settings, system, tools
 
 
 def create_app(
@@ -28,48 +31,36 @@ def create_app(
     update_progress: Callable[[], UpdateProgress] | None = None,
 ) -> FastAPI:
     service = job_service or JobService()
-    app = FastAPI(
+    runtime = JobRuntime(registry=build_invoice_registry(service))
+    app = create_devbase_app(
+        runtime=runtime,
         title='SYNTEC Invoice Processor API',
         version=version,
-        docs_url=None,
-        redoc_url=None,
-        openapi_url='/api/v1/openapi.json',
+        local_token=local_token,
+        static_dir=static_dir,
+        lifecycle_policy=None,
+        allowed_origins=allowed_origins,
+        include_default_routes=False,
     )
     app.state.job_service = service
-    app.state.local_token = (
-        local_token if local_token is not None else secrets.token_urlsafe(32)
-    )
+    app.state.devbase_runtime = runtime
     app.state.version = version
     app.state.update_apply = update_apply
-    app.state.allowed_origins = frozenset(
-        origin.rstrip('/') for origin in (allowed_origins or ())
-    )
     app.state.update_progress = update_progress
-
-    @app.middleware('http')
-    async def add_security_headers(request, call_next):
-        response = await call_next(request)
-        response.headers.setdefault(
-            'Content-Security-Policy',
-            "default-src 'self'; base-uri 'none'; object-src 'none'; "
-            "frame-ancestors 'none'; script-src 'self'; "
-            "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
-            "connect-src 'self' ws: wss:; form-action 'self'",
-        )
-        response.headers.setdefault('X-Content-Type-Options', 'nosniff')
-        response.headers.setdefault('Referrer-Policy', 'no-referrer')
-        return response
 
     app.include_router(system.router, prefix='/api/v1')
     app.include_router(jobs.router, prefix='/api/v1')
     app.include_router(events.router, prefix='/api/v1')
     app.include_router(settings.router, prefix='/api/v1')
     app.include_router(email.router, prefix='/api/v1')
+    app.include_router(tools.router, prefix='/api/v1')
     app.add_exception_handler(ApplicationError, application_error_handler)
-    if static_dir is not None:
-        static_path = Path(static_dir)
-        if static_path.is_dir():
-            app.mount(
-                '/', StaticFiles(directory=str(static_path), html=True), name='web'
-            )
     return app
+
+
+def create_app_from_environment() -> FastAPI:
+    """Create the browser-mode app from the launcher environment."""
+    return create_app(
+        local_token=os.getenv('PLATFORM_LOCAL_TOKEN'),
+        static_dir=os.getenv('PLATFORM_STATIC_DIR'),
+    )

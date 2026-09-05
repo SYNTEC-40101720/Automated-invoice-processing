@@ -1,4 +1,5 @@
 import { FileCheck2, Inbox, PanelLeft, ScanSearch, Settings } from 'lucide-react'
+import type { ToolDescriptor } from '../api/types'
 import type { WorkbenchView } from '../stores/workbench'
 import { useWorkbench } from '../stores/workbench'
 
@@ -7,6 +8,7 @@ interface SidebarProps {
   version: string | null
   sidebarCollapsed: boolean
   onToggleCollapsed: () => void
+  tools: ToolDescriptor[]
 }
 
 type PrimaryView = Exclude<WorkbenchView, 'settings'>
@@ -17,8 +19,14 @@ const mainItems: { id: PrimaryView; label: string; icon: React.ReactNode }[] = [
   { id: 'audit', label: '审核中心', icon: <ScanSearch size={16} /> },
 ]
 
-export function Sidebar({ activeView, version, sidebarCollapsed, onToggleCollapsed }: SidebarProps) {
+export function Sidebar({ activeView, version, sidebarCollapsed, onToggleCollapsed, tools }: SidebarProps) {
   const setView = useWorkbench((state) => state.setView)
+  const invoiceTool = tools.find((tool) => tool.kind === 'invoice_processing')
+  const items = mainItems.map((item) => (
+    item.id === 'processing' && invoiceTool
+      ? { ...item, label: invoiceTool.title }
+      : item
+  ))
 
   return (
     <aside className="side-bar">
@@ -35,7 +43,7 @@ export function Sidebar({ activeView, version, sidebarCollapsed, onToggleCollaps
         </button>
       </div>
       <nav className="sidebar-primary-nav" aria-label="主导航">
-        {mainItems.map((item) => (
+        {items.map((item) => (
           <button
             key={item.id}
             className={`sidebar-primary-item ${activeView === item.id ? 'is-active' : ''}`}

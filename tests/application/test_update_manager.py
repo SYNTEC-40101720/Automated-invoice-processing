@@ -7,9 +7,9 @@ import sys
 import threading
 from pathlib import Path
 
-from src.application.update_checker import StagedUpdate, UpdateResult
-from src.desktop import update_manager
-from src.desktop.update_manager import DesktopUpdateManager
+from invoice_processor.application.update_checker import StagedUpdate, UpdateResult
+from invoice_processor.desktop import update_manager
+from invoice_processor.desktop.update_manager import DesktopUpdateManager
 
 
 def test_apply_downloads_and_launches_standalone_helper(tmp_path, monkeypatch):

@@ -32,7 +32,7 @@
 
 **规则**：增值税专用发票、高铁票在最终合并 PDF 中必须出现 **两份完整内容**（抵扣联 + 发票联）。
 
-**实现位置**：[`_merge_classified_pdfs`](src/core/processor.py) 
+**实现位置**：[`_merge_classified_pdfs`](backend/invoice_processor/core/processor.py)
 - 专票/高铁票：每个文件 `writer.append(reader)` **两遍**
 - 普通发票：`writer.append(reader)` **一遍**
 
@@ -44,7 +44,7 @@
 
 **规则**：仅对发票校验购买方税号，且必须等于 `TARGET_TAX_ID`（`91320594688334374M`）；行程单、高铁票等非发票凭证不执行税号检查。不一致的发票移入「税号异常」子目录。
 
-**实现位置**：[`_extract_buyer_tax_id`](src/core/processor.py)（静态方法）
+**实现位置**：[`_extract_buyer_tax_id`](backend/invoice_processor/core/processor.py)（静态方法）
 - 在「销售方」关键字之前的文本中匹配第一个 18 位税号
 - 长度固定 18 位，避免吞掉密码区数字
 - 输出文件名含 `行程单` 或 `高铁票` 时跳过税号检查
@@ -61,13 +61,13 @@
 1. `create_amount_mapping` 正则 `^(\d+\.\d{2})` 要求两位小数
 2. 避免同一发票因 `771.8` 与 `771.80` 被当成两个文件
 
-**实现位置**：[`_generate_output_file`](src/core/processor.py) 在生成文件名前用 `_normalize_amount()` 标准化。
+**实现位置**：[`_generate_output_file`](backend/invoice_processor/core/processor.py) 在生成文件名前用 `_normalize_amount()` 标准化。
 
 ### 3.4 重复文件去重 ⚠️
 
 **规则**：源目录中可能存在内容相同的重复文件（如同一发票从不同渠道下载），处理后只保留一份。
 
-**实现位置**：[`_generate_output_file`](src/core/processor.py) 
+**实现位置**：[`_generate_output_file`](backend/invoice_processor/core/processor.py)
 - 用 `self._generated_names: set[str]` 记录已生成的文件名
 - 用 `self._dedup_lock` 保证线程安全
 - 目标文件名已存在时跳过，记录 warning 日志
@@ -103,19 +103,21 @@
 ## 5. 架构分层
 
 ```
-src/
-├── domain/             # Job、状态机、领域事件和错误码
-├── application/       # JobService、EventBus、文件服务、审核服务和更新检查
-├── api/                # FastAPI 路由、token、静态资源和 WebSocket
-├── desktop/            # pywebview 启动器、NativeBridge 和自动更新器
-└── core/               # 发票处理业务，不依赖 Web
+backend/
+├── devbase/            # 通用 JobRuntime、ToolRegistry、API 安全层和桌面壳
+└── invoice_processor/  # 发票业务包
+	├── domain/         # Job、状态机、领域事件和错误码
+	├── application/    # JobService、EventBus、文件服务、审核和任务适配
+	├── api/            # FastAPI 路由、token、静态资源和 WebSocket
+	├── desktop/        # 发票桌面扩展、NativeBridge 和自动更新器
+	└── core/           # 发票处理业务，不依赖 Web
 web/
-└── src/                # React 工作台和前端状态管理
+└── web/src/            # React 工作台和前端状态管理
 ```
 
 **约束**：
-- 业务层（`src/core/`）禁止 import 任何 Qt、FastAPI 或 React 模块
-- 后台任务通过 `src/application/event_bus.py` 发布事件，API 不直接操作 worker
+- 业务层（`backend/invoice_processor/core/`）禁止 import 任何 Qt、FastAPI 或 React 模块
+- 后台任务通过应用层事件总线发布事件，API 不直接操作 worker
 - WebSocket 连接必须校验本地 token，HTTP API 使用 `X-Local-Token`
 - 桌面服务只监听 `127.0.0.1`，退出时必须调用 `JobService.shutdown()`
 - 业务配置（税号、线程数）通过 `config_manager` 读写 INI，运行时用 `_cfg.TARGET_TAX_ID` 动态访问
@@ -140,12 +142,12 @@ web/
 
 | # | 改进 | 实现位置 | 说明 |
 |---|---|---|---|
-| 1 | 停止按钮中断任务 | `src/application/job_service.py` | 设置取消事件并让正在运行的任务收敛 |
+| 1 | 停止按钮中断任务 | `backend/invoice_processor/application/job_service.py` | 设置取消事件并让正在运行的任务收敛 |
 | 2 | 日志持久化 | `logger_config.py` | RotatingFileHandler，1MB 轮转，5 备份 |
-| 3 | PDF 异常分类 | `src/core/pdf_text.py` | 返回 encrypted/corrupted/empty/unknown |
+| 3 | PDF 异常分类 | `backend/invoice_processor/core/pdf_text.py` | 返回 encrypted/corrupted/empty/unknown |
 | 4 | 配置外部化 | `config_manager.py` + API/Web 设置视图 | INI 读写和敏感值脱敏 |
-| 5 | 日志导出 | `src/desktop/native_bridge.py` + Web 工作台 | 原生保存对话框和日志导出 |
-| 6 | 目录选择与处理 | `src/desktop/native_bridge.py` + Web 处理视图 | 通过桌面桥接选择目录并启动任务 |
+| 5 | 日志导出 | `backend/invoice_processor/desktop/native_bridge.py` + Web 工作台 | 原生保存对话框和日志导出 |
+| 6 | 目录选择与处理 | `backend/invoice_processor/desktop/native_bridge.py` + Web 处理视图 | 通过桌面桥接选择目录并启动任务 |
 | 7 | 内容哈希去重 | `processor.py:_check_content_duplicate` | MD5 哈希，线程安全 |
 | 8 | 类型路由注册表 | `processor.py:@register_type` | 装饰器注册，无需改 determine_processor_type |
 | 9 | 集成测试 | `tests/test_integration.py` | 20 个集成测试覆盖新功能 |
@@ -182,7 +184,7 @@ web/
 python -m pytest tests/ -q
 
 # Python 静态检查
-python -m ruff check src tests
+python -m ruff check backend tests
 
 # 前端类型检查和生产构建
 npm --prefix web run typecheck
@@ -234,9 +236,9 @@ poll_minutes = 0               # 自动轮询分钟数，0 = 关闭（仅手动�
 ```
 
 ### 实现位置
-- `src/core/email_pull.py`：IMAP 拉取纯逻辑（不依赖 Qt），入口 `pull_invoices()`
-- `src/config_manager.py`：`get_email_*` / `set_email_config` / `get_inbox_dir`
-- v7 API：`src/api/routes/email.py`；Web：`web/src/features/InboxView.tsx`
+- `backend/invoice_processor/core/email_pull.py`：IMAP 拉取纯逻辑（不依赖 Qt），入口 `pull_invoices()`
+- `backend/invoice_processor/config_manager.py`：`get_email_*` / `set_email_config` / `get_inbox_dir`
+- v7 API：`backend/invoice_processor/api/routes/email.py`；Web：`web/src/features/InboxView.tsx`
 
 ### 注意
 - 拉取默认不修改邮件状态（`BODY.PEEK` 读取），如需标记已读用 `mark_seen`
@@ -264,10 +266,10 @@ timeout = 60
 ```
 
 ### 实现位置
-- `src/core/local_audit.py`：`check_filenames` / `check_rows`（纯规则，可单测）/ `run_local_audit`
-- `src/core/ai_audit.py`：`build_prompt` / `parse_findings`（宽容解析 JSON）/ `audit_records`（urllib 调用，无新增依赖）/ `write_audit_report`（回填 Excel）
-- `src/core/excel_summary.py`：`_parse_didi_trip_details` 增强——行程行提取 `time / city / route / mileage`；高铁票提取发车时间；审核与汇总共用同一套解析
-- v7 API：`src/api/routes/settings.py`；Web：`web/src/features/AuditView.tsx` / `web/src/features/SettingsView.tsx`
+- `backend/invoice_processor/core/local_audit.py`：`check_filenames` / `check_rows`（纯规则，可单测）/ `run_local_audit`
+- `backend/invoice_processor/core/ai_audit.py`：`build_prompt` / `parse_findings`（宽容解析 JSON）/ `audit_records`（urllib 调用，无新增依赖）/ `write_audit_report`（回填 Excel）
+- `backend/invoice_processor/core/excel_summary.py`：`_parse_didi_trip_details` 增强——行程行提取 `time / city / route / mileage`；高铁票提取发车时间；审核与汇总共用同一套解析
+- v7 API：`backend/invoice_processor/api/routes/settings.py`；Web：`web/src/features/AuditView.tsx` / `web/src/features/SettingsView.tsx`
 
 ### 注意
 - API Key / 邮箱授权码属敏感信息，写入 config.ini（不入库），UI 用密码框显示

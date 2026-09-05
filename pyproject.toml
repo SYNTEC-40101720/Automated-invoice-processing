@@ -24,3 +24,8 @@ select = ["E", "F", "W", "I"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["backend"]
+
+[tool.setuptools.packages.find]
+where = ["backend"]
+include = ["devbase*", "invoice_processor*"]

@@ -43,6 +43,14 @@
    python build_syntec.py
    ```
 
+浏览器调试模式：
+
+```
+python main.py --browser
+python main.py --browser --reload
+python main.py --browser --no-browser
+```
+
 ## 项目结构
 
 ```
@@ -55,18 +63,20 @@
 ├── config.ini                    # 运行时用户配置（不入库，首次运行自动生成）
 ├── README.md                     # 项目说明
 ├── PROJECT_DEV.md                # 项目维护说明（业务规则、架构约定）
-├── src/                          # 源代码包
-│   ├── __init__.py
-│   ├── config.py                 # 业务配置常量（税号、线程数）
-│   ├── config_manager.py         # INI 配置读写（税号、线程数外部化）
-│   ├── logger_config.py          # 日志配置（固定路径 + 轮转）
-│   ├── domain/                   # 领域模型、状态机和错误码
-│   ├── application/              # 任务编排、事件总线、文件服务和审核服务
-│   ├── api/                      # FastAPI 路由、鉴权、静态资源和 WebSocket
-│   ├── desktop/                  # pywebview 启动器和原生能力桥
-│   └── core/                     # 可复用发票处理核心
-│   │   ├── __init__.py
-│   │   └── processor.py          # InvoiceProcessor 发票处理核心类
+├── backend/
+│   ├── devbase/                  # 通用桌面工具框架
+│   │   ├── domain/               # 状态、事件、端口和资源
+│   │   ├── application/          # JobRuntime、ToolRegistry、生命周期和更新
+│   │   ├── api/                  # 安全 API 工厂和通用路由
+│   │   └── desktop/              # 桌面壳、NativeBridge 和更新器
+│   └── invoice_processor/        # 发票业务包
+│       ├── config.py             # 业务配置常量（税号、线程数）
+│       ├── config_manager.py     # 发票业务配置读写
+│       ├── domain/               # 发票领域模型、状态机和错误码
+│       ├── application/          # 发票流水线、审核、邮箱和任务适配器
+│       ├── api/                  # 发票路由、设置和 WebSocket
+│       ├── desktop/              # 发票桌面扩展能力
+│       └── core/                 # InvoiceProcessor 发票处理核心
 ├── web/                          # React/Vite 工作台
 │   ├── src/                      # 视图、API 客户端、状态和样式
 │   └── package.json              # 前端脚本与依赖
@@ -79,28 +89,40 @@
 | 模块 | 职责 |
 |---|---|
 | `main.py` | 桌面入口，启动本地 FastAPI 服务和 WebView2 |
-| `src/desktop/` | 随机本地端口、token、桌面桥接、更新编排和退出清理 |
-| `src/api/` | HTTP/WebSocket 契约、本地 token 和 React 静态资源 |
-| `src/application/` | 任务状态、取消、日志、审核、归档和更新检查编排 |
-| `src/domain/` | Job 状态机、事件和领域错误 |
-| `src/config.py` | 集中存放业务配置常量（税号、线程数） |
-| `src/config_manager.py` | INI 配置文件读写，运行时动态访问税号等 |
-| `src/logger_config.py` | 日志持久化（RotatingFileHandler，1MB 轮转，5 备份） |
-| `src/core/processor.py` | 发票处理核心算法：PDF 提取、类型路由、正则解析、重命名、税号校验、PDF 合并 |
+| `backend/devbase/` | 通用安全层、JobRuntime、ToolRegistry、生命周期、桌面壳和更新能力 |
+| `backend/invoice_processor/desktop/` | 发票桌面扩展、随机端口、业务桥接和退出清理 |
+| `backend/invoice_processor/api/` | 发票 HTTP/WebSocket 契约、设置、邮箱和业务兼容路由 |
+| `backend/invoice_processor/application/` | 发票流水线、审核、归档、邮箱和 DevBase Task 适配 |
+| `backend/invoice_processor/domain/` | 发票 Job 状态机、阶段、触发来源和领域错误 |
+| `backend/invoice_processor/config_manager.py` | 发票业务 INI 配置和敏感字段读写 |
+| `backend/invoice_processor/core/processor.py` | 发票处理核心算法：PDF 提取、类型路由、正则解析、重命名、税号校验、PDF 合并 |
 | `web/src/` | React 工作台视图、服务端状态和实时事件 |
+
+## DevBase 任务接口
+
+当前已接入的通用任务契约：
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/v1/tools` | 返回已注册工具清单 |
+| POST | `/api/v1/jobs/start` | 按 `kind` 启动 DevBase 任务，发票工具为 `invoice_processing` |
+| GET | `/api/v1/jobs/runtime/current` | 返回 DevBase 运行时快照 |
+| POST | `/api/v1/jobs/cancel` | 取消当前 DevBase 任务 |
+
+原有 `/api/v1/jobs`、设置、邮箱和日志接口暂时保留，作为发票工作台兼容层；前端业务视图迁移完成后再收敛重复契约。
 
 ## 配置说明
 
 业务配置（税号、线程数和 AI 审核）通过 Web 工作台「设置」视图修改；邮箱连接参数在「设置」视图维护，收件目录、自动收件开关和轮询间隔在「收件箱」视图设置并显示。所有配置保存至 `config.ini` 并立即生效，处理工作区的源文件目录由处理页单独选择。授权码和 API Key 由本地安全存储负责保存，API 响应只返回是否已配置。
 
-业务配置默认值和动态读取逻辑见 [src/config.py](src/config.py) 与 [src/config_manager.py](src/config_manager.py)。
+业务配置默认值和动态读取逻辑见 [backend/invoice_processor/config.py](backend/invoice_processor/config.py) 与 [backend/invoice_processor/config_manager.py](backend/invoice_processor/config_manager.py)。
 
 ## 开发规范
 
 - 模块化设计，领域层、应用层、API 和界面分离
-- `src/core/` 只承载发票处理业务，不依赖 Web 或 Qt
+- `backend/invoice_processor/core/` 只承载发票处理业务，不依赖 Web 或 Qt
 - 后台任务通过应用层事件总线向 API 和 WebSocket 推送状态
-- 桌面能力只能通过 `src/desktop/native_bridge.py` 暴露
+- 桌面能力只能通过 `backend/invoice_processor/desktop/native_bridge.py` 暴露；通用能力来自 DevBase
 - 代码遵循 PEP8 规范
 - 所有注释使用中文
 
@@ -117,14 +139,14 @@ python -m pytest tests/test_processor.py -v
 python -m pytest tests/test_integration.py -v
 
 # Python 静态检查
-python -m ruff check src tests
+python -m ruff check backend tests
 ```
 
-当前 v7.0.12 发布基线已验证 Python 测试 163 条通过、编译和依赖检查通过，前端类型检查和生产构建通过，`build_syntec.py` 已生成并完成 SYNTEC 域控合规校验，更新器成功提交和失败回滚冒烟均通过；真实 Releases API 的旧版本号/当前版本号检查均已通过。旧版 EXE 实际启动、干净域控账户启动和目标机 WebView2 验收仍需单独执行。
+当前 v7.0.12 发布基线已验证 Python 测试通过、编译和依赖检查通过，前端类型检查和生产构建通过；DevBase 工具清单已提供 `invoice_processing` 任务入口。旧版 EXE 实际启动、干净域控账户启动和目标机 WebView2 验收仍需单独执行。
 
 ## 版本发布
 
-版本源为 `src/version.py`，递增命令会同步 `pyproject.toml`、Web 包元数据和 PyInstaller 资源：
+版本源为 `backend/invoice_processor/version.py`，递增命令会同步 `pyproject.toml`、Web 包元数据和 PyInstaller 资源：
 
 ```bash
 python bump_version.py patch   # 7.0.5 → 7.0.6

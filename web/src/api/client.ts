@@ -11,6 +11,7 @@ import type {
   UpdateApplyResponse,
   UpdateProgress,
   UpdateResponse,
+  ToolListResponse,
 } from './types'
 
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? ''
@@ -40,6 +41,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   health: () => request<HealthResponse>('/system/health'),
+  tools: () => request<ToolListResponse>('/tools'),
   updateCheck: () => request<UpdateResponse>('/system/update'),
   applyUpdate: () => request<UpdateApplyResponse>('/system/update/apply', { method: 'POST' }),
   updateProgress: () => request<UpdateProgress>('/system/update/progress'),

@@ -4,9 +4,9 @@ import threading
 
 import pytest
 
-from src.application.event_bus import EventBus
-from src.domain.errors import EventStreamClosed, InvalidJobTransition
-from src.domain.job import Job, JobStatus, JobTrigger
+from invoice_processor.application.event_bus import EventBus
+from invoice_processor.domain.errors import EventStreamClosed, InvalidJobTransition
+from invoice_processor.domain.job import Job, JobStatus, JobTrigger
 
 
 def test_job_cancel_is_cooperative_and_terminal_transition_is_rejected():
