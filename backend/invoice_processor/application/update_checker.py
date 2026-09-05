@@ -7,7 +7,6 @@ import json
 import logging
 import re
 import shutil
-import stat
 import tempfile
 import zipfile
 from collections.abc import Callable
@@ -17,6 +16,11 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
+
+from devbase.desktop.update_helper import (
+    UpdateApplyError,
+    safe_extract_zip,
+)
 
 from ..version import __version__
 
@@ -299,22 +303,10 @@ def _download_asset(
 
 
 def _extract_zip_safely(archive_path: Path, destination: Path) -> None:
-    destination.mkdir(parents=True, exist_ok=True)
-    root = destination.resolve()
-    with zipfile.ZipFile(archive_path) as archive:
-        for member in archive.infolist():
-            target = (destination / member.filename).resolve()
-            if not target.is_relative_to(root):
-                raise UpdateError('更新压缩包包含非法路径')
-            mode = member.external_attr >> 16
-            if stat.S_ISLNK(mode):
-                raise UpdateError('更新压缩包不允许包含符号链接')
-            if member.is_dir():
-                target.mkdir(parents=True, exist_ok=True)
-                continue
-            target.parent.mkdir(parents=True, exist_ok=True)
-            with archive.open(member) as source, target.open('wb') as output:
-                shutil.copyfileobj(source, output)
+    try:
+        safe_extract_zip(archive_path, destination)
+    except UpdateApplyError as error:
+        raise UpdateError(str(error)) from error
 
 
 def _find_package_dir(extracted_dir: Path) -> Path:
