@@ -3,6 +3,7 @@ import type { PointerEventHandler, ReactNode } from 'react'
 import type { ToolDescriptor } from '../api/types'
 import type { WorkbenchView } from '../stores/workbench'
 import { useWorkbench } from '../stores/workbench'
+import appLogo from '../assets/app-logo.svg'
 
 interface SidebarProps {
   activeView: WorkbenchView
@@ -69,13 +70,13 @@ export function Sidebar({
         <div className="sidebar-brand-row">
           {!sidebarCollapsed && (
             <button type="button" className="sidebar-brand" title="SYNTEC" onClick={openWorkbench}>
-              <span className="sidebar-brand-mark">S</span>
+              <img className="sidebar-brand-mark" src={appLogo} alt="SYNTEC" />
               <span className="sidebar-brand-name">SYNTEC</span>
             </button>
           )}
           {sidebarCollapsed && (
             <>
-              <span className="sidebar-brand-mark" title="SYNTEC">S</span>
+              <img className="sidebar-brand-mark" src={appLogo} alt="SYNTEC" title="SYNTEC" />
               <button
                 type="button"
                 className="sidebar-toggle sidebar-toggle-rail"

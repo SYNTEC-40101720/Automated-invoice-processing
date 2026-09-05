@@ -817,11 +817,10 @@ h1 {
   height: 30px;
   flex: 0 0 30px;
   place-items: center;
-  border: 1px solid var(--line-strong);
+  border: 0;
   border-radius: 50%;
-  color: var(--text);
-  background: var(--button-bg);
-  font: 600 14px "Segoe UI Variable", "Microsoft YaHei UI", sans-serif;
+  background: transparent;
+  object-fit: contain;
 }
 
 .sidebar-brand-name {
