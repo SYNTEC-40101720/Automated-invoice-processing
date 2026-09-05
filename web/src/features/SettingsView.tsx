@@ -46,6 +46,7 @@ const settingsSectionMeta: Record<SettingsSection, { label: string; eyebrow: str
   },
 }
 const invoiceSettingsOrder: SettingsSection[] = ['business', 'email', 'ai']
+const settingsSectionOrder: SettingsSection[] = ['devbase', ...invoiceSettingsOrder]
 
 export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate, theme, onThemeChange }: SettingsViewProps) {
   const queryClient = useQueryClient()
@@ -166,32 +167,18 @@ export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate, th
   return <div className="editor-view feature-view">
     <div className="view-scroll feature-scroll settings-scroll">
       <nav className="settings-subnav" aria-label="设置分类">
-        <div className="settings-subnav-group">
-          <span className="settings-subnav-label">DevBase</span>
-          <button
-            className={settingsSection === 'devbase' ? 'is-active' : ''}
-            onClick={() => setSettingsSection('devbase')}
-            aria-current={settingsSection === 'devbase' ? 'page' : undefined}
+        {settingsSectionOrder.map((sectionId) => {
+          const item = settingsSectionMeta[sectionId]
+          return <button
+            key={sectionId}
+            className={settingsSection === sectionId ? 'is-active' : ''}
+            onClick={() => setSettingsSection(sectionId)}
+            aria-current={settingsSection === sectionId ? 'page' : undefined}
           >
-            {settingsSectionMeta.devbase.icon}
-            <span>基础设置</span>
+            {item.icon}
+            <span>{sectionId === 'devbase' ? '基础设置' : item.label}</span>
           </button>
-        </div>
-        <div className="settings-subnav-group settings-subnav-group-invoice">
-          <span className="settings-subnav-label">发票业务</span>
-          {invoiceSettingsOrder.map((sectionId) => {
-            const item = settingsSectionMeta[sectionId]
-            return <button
-              key={sectionId}
-              className={settingsSection === sectionId ? 'is-active' : ''}
-              onClick={() => setSettingsSection(sectionId)}
-              aria-current={settingsSection === sectionId ? 'page' : undefined}
-            >
-              {item.icon}
-              <span>{item.label}</span>
-            </button>
-          })}
-        </div>
+        })}
       </nav>
       <header className="view-header feature-header">
         <div>

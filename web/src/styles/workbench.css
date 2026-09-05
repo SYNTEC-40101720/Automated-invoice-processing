@@ -132,25 +132,6 @@ h1 { margin: 10px 0 8px; color: var(--text); font-size: 30px; font-weight: 600; 
   gap: 8px 12px;
 }
 
-.settings-subnav-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.settings-subnav-group-invoice {
-  padding-left: 12px;
-  border-left: 1px solid var(--line);
-}
-
-.settings-subnav-label {
-  margin-right: 2px;
-  color: var(--text-subtle);
-  font: 10px "Cascadia Code", monospace;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-}
-
 .settings-panel-stack {
   display: grid;
   gap: 14px;
