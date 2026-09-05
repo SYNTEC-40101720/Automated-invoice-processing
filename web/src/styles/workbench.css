@@ -747,6 +747,34 @@ h1 {
   color: var(--text);
 }
 
+.sidebar-primary-item {
+  color: var(--text-muted);
+}
+
+.sidebar-primary-item:hover {
+  color: var(--text);
+  background: var(--hover-bg);
+}
+
+.sidebar-primary-item.is-active {
+  color: var(--text);
+  background: var(--active-bg);
+}
+
+.sidebar-primary-icon {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  place-items: center;
+  color: currentColor;
+}
+
+.sidebar-primary-item .sidebar-primary-icon,
+.sidebar-primary-item.is-active .sidebar-primary-icon {
+  color: currentColor;
+}
+
 :root[data-theme="dark"] .side-bar,
 :root[data-theme="dark"] .status-bar {
   background: var(--sidebar-bg);
