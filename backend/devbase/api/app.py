@@ -33,6 +33,7 @@ def create_app(
     allowed_origins: Iterable[str] | None = None,
     update_manager: UpdateManager | None = None,
     include_default_routes: bool = True,
+    defer_static_mount: bool = False,
 ) -> FastAPI:
     app = FastAPI(
         title=title,
@@ -100,14 +101,8 @@ def create_app(
         app.include_router(tools.router, prefix="/api/v1")
         app.include_router(updates.router, prefix="/api/v1")
 
-    if static_dir is not None:
-        static_path = Path(static_dir)
-        if static_path.is_dir() and (static_path / "index.html").is_file():
-            app.mount(
-                "/",
-                StaticFiles(directory=static_path, html=True),
-                name="frontend",
-            )
+    if static_dir is not None and not defer_static_mount:
+        mount_static_frontend(app, static_dir)
 
     @app.exception_handler(JobAlreadyRunningError)
     async def handle_job_conflict(
@@ -147,6 +142,19 @@ def create_app(
         )
 
     return app
+
+
+def mount_static_frontend(app: FastAPI, static_dir: str | Path | None) -> None:
+    """Mount a built frontend after a derived app has registered its routes."""
+    if static_dir is None:
+        return
+    static_path = Path(static_dir)
+    if static_path.is_dir() and (static_path / "index.html").is_file():
+        app.mount(
+            "/",
+            StaticFiles(directory=static_path, html=True),
+            name="frontend",
+        )
 
 
 def create_app_from_environment() -> FastAPI:

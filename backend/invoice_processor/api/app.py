@@ -9,7 +9,10 @@ from pathlib import Path
 from fastapi import FastAPI
 
 from devbase.application.job_runtime import JobRuntime
-from devbase.api.app import create_app as create_devbase_app
+from devbase.api.app import (
+    create_app as create_devbase_app,
+    mount_static_frontend,
+)
 
 from ..application.invoice_task import build_invoice_registry
 from ..application.job_service import JobService
@@ -41,6 +44,7 @@ def create_app(
         lifecycle_policy=None,
         allowed_origins=allowed_origins,
         include_default_routes=False,
+        defer_static_mount=True,
     )
     app.state.job_service = service
     app.state.devbase_runtime = runtime
@@ -55,6 +59,7 @@ def create_app(
     app.include_router(email.router, prefix='/api/v1')
     app.include_router(tools.router, prefix='/api/v1')
     app.add_exception_handler(ApplicationError, application_error_handler)
+    mount_static_frontend(app, static_dir)
     return app
 
 
