@@ -20,14 +20,14 @@
 - Python 3.12+
 - Windows 操作系统
 - Node.js 18+ 与 npm（仅前端构建需要）
-- 依赖包详见 [requirements.txt](requirements.txt)
+- 依赖详见 [pyproject.toml](pyproject.toml)
 
 ## 安装步骤
 
 1. 克隆或下载项目到本地
-2. 安装 Python 依赖包：
+2. 安装 Python 依赖包（含开发工具）：
    ```
-   python -m pip install -r requirements.txt
+   python -m pip install -e .[dev,build]
    ```
 3. 安装并构建 Web 工作台：
    ```
@@ -38,9 +38,9 @@
    ```
    python main.py
    ```
-5. 按 SYNTEC 域控规范打包（需安装 PyInstaller）：
+5. 按 SYNTEC 域控规范打包：
    ```
-   python build_syntec.py
+   python scripts/build_syntec.py
    ```
 
 浏览器调试模式：
@@ -55,14 +55,15 @@ python main.py --browser --no-browser
 
 ```
 ├── main.py                       # Web 桌面入口（FastAPI + pywebview）
-├── build_syntec.py               # 前端构建、PyInstaller 打包和合规校验
-├── bump_version.py               # 递增并同步发布版本号
-├── requirements.txt              # 依赖包列表
-├── version_info.txt              # PyInstaller Windows 版本信息资源
 ├── pyproject.toml                # 项目元数据与工具配置
 ├── config.ini                    # 运行时用户配置（不入库，首次运行自动生成）
 ├── README.md                     # 项目说明
-├── PROJECT_DEV.md                # 项目维护说明（业务规则、架构约定）
+├── version_info.txt              # PyInstaller Windows 版本信息资源
+├── docs/                         # 项目文档（架构、SOP、开发维护说明）
+├── scripts/                     # 构建与工具脚本
+│   ├── build_syntec.py           # 前端构建、PyInstaller 打包和合规校验
+│   ├── bump_version.py           # 递增并同步发布版本号
+│   └── smoke/                    # 更新器发布前冒烟脚本
 ├── backend/
 │   ├── devbase/                  # 通用桌面工具框架
 │   │   ├── domain/               # 状态、事件、端口和资源
@@ -80,8 +81,7 @@ python main.py --browser --no-browser
 ├── web/                          # React/Vite 工作台
 │   ├── src/                      # 视图、API 客户端、状态和样式
 │   └── package.json              # 前端脚本与依赖
-├── tests/                        # 核心、应用层和 API 契约测试
-└── smoke/                        # 更新器发布前冒烟脚本（输出使用系统临时目录）
+└── tests/                        # 核心、应用层和 API 契约测试
 ```
 
 ## 模块职责
@@ -114,6 +114,8 @@ python main.py --browser --no-browser
 ## 配置说明
 
 业务配置（税号、线程数和 AI 审核）通过 Web 工作台「设置」视图修改；邮箱连接参数在「设置」视图维护，收件目录、自动收件开关和轮询间隔在「收件箱」视图设置并显示。所有配置保存至 `config.ini` 并立即生效，处理工作区的源文件目录由处理页单独选择。授权码和 API Key 由本地安全存储负责保存，API 响应只返回是否已配置。
+
+详细架构和开发规范见 [docs/](docs/) 目录。
 
 业务配置默认值和动态读取逻辑见 [backend/invoice_processor/config.py](backend/invoice_processor/config.py) 与 [backend/invoice_processor/config_manager.py](backend/invoice_processor/config_manager.py)。
 
@@ -149,12 +151,12 @@ python -m ruff check backend tests
 版本源为 `backend/invoice_processor/version.py`，递增命令会同步 `pyproject.toml`、Web 包元数据和 PyInstaller 资源：
 
 ```bash
-python bump_version.py patch   # 7.0.5 → 7.0.6
-python bump_version.py minor   # 7.0.5 → 7.1.0
-python bump_version.py major   # 7.0.5 → 8.0.0
+python scripts/bump_version.py patch   # 7.0.5 → 7.0.6
+python scripts/bump_version.py minor   # 7.0.5 → 7.1.0
+python scripts/bump_version.py major   # 7.0.5 → 8.0.0
 ```
 
-普通测试不会自动修改版本；正式发布时运行 `python build_syntec.py` 会自动把补丁版本递增一次，并同步到运行时、前端元数据和 Windows 资源。打包脚本会拒绝不一致的版本配置。
+普通测试不会自动修改版本；正式发布时运行 `python scripts/build_syntec.py` 会自动把补丁版本递增一次，并同步到运行时、前端元数据和 Windows 资源。打包脚本会拒绝不一致的版本配置。
 
 ## 自动更新检查
 
@@ -168,8 +170,8 @@ python bump_version.py major   # 7.0.5 → 8.0.0
 
 发布新版本时保持版本号一致：
 
-1. 执行 `python bump_version.py patch`（或 `minor`、`major`）。
-2. 执行 `python build_syntec.py`，生成新的 `dist/SYNTEC-电子票据处理系统/` 打包目录，其中包含主程序和 `SYNTEC-电子票据更新器.exe`。
+1. 执行 `python scripts/bump_version.py patch`（或 `minor`、`major`）。
+2. 执行 `python scripts/build_syntec.py`，生成新的 `dist/SYNTEC-电子票据处理系统/` 打包目录，其中包含主程序和 `SYNTEC-电子票据更新器.exe`。
 3. `build_syntec.py` 会生成 `dist/SYNTEC-Invoice-Processor-vX.Y.Z.zip`，直接使用该 ASCII 文件名作为资产。
 4. 在 GitHub 创建 Release，标签使用 `vX.Y.Z` 格式，上传该 ZIP 并发布。
 5. 发布 Release 后，用户在设置页点击「检查更新」即可下载并完成更新；Release 标签版本必须高于软件当前版本。
@@ -190,4 +192,4 @@ python bump_version.py major   # 7.0.5 → 8.0.0
 | v6.1 | 2026-07 | 域控规范支持、桌面界面迁移、墨韵主题 |
 | v6.0 | 2026-07 | 初始版本 |
 
-详细变更见 [PROJECT_DEV.md](PROJECT_DEV.md)。
+详细变更见 [docs/PROJECT_DEV.md](docs/PROJECT_DEV.md)。

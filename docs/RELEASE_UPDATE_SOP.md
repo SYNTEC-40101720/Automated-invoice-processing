@@ -302,8 +302,8 @@ Windows 冒烟结果：
 
 本地端到端冒烟（使用真实 PyInstaller onedir EXE）：
 
-- `python smoke/run_success_smoke.py`：stub 主程序写入确认文件 → 新版本提交、旧备份和 staging 清理；构建输出全部位于系统临时目录。
-- `python smoke/run_failure_smoke.py`：stub 主程序不写确认文件直接退出 → 旧版本恢复、`update.log` 保留；构建输出全部位于系统临时目录。
+- `python scripts/smoke/run_success_smoke.py`：stub 主程序写入确认文件 → 新版本提交、旧备份和 staging 清理；构建输出全部位于系统临时目录。
+- `python scripts/smoke/run_failure_smoke.py`：stub 主程序不写确认文件直接退出 → 旧版本恢复、`update.log` 保留；构建输出全部位于系统临时目录。
 
 已知仍无法本地覆盖的风险：
 

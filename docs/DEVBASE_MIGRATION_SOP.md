@@ -209,7 +209,7 @@
 
 ### 8. PyInstaller 打包 `.spec` + 脚本分离
 
-**来源**：发票项目 `build_syntec.py` + `version_info.txt`
+**来源**：发票项目 `scripts/build_syntec.py` + `version_info.txt`
 
 **DevBase 目标文件**：
 - `devbase.spec` — 标准 PyInstaller spec（双 exe：主程序 + 更新器）
@@ -231,7 +231,7 @@
 
 ### 9. GitHub Release 自动更新体系
 
-**来源**：发票项目 `src/desktop/update_helper.py` + `update_manager.py` + `update_protocol.py` + `src/application/update_checker.py` + `UpdateBanner.tsx` + `GITHUB_RELEASE_UPDATE_SOP.md`
+**来源**：发票项目 `src/desktop/update_helper.py` + `update_manager.py` + `update_protocol.py` + `src/application/update_checker.py` + `UpdateBanner.tsx` + `docs/RELEASE_UPDATE_SOP.md`
 
 **DevBase 目标文件**：
 - `backend/devbase/desktop/update_helper.py` — 独立更新器
@@ -240,7 +240,7 @@
 - `backend/devbase/application/update_checker.py` — 版本比较 + 资产选择
 - `backend/devbase/api/routes/` — 更新端点
 - `web/src/components/UpdateBanner.tsx` — 前端更新 UI
-- `GITHUB_RELEASE_UPDATE_SOP.md` — SOP 文档
+- `docs/RELEASE_UPDATE_SOP.md` — SOP 文档
 
 **验收标准**：
 - [ ] 版本比较：semver 比较，选出最新 Release
@@ -352,7 +352,7 @@
 
 ### 14. `bump_version.py` 版本同步
 
-**来源**：发票项目 `bump_version.py`
+**来源**：发票项目 `scripts/bump_version.py`
 
 **DevBase 目标文件**：`bump_version.py`（根目录）
 
@@ -363,7 +363,7 @@
 - [ ] `--check` 只查不改
 - [ ] `LegalCopyright` 年份自动更新
 - [ ] Windows 版本四元组格式
-- [ ] CLI：`python bump_version.py [patch|minor|major] [--check]`
+- [ ] CLI：`python scripts/bump_version.py [patch|minor|major] [--check]`
 
 ---
 

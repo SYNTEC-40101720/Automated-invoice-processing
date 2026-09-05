@@ -13,6 +13,16 @@ dependencies = [
     "pywebview>=5.3.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "httpx",
+    "ruff",
+]
+build = [
+    "pyinstaller>=6.0",
+]
+
 [project.scripts]
 invoice-processor = "main:main"
 
@@ -24,7 +34,7 @@ select = ["E", "F", "W", "I"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["backend"]
+pythonpath = ["backend", "scripts"]
 
 [tool.setuptools.packages.find]
 where = ["backend"]

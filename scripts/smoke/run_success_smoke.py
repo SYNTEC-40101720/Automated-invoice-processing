@@ -1,4 +1,4 @@
-"""本地失败路径端到端冒烟：新版本不写确认文件，helper 应回滚。"""
+"""本地成功路径端到端冒烟：stub 主程序写入确认文件。"""
 from __future__ import annotations
 
 import shutil
@@ -8,7 +8,8 @@ import tempfile
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
+SCRIPT_DIR = Path(__file__).resolve().parent
 APP_NAME = 'SYNTEC-电子票据处理系统'
 
 
@@ -28,7 +29,7 @@ def package(smoke_root: Path) -> None:
         '--distpath', str(v1_root),
         '--workpath', str(smoke_root / 'build-smoke'),
         '--specpath', str(smoke_root),
-        str(ROOT / 'smoke' / 'stub_app_fail.py'),
+        str(SCRIPT_DIR / 'stub_app.py'),
     ])
 
 
@@ -42,8 +43,21 @@ def prepare_v2(v1: Path, v2: Path) -> None:
     (v2 / f'{APP_NAME}.exe.marker').write_text('new-version', encoding='utf-8')
 
 
+def stop_started_application(v1: Path) -> None:
+    pid_file = v1 / '.smoke-child.pid'
+    if not pid_file.exists():
+        return
+    pid = int(pid_file.read_text(encoding='ascii'))
+    subprocess.run(
+        ['taskkill', '/PID', str(pid), '/T', '/F'],
+        capture_output=True,
+        check=False,
+        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
+    )
+
+
 def main() -> int:
-    with tempfile.TemporaryDirectory(prefix='syntec-update-failure-') as temp_dir:
+    with tempfile.TemporaryDirectory(prefix='syntec-update-success-') as temp_dir:
         smoke_root = Path(temp_dir)
         v1 = smoke_root / 'v1' / APP_NAME
         v2 = smoke_root / 'v2'
@@ -51,9 +65,7 @@ def main() -> int:
 
         package(smoke_root)
         prepare_v2(v1, v2)
-        # 写入旧版标记，确认回滚后保留
-        old_marker = v1 / 'old-version.txt'
-        old_marker.write_text('old', encoding='utf-8')
+        # 等待 Windows 扫描/文件锁释放
         time.sleep(2)
 
         parent = subprocess.Popen(
@@ -71,31 +83,26 @@ def main() -> int:
             if parent.poll() is None:
                 parent.terminate()
                 parent.wait(timeout=5)
+        stop_started_application(v1)
 
-        if result.returncode == 0:
-            print('FAIL: helper should have failed')
+        if result.returncode != 0:
+            print('FAIL: helper exited with', result.returncode)
+            if (staging / 'update.log').exists():
+                print((staging / 'update.log').read_text(encoding='utf-8'))
             return 1
 
-        if not old_marker.exists() or old_marker.read_text(encoding='utf-8') != 'old':
-            print('FAIL: old installation not restored')
+        marker = v1 / f'{APP_NAME}.exe.marker'
+        if marker.exists():
+            print('SUCCESS: new version marker present')
+        else:
+            print('FAIL: new version marker missing')
             return 1
 
-        new_marker = v1 / f'{APP_NAME}.exe.marker'
-        if new_marker.exists():
-            print('FAIL: new version marker should not be present after rollback')
+        if staging.exists():
+            print('FAIL: staging directory should have been cleaned')
             return 1
 
-        log = staging / 'update.log'
-        if not log.exists():
-            print('FAIL: update log should be retained for diagnosis')
-            return 1
-
-        log_text = log.read_text(encoding='utf-8')
-        if '自动更新失败' not in log_text:
-            print('FAIL: update log should contain failure record')
-            return 1
-
-        print('SUCCESS: update rolled back and diagnostics preserved')
+        print('SUCCESS: update committed and staging cleaned')
         return 0
 
 

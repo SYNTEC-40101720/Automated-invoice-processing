@@ -2,7 +2,7 @@
 SYNTEC 域控规范打包脚本
 
 用法：
-    python build_syntec.py          # 自动清理 + 打包 + 合规验证
+    python scripts/build_syntec.py          # 自动清理 + 打包 + 合规验证
 
 输出：
     dist/SYNTEC-电子票据处理系统/
@@ -22,9 +22,13 @@ import sys
 import tomllib
 from pathlib import Path
 
-BACKEND_DIR = Path(__file__).resolve().parent / "backend"
+SCRIPTS_DIR = Path(__file__).resolve().parent
+ROOT = SCRIPTS_DIR.parent
+BACKEND_DIR = ROOT / "backend"
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
 
 from bump_version import update_files as sync_version_files
 from invoice_processor.version import __version__
@@ -50,7 +54,6 @@ def prepare_release_version() -> str:
 # 强制 UTF-8 输出，避免 emoji 在 GBK 终端报错
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
 
-ROOT = Path(__file__).resolve().parent
 APP_NAME = "SYNTEC-电子票据处理系统"
 UPDATER_NAME = "SYNTEC-电子票据更新器"
 RELEASE_ARCHIVE_PREFIX = "SYNTEC-Invoice-Processor"

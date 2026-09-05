@@ -140,7 +140,7 @@ Automated-invoice-processing-main/
 │   ├── application/                # 状态机与编排测试
 │   ├── api/                        # HTTP/WebSocket 契约测试
 │   └── e2e/                        # Playwright 桌面视口测试
-└── build_syntec.py                 # 先构建 web，再打包 Python 与静态资源
+└── scripts/build_syntec.py          # 先构建 web，再打包 Python 与静态资源
 ```
 
 重构完成后，生产代码不保留旧 UI 包或 Qt 依赖；新代码通过应用层、API 和桌面桥接层协作。

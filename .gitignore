@@ -37,12 +37,14 @@ dist/
 
 # IDE / Editor
 .idea/
-.vscode/
 *.swp
 *.swo
 *~
 .DS_Store
 Thumbs.db
+
+# VS Code (保留共享配置)
+# .vscode/ — 取消全局忽略，团队共享 settings.json
 
 # Project specific
 # 发票处理输出目录（运行时自动生成）
