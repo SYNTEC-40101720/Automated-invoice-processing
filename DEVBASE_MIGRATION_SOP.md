@@ -20,6 +20,7 @@
 - 主程序已新增 `invoice_processor.spec`，并通过实际 PyInstaller 构建
 - 更新器 ZIP 安全解压已复用 DevBase，发票 Release 命名和完整性校验保持业务扩展
 - 前端处理工作台的启动动作已切换到 DevBase `/jobs/start`，详情和日志暂由兼容层提供
+- 事件模型完成边界评估：DevBase 运行时负责任务生命周期，发票 EventBus 保留日志、统计和业务阶段事件，避免把业务字段硬塞进通用事件值对象
 - 根入口支持桌面/浏览器调试模式
 - NativeBridge 复用 DevBase 通用目录能力，保留发票专属方法
 - `/api/v1/tools` 和前端 Sidebar 已接入工具清单
@@ -30,7 +31,7 @@
 - 旧 `/jobs` 业务兼容 API 还未完全切换为 DevBase 标准 JobRuntime 契约
 - 发票事件总线与 DevBase 事件游标尚未统一
 - 更新器仍保留发票项目资产命名和兼容旧 Release 的扩展实现
-- 旧发票 jobs API 与 DevBase JobRuntime 事件模型尚未完全收敛
+- 旧发票 jobs API 仍作为详情/日志兼容层保留，后续可在不改变业务事件字段的前提下逐步收敛
 - 前端业务视图仍使用原有发票任务响应模型
 
 ---
