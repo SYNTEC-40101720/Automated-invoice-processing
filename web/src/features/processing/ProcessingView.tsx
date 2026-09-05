@@ -29,10 +29,6 @@ export function ProcessingView({ job, onChooseDirectory, onStart, onCancel, onOp
             <h1>电子票据处理</h1>
             <p>把目录里的 PDF 变成可核验、可归档的报销资料。</p>
           </div>
-          <div className={`state-badge ${finished ? 'success' : active ? 'working' : ''}`}>
-            {finished ? <CheckCircle2 size={15} /> : active ? <span className="pulse-dot" /> : <span className="idle-dot" />}
-            {finished ? '本次任务已完成' : active ? (job?.message ?? '正在处理') : '工作台就绪'}
-          </div>
         </header>
 
         <section className="source-strip">
