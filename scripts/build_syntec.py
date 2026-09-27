@@ -215,9 +215,17 @@ def create_release_archive() -> Path:
     with archive_path.open("rb") as archive_file:
         for chunk in iter(lambda: archive_file.read(1024 * 1024), b""):
             digest.update(chunk)
+    checksum = digest.hexdigest()
+    # 落盘 .sha256 附带文件：随 Release 一起上传后，可直接回填 SOP 记录，
+    # 也便于发布前人工核对。
+    checksum_path = archive_path.with_suffix(".zip.sha256")
+    checksum_path.write_text(
+        f"{checksum}  {archive_path.name}\n", encoding="utf-8"
+    )
     print(f"📦 Release ZIP: {archive_path}")
     print(f"   大小: {archive_path.stat().st_size / 1024 / 1024:.2f} MB")
-    print(f"   SHA-256: {digest.hexdigest()}")
+    print(f"   SHA-256: {checksum}")
+    print(f"   摘要文件: {checksum_path}")
     return archive_path
 
 

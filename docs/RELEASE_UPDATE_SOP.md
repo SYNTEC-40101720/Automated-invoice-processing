@@ -167,11 +167,9 @@ else:
 
 ### 7.3 生成和上传资产
 
-生成完整 ZIP 后计算摘要：
-
-```powershell
-Get-FileHash .\dist\ProductName-v1.2.3.zip -Algorithm SHA256
-```
+`python scripts/build_syntec.py` 会在生成 ZIP 的同时落盘摘要文件
+`dist/SYNTEC-Invoice-Processor-vX.Y.Z.zip.sha256`（格式：`<sha256>  <文件名>`），
+无需再手工执行 Get-FileHash：
 
 创建 Release 并上传 ASCII 资产：
 
@@ -196,7 +194,7 @@ gh release view v1.2.3 --repo OWNER/REPOSITORY --json tagName,isDraft,isPrerelea
 - 资产 `state=uploaded`
 - 资产名仍为预期 ASCII 名称
 - 资产大小合理
-- GitHub digest 与本地 SHA-256 一致
+- GitHub digest 与本地 SHA-256 一致（以 `.zip.sha256` 文件为准）
 
 ## 8. 验收矩阵
 
