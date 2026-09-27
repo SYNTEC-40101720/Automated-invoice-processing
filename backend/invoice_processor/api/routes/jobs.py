@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
-
 from devbase.application.job_runtime import JobRuntime
+from fastapi import APIRouter, Depends, status
 
 from ...application.job_service import JobService
 from ..dependencies import get_devbase_runtime, get_job_service, require_local_token
@@ -46,7 +45,11 @@ def start_job(
     return service.start_job(request.source_dir, request.trigger)
 
 
-@router.post('/start', response_model=RuntimeJobResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    '/start',
+    response_model=RuntimeJobResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def start_runtime_job(
     request: RuntimeJobStartRequest,
     runtime: JobRuntime = Depends(get_devbase_runtime),

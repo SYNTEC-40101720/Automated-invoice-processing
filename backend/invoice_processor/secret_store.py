@@ -11,7 +11,6 @@ import sys
 
 from devbase.secret_store import DPAPI_PREFIX, SecretStore
 
-
 PREFIX = DPAPI_PREFIX
 
 

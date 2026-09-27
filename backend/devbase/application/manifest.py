@@ -85,7 +85,10 @@ class ToolRegistry:
 
     def descriptors(self) -> list[ToolDescriptor]:
         """All descriptors, sorted by (group, kind) — stable for rendering."""
-        return [self._tools[k] for k in sorted(self._tools, key=lambda k: (self._tools[k].group, k))]
+        return [
+            self._tools[k]
+            for k in sorted(self._tools, key=lambda k: (self._tools[k].group, k))
+        ]
 
     def groups(self) -> list[str]:
         """Distinct group names in registration order."""

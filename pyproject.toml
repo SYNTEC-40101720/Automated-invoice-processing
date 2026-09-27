@@ -32,6 +32,10 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
 
+[tool.ruff.lint.per-file-ignores]
+# 打包脚本需要先注入 sys.path 才能导入 backend/scripts 内模块
+"scripts/build_syntec.py" = ["E402"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["backend", "scripts"]

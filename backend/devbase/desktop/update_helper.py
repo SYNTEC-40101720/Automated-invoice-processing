@@ -61,7 +61,9 @@ def safe_extract_zip(
     with zipfile.ZipFile(archive) as source:
         for info in source.infolist():
             if _is_symlink(info):
-                raise UpdateApplyError(f"symbolic links are not allowed: {info.filename}")
+                raise UpdateApplyError(
+                    f"symbolic links are not allowed: {info.filename}"
+                )
             parts = _member_parts(info.filename)
             top_levels.add(parts[0])
             members.append((info, parts))
@@ -76,7 +78,9 @@ def safe_extract_zip(
         for info, parts in members:
             target = (destination_path.joinpath(*parts)).resolve()
             if destination_path not in target.parents and target != destination_path:
-                raise UpdateApplyError(f"ZIP member escapes extraction root: {info.filename}")
+                raise UpdateApplyError(
+                    f"ZIP member escapes extraction root: {info.filename}"
+                )
             if info.is_dir() or info.filename.endswith(("/", "\\")):
                 target.mkdir(parents=True, exist_ok=True)
                 continue
@@ -93,13 +97,17 @@ def require_release_files(
     updater_name: str | None = None,
 ) -> None:
     root = Path(release_dir)
-    executable_matches = [path for path in root.rglob(executable_name) if path.is_file()]
+    executable_matches = [
+        path for path in root.rglob(executable_name) if path.is_file()
+    ]
     if len(executable_matches) != 1:
         raise UpdateApplyError(
             f"expected one {executable_name}, found {len(executable_matches)}"
         )
     if updater_name is not None:
-        updater_matches = [path for path in root.rglob(updater_name) if path.is_file()]
+        updater_matches = [
+            path for path in root.rglob(updater_name) if path.is_file()
+        ]
         if len(updater_matches) != 1:
             raise UpdateApplyError(
                 f"expected one {updater_name}, found {len(updater_matches)}"

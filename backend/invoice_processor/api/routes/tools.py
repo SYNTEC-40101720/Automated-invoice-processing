@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
-
 from devbase.application.job_runtime import JobRuntime
+from fastapi import APIRouter, Depends
 
 from ..dependencies import get_devbase_runtime, require_local_token
 from ..schemas import ToolDescriptorResponse, ToolListResponse
-
 
 router = APIRouter(
     prefix='/tools',

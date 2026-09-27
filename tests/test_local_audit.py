@@ -5,7 +5,6 @@
 import base64
 
 import pytest
-
 from invoice_processor.core.local_audit import check_filenames, check_rows
 
 

@@ -320,7 +320,9 @@ class JobRuntime:
         )
 
 
-def demo_long_task(ctx: TaskContext, *, total_steps: int = 10, step_delay: float = 0.2) -> dict[str, Any]:
+def demo_long_task(
+    ctx: TaskContext, *, total_steps: int = 10, step_delay: float = 0.2
+) -> dict[str, Any]:
     """Built-in demo task: counts to ``total_steps`` unless cancelled.
 
     Registered as ``demo_long_task``. Real tools register their own task
@@ -330,7 +332,8 @@ def demo_long_task(ctx: TaskContext, *, total_steps: int = 10, step_delay: float
     for step in range(1, total_steps + 1):
         if ctx.is_cancelled():
             return {"done": False, "message": res.string("demo.cancelled")}
-        ctx.report_progress(step / total_steps, res.string("demo.progress", step=step, total=total_steps))
+        message = res.string("demo.progress", step=step, total=total_steps)
+        ctx.report_progress(step / total_steps, message)
         time.sleep(step_delay)
     return {"done": True, "message": res.string("demo.completed")}
 

@@ -6,7 +6,6 @@ import os
 import threading
 
 import pytest
-
 from invoice_processor.application.event_bus import EventBus
 from invoice_processor.application.invoice_file_service import FileProcessResult
 from invoice_processor.application.job_service import JobService
@@ -92,7 +91,10 @@ def make_source(tmp_path, count=2):
 def test_known_directory_includes_configured_inbox(tmp_path, monkeypatch):
     inbox = tmp_path / 'inbox'
     inbox.mkdir()
-    monkeypatch.setattr('invoice_processor.application.job_service.get_inbox_dir', lambda: str(inbox))
+    monkeypatch.setattr(
+        'invoice_processor.application.job_service.get_inbox_dir',
+        lambda: str(inbox),
+    )
     service, _ = make_service(tmp_path)
 
     assert service.is_known_directory(str(inbox)) is True

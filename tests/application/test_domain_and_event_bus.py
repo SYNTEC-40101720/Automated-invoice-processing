@@ -3,7 +3,6 @@
 import threading
 
 import pytest
-
 from invoice_processor.application.event_bus import EventBus
 from invoice_processor.domain.errors import EventStreamClosed, InvalidJobTransition
 from invoice_processor.domain.job import Job, JobStatus, JobTrigger

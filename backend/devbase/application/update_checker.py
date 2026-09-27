@@ -95,12 +95,22 @@ class GitHubReleaseClient:
 
     def check(self, current: str | ReleaseVersion) -> UpdateCheckResult:
         current_version = (
-            current if isinstance(current, ReleaseVersion) else ReleaseVersion.parse(current)
+            current
+            if isinstance(current, ReleaseVersion)
+            else ReleaseVersion.parse(current)
         )
         try:
             payload = self._fetch_release()
             release = self._parse_release(payload)
-        except (OSError, URLError, TimeoutError, ValueError, TypeError, KeyError, UpdateCheckError) as error:
+        except (
+            OSError,
+            URLError,
+            TimeoutError,
+            ValueError,
+            TypeError,
+            KeyError,
+            UpdateCheckError,
+        ) as error:
             return UpdateCheckResult(
                 current=current_version,
                 latest=None,
@@ -146,8 +156,14 @@ class GitHubReleaseClient:
         try:
             with self._opener(request, timeout=self.config.timeout_seconds) as response:
                 content_length = response.headers.get("Content-Length")
-                if content_length is not None and int(content_length) > self.config.max_download_bytes:
-                    raise UpdateCheckError("release asset exceeds configured size limit")
+                exceeds_limit = (
+                    content_length is not None
+                    and int(content_length) > self.config.max_download_bytes
+                )
+                if exceeds_limit:
+                    raise UpdateCheckError(
+                        "release asset exceeds configured size limit"
+                    )
                 with tempfile.NamedTemporaryFile(
                     mode="wb",
                     prefix="download-",
@@ -159,7 +175,9 @@ class GitHubReleaseClient:
                     for chunk in _chunks(response):
                         total += len(chunk)
                         if total > self.config.max_download_bytes:
-                            raise UpdateCheckError("release asset exceeds configured size limit")
+                            raise UpdateCheckError(
+                                "release asset exceeds configured size limit"
+                            )
                         digest.update(chunk)
                         output.write(chunk)
             if total == 0:
@@ -212,7 +230,9 @@ class GitHubReleaseClient:
             download_url = raw.get("browser_download_url")
             if not isinstance(name, str) or not isinstance(download_url, str):
                 continue
-            if not name.startswith(self.config.asset_prefix) or not name.endswith(".zip"):
+            if not name.startswith(self.config.asset_prefix) or not name.endswith(
+                ".zip"
+            ):
                 continue
             if not download_url.startswith(self.config.download_prefix):
                 continue

@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from devbase import __version__
 from devbase.application.errors import (
     JobAlreadyRunningError,
     JobNotCancellableError,
@@ -17,7 +18,6 @@ from devbase.application.job_runtime import JobRuntime
 from devbase.application.lifecycle import LifecyclePolicy, WindowLifecycle
 from devbase.application.task import TaskNotFoundError
 from devbase.desktop.update_manager import UpdateManager
-from devbase import __version__
 
 from .routes import events, jobs, system, tools, updates
 

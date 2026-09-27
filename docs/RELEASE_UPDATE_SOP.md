@@ -273,21 +273,21 @@ Windows 冒烟结果：
 
 ## 11. 本项目交付基线
 
-当前源码与发布流程对应 v7.0.12。历史版本说明保留在 README 的版本历史中，本节只保留当前交付所需的验收记录。
+当前源码与发布流程对应 v7.1.3。历史版本说明保留在 README 的版本历史中，本节只保留当前交付所需的验收记录。
 
 - 应用：SYNTEC 电子票据处理系统
 - 仓库：`SYNTEC-40101720/Automated-invoice-processing`
-- 当前版本：`7.0.11`
-- 目标版本：`7.0.12`
-- Release URL：https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.0.12
-- 资产：`SYNTEC-Invoice-Processor-v7.0.12.zip`
-- 资产大小：`53,971,338` bytes（约 51.47 MiB）
-- 资产 SHA-256：`65e7c7942774592e770008202590dd3e9f84ffb6d9ad957adb9662eaa98b1ec7`
+- 当前版本：`7.1.1`
+- 目标版本：`7.1.3`
+- Release URL：https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.1.3
+- 资产：`SYNTEC-Invoice-Processor-v7.1.3.zip`
+- 资产大小：`71,139,735` bytes（约 67.89 MiB）
+- 资产 SHA-256：待发布后补充
 - 主程序/更新器版本资源：`7.0.12.0`；CompanyName 为 `SYNTEC`；语言为中性
 - ZIP 结构：单一顶层目录，包含主程序、独立更新器和 `_internal/web/dist/index.html`
-- 完整 Python 测试：`161 passed`
+- 完整 Python 测试：`171 passed`
 - 前端构建：`npm run build` 通过
-- Releases API 检查：传入 `7.0.11` 得到 `available=true`、`installable=true`；传入 `7.0.12` 得到 `available=false`
+- Releases API 检查：传入 `7.1.1` 得到 `available=true`、`installable=true`；传入 `7.1.3` 得到 `available=false`（以发布后实测为准）
 - 旧版 EXE 实际启动检查：本次未执行
 - 配置、日志和业务数据保留：本机更新器冒烟已验证；真实 Windows 安装替换尚未执行
 - 未覆盖环境：真实域控机器、干净 Windows 环境和实际 GitHub Release 更新替换/回滚流程

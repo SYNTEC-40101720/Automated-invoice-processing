@@ -6,13 +6,14 @@ import os
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
-from fastapi import FastAPI
-
-from devbase.application.job_runtime import JobRuntime
 from devbase.api.app import (
     create_app as create_devbase_app,
+)
+from devbase.api.app import (
     mount_static_frontend,
 )
+from devbase.application.job_runtime import JobRuntime
+from fastapi import FastAPI
 
 from ..application.invoice_task import build_invoice_registry
 from ..application.job_service import JobService

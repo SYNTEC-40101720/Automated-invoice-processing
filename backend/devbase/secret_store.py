@@ -7,8 +7,16 @@ import binascii
 import ctypes
 import sys
 import warnings
-from ctypes import POINTER, Structure, byref, c_bool, c_ubyte, c_uint32, c_void_p
-from ctypes import c_wchar_p
+from ctypes import (
+    POINTER,
+    Structure,
+    byref,
+    c_bool,
+    c_ubyte,
+    c_uint32,
+    c_void_p,
+    c_wchar_p,
+)
 
 DPAPI_PREFIX = "dpapi:"
 INSECURE_PREFIX = "insecure:"

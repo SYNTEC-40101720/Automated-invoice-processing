@@ -1,7 +1,6 @@
 """更新检查 API 测试。"""
 
 from fastapi.testclient import TestClient
-
 from invoice_processor.api.app import create_app
 from invoice_processor.api.routes import system as system_route
 from invoice_processor.application.update_checker import (

@@ -1,4 +1,4 @@
-# SYNTEC 电子票据处理系统 v7.0.12
+# SYNTEC 电子票据处理系统 v7.1.3
 
 基于 Python 3.12+、FastAPI 的业务底层、React/Vite Web 工作台和 pywebview/WebView2 桌面壳，用于批量识别、重命名、校验与合并 PDF 电子发票。
 
@@ -136,7 +136,7 @@ python -m pytest tests/test_integration.py -v
 python -m ruff check backend tests
 ```
 
-当前 v7.0.12 发布基线已验证 Python 测试通过、编译和依赖检查通过，前端类型检查和生产构建通过；DevBase 工具清单已提供 `invoice_processing` 任务入口。旧版 EXE 实际启动、干净域控账户启动和目标机 WebView2 验收仍需单独执行。
+当前 v7.1.3 发布基线已验证 Python 测试通过（171 条）、编译和依赖检查通过，前端类型检查和生产构建通过；DevBase 工具清单已提供 `invoice_processing` 任务入口。旧版 EXE 实际启动、干净域控账户启动和目标机 WebView2 验收仍需单独执行。
 
 ## 版本发布
 
@@ -172,6 +172,8 @@ python scripts/bump_version.py major   # 7.0.5 → 8.0.0
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v7.1.3 | 2026-09-05 | 目录规范化（docs/、scripts/、pyproject 统一依赖）、默认打开「发票收取」、修复窄视口侧边栏错位并简化 main.py 入口 |
+| v7.1.1 | 2026-09-05 | DevBase 框架迁移：任务运行时、更新安全、生命周期复用 DevBase；工作台外壳对齐 DevBase 侧边栏与导航；邮箱收件箱简化并新增打开目录 API；清理死代码（171 条测试通过，域控打包合规验证通过） |
 | v7.0.12 | 2026-09-01 | 完善自动更新启动确认、回滚保护、安装包完整性校验和发布前冒烟验证；隔离测试构建产物 |
 | v7.0.11 | 2026-08-31 | 完善 GitHub Release 自动更新的包完整性校验、启动确认、回滚保护和本地成功/失败冒烟验证 |
 | v7.0.5 | 2026-08-29 | 清理发布产物和冗余配置入口，补齐 README/版本信息并完成发布前静态验证与打包路径整理 |

@@ -12,7 +12,6 @@ from typing import Any
 
 from devbase import __version__
 
-
 DirectoryPicker = Callable[[str], str | None]
 DirectoryOpener = Callable[[Path], None]
 PathChecker = Callable[[Path], bool]

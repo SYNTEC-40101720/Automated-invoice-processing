@@ -145,7 +145,12 @@ def run_desktop(
     server_thread.start()
     base_url = f'http://{host}:{port}'
     try:
-        health_url = f'http://[IP_ADDRESS]:{port}/api/v1/system/health' if host in ('[IP_ADDRESS]', '[IP_ADDRESS]') else f'{base_url}/api/v1/system/health'
+        loopback = host in ('127.0.0.1', 'localhost')
+        health_url = (
+            f'http://127.0.0.1:{port}/api/v1/system/health'
+            if loopback
+            else f'{base_url}/api/v1/system/health'
+        )
         _wait_until_ready(health_url, token)
         print(f'\n工作台地址: {base_url}/?token={token}\n')
         try:

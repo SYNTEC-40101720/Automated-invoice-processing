@@ -9,7 +9,6 @@ import zipfile
 from urllib.error import URLError
 
 import pytest
-
 from invoice_processor.application.update_checker import (
     GITHUB_API_URL,
     GITHUB_RELEASES_URL,

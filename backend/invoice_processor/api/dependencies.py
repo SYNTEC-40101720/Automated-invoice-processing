@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from fastapi import Header, HTTPException, Request, WebSocket
-
 from devbase.application.job_runtime import JobRuntime
+from fastapi import Header, HTTPException, Request, WebSocket
 
 from ..application.job_service import JobService
 

@@ -76,7 +76,11 @@ class NativeBridge(DevBaseNativeBridge):
     def open_directory(self, path: str) -> bool:
         checker = None
         if self._directory_checker is not None:
-            checker = lambda target: self._directory_checker(str(target))
+            original = self._directory_checker
+
+            def checker(target) -> bool:  # noqa: F811
+                return original(str(target))
+
         return super().open_directory(path, checker=checker)
 
     def get_runtime_info(self) -> dict[str, str | bool]:

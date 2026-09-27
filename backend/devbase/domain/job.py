@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # 避免 events.py -> job.py -> events.py 循环导入
+    from .events import RuntimeEvent
 
 
 class JobStatus(StrEnum):

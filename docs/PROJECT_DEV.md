@@ -1,7 +1,7 @@
 # 项目维护说明（PROJECT_DEV）
 
 > 本文件记录发票处理系统的核心业务规则、技术约定与历史踩坑点。
-> 当前交付基线：v7.0.12。
+> 当前交付基线：v7.1.3。
 > **修改业务逻辑前，请先阅读本文件，避免重复踩坑。**
 
 ---
@@ -138,7 +138,7 @@ web/
 | 10 | 配置硬编码 | 税号写死在 config.py | `config_manager.py` 读写 INI + Web 设置视图 | 修改税号后下次处理生效 |
 | 11 | 类型路由 if-elif 难扩展 | 新增类型要改核心方法 | `@register_type` 装饰器 + `_TYPE_REGISTRY` 注册表 | 新增类型只加装饰器 |
 
-## 7. 当前能力（v7.0.12）
+## 7. 当前能力（v7.1.3）
 
 | # | 改进 | 实现位置 | 说明 |
 |---|---|---|---|
@@ -195,7 +195,7 @@ python scripts/build_syntec.py
 
 ```
 
-截至 v7.0.12，本机 Windows 环境已验证：163 条 Python 测试通过，`compileall`、`pip check`、Ruff、前端 typecheck/build 和 SYNTEC PyInstaller 域控合规检查通过；本机发布包启动冒烟以及更新器成功提交、失败回滚冒烟均通过，真实 Releases API 的旧版本号/当前版本号检查均已通过。旧版 EXE 实际启动、真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户启动以及目标机 WebView2/DPI 验收仍需在目标环境执行。
+截至 v7.1.3，本机 Windows 环境已验证：163 条 Python 测试通过，`compileall`、`pip check`、Ruff、前端 typecheck/build 和 SYNTEC PyInstaller 域控合规检查通过；本机发布包启动冒烟以及更新器成功提交、失败回滚冒烟均通过，真实 Releases API 的旧版本号/当前版本号检查均已通过。旧版 EXE 实际启动、真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户启动以及目标机 WebView2/DPI 验收仍需在目标环境执行。
 
 更新器冒烟脚本使用系统临时目录保存 PyInstaller 输出和替换现场，项目目录只保留脚本，不保留二进制测试产物：
 

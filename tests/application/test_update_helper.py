@@ -6,7 +6,6 @@ import subprocess
 from pathlib import Path
 
 import pytest
-
 from invoice_processor.desktop.update_helper import (
     MAIN_EXECUTABLE_NAME,
     replace_install,

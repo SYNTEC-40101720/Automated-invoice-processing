@@ -5,9 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from fastapi.testclient import TestClient
-
 from devbase.domain.job import JobStatus
+from fastapi.testclient import TestClient
 from invoice_processor.api.app import create_app
 from invoice_processor.api.routes import email as email_route
 from invoice_processor.api.routes import settings as settings_route
@@ -165,7 +164,9 @@ def test_open_directory_only_opens_known_directory(tmp_path, monkeypatch):
     app = make_app(tmp_path)
     service = app.state.job_service
     opened_paths = []
-    monkeypatch.setattr(service, 'is_known_directory', lambda path: path == str(tmp_path))
+    monkeypatch.setattr(
+        service, 'is_known_directory', lambda path: path == str(tmp_path)
+    )
     monkeypatch.setattr(
         system_route,
         '_open_directory',

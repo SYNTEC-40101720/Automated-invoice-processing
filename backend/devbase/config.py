@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
 from configparser import ConfigParser
+from copy import deepcopy
 from typing import Mapping
 
 DEFAULT_CONFIG: dict[str, dict[str, str]] = {

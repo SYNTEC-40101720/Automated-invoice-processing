@@ -10,7 +10,6 @@ from devbase.application.task import TaskContext
 from ..domain.job import JobTrigger
 from .job_service import JobService
 
-
 INVOICE_TOOL_KIND = "invoice_processing"
 
 

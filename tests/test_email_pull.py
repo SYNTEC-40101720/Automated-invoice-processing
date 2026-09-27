@@ -143,7 +143,9 @@ def test_pull_invoices_passes_bounded_timeout_to_imap(monkeypatch, tmp_path):
         captured.update(host=host, port=port, timeout=timeout)
         return FakeMail()
 
-    monkeypatch.setattr('invoice_processor.core.email_pull.imaplib.IMAP4_SSL', fake_imap)
+    monkeypatch.setattr(
+        'invoice_processor.core.email_pull.imaplib.IMAP4_SSL', fake_imap
+    )
     result = pull_invoices(
         host='imap.example.com',
         port=993,
