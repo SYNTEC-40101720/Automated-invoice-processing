@@ -1,5 +1,4 @@
 import type {
-  AiSettings,
   BusinessSettings,
   DomainEvent,
   EmailPullResponse,
@@ -95,13 +94,7 @@ export const api = {
   }) => request<SettingsResponse>('/settings', {
     method: 'PATCH', body: JSON.stringify(body),
   }),
-  updateBusiness: (body: Partial<BusinessSettings>) => request<BusinessSettings>('/settings/business', {
-    method: 'PATCH', body: JSON.stringify(body),
-  }),
   updateEmail: (body: Record<string, unknown>) => request<EmailSettings>('/settings/email', {
-    method: 'PATCH', body: JSON.stringify(body),
-  }),
-  updateAi: (body: Record<string, unknown>) => request<AiSettings>('/settings/ai', {
     method: 'PATCH', body: JSON.stringify(body),
   }),
   testEmail: (body: Record<string, unknown>) => request<{ ok: boolean; message: string }>('/settings/email/test', {

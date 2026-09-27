@@ -3,7 +3,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ClipboardPaste, FolderOpen, LoaderCircle, RefreshCw } from 'lucide-react'
 import { api } from '../api/client'
 import type { EmailSettings, SettingsResponse } from '../api/types'
-import { useWorkbench } from '../stores/workbench'
 
 interface InboxViewProps {
   emailSettings: EmailSettings | null
@@ -11,14 +10,8 @@ interface InboxViewProps {
 
 export function InboxView({ emailSettings }: InboxViewProps) {
   const queryClient = useQueryClient()
-  const setJob = useWorkbench((state) => state.setJob)
   const [message, setMessage] = useState('')
-  const pull = useMutation({
-    mutationFn: api.pullEmail,
-    onSuccess: (response) => {
-      if (response.job) setJob(response.job)
-    },
-  })
+  const pull = useMutation({ mutationFn: api.pullEmail })
   const updateEmail = useMutation({
     mutationFn: (values: Record<string, unknown>) => api.updateEmail(values),
     onSuccess: (nextEmail) => {
@@ -102,7 +95,7 @@ export function InboxView({ emailSettings }: InboxViewProps) {
           <div className="feature-stat"><strong>{result?.downloaded ?? 0}</strong><span>新附件</span></div>
           <div className="feature-stat"><strong>{result?.total_scanned ?? 0}</strong><span>扫描邮件</span></div>
           <div className="feature-stat"><strong>{result?.errors.length ?? 0}</strong><span>异常</span></div>
-          <div className="feature-message">{result ? result.job_error ? result.job_error.message : result.new_files.length > 0 ? '已拉取新附件，请到发票处理页面手动开始处理' : '没有发现新的 PDF 附件' : '尚未执行拉取'}</div>
+          <div className="feature-message">{result ? result.new_files.length > 0 ? '已拉取新附件，请到发票处理页面手动开始处理' : '没有发现新的 PDF 附件' : '尚未执行拉取'}</div>
         </section>
         {result?.errors.length ? <section className="feature-section error-list">{result.errors.map((error) => <p key={error}>{error}</p>)}</section> : null}
       </div>

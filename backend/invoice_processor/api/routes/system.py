@@ -76,7 +76,4 @@ def update_check(request: Request) -> UpdateResponse:
         available=result.available,
         latest_version=result.latest_version,
         release_url=result.release_url,
-        installable=result.installable,
-        asset_name=result.asset_name,
-        asset_size=result.asset_size,
     )

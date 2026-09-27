@@ -16,7 +16,6 @@ def test_update_endpoint_returns_release_information(monkeypatch):
             available=True,
             latest_version='7.0.5',
             release_url='https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.0.5',
-            asset_name='SYNTEC-电子票据处理系统-v7.0.5.zip',
         ),
     )
     client = TestClient(create_app(local_token='test-token'))
@@ -33,9 +32,6 @@ def test_update_endpoint_returns_release_information(monkeypatch):
         'available': True,
         'latest_version': '7.0.5',
         'release_url': 'https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.0.5',
-        'installable': False,
-        'asset_name': 'SYNTEC-电子票据处理系统-v7.0.5.zip',
-        'asset_size': None,
     }
 
 

@@ -7,7 +7,7 @@
 
 ## 1. 背景与目标
 
-重构前的桌面界面同时承担渲染、线程池调度、任务状态、邮箱拉取、归档和审核编排，导致状态同步、测试和界面迭代越来越困难。当前实现已将任务状态、邮箱轮询、归档和审核编排拆分到应用层、API、Web 工作台和桌面桥接层；目录监听仍不是当前版本能力。
+重构前的桌面界面同时承担渲染、线程池调度、任务状态、邮箱拉取、归档和审核编排，导致状态同步、测试和界面迭代越来越困难。当前实现已将任务、手动邮箱拉取、归档和审核编排拆分到应用层、API、Web 工作台和桌面桥接层；后台邮箱轮询和目录监听不属于当前版本能力。
 
 本次重构采用“Python 本地后端 + Web 前端 + Windows WebView 桌面壳”模式：
 
@@ -21,7 +21,7 @@
 ### 1.1 成功标准
 
 1. 用户双击 EXE 后进入桌面窗口，不出现控制台和外部浏览器。
-2. 原有目录选择、拖入 PDF、开始/停止、实时进度、日志、输出目录、邮箱拉取、自动处理、设置、本地审核和 AI 审核能力均保留。
+2. 原有目录选择、拖入 PDF、开始/停止、实时进度、日志、输出目录、手动邮箱拉取、设置、本地审核和 AI 审核能力均保留。
 3. 核心业务规则与当前测试结果不回归，且 `backend/invoice_processor/core/` 不依赖 FastAPI、pywebview 或前端代码。
 4. UI 刷新、窗口关闭或 WebSocket 短暂断开不会中止后台任务；重新连接后可恢复当前快照。
 5. 前后端接口有稳定的数据模型，UI 不再直接编排线程或调用核心私有方法。
@@ -100,7 +100,7 @@ Automated-invoice-processing-main/
 │   │   └── desktop/                # 通用 NativeBridge、日志
 │   └── invoice_processor/          # 发票业务包（依赖 devbase）
 │       ├── api/                    # 业务路由：jobs/settings/email/events
-│       ├── application/            # JobService 编排、邮箱轮询、审核
+│       ├── application/            # JobService 编排、手动邮箱收件、审核
 │       ├── core/                   # 票据算法：提取、类型注册表、合并
 │       ├── domain/                 # 业务 Job 聚合、错误码
 │       └── desktop/                # launcher、业务 NativeBridge
@@ -124,7 +124,7 @@ Automated-invoice-processing-main/
 
 重构完成后，生产代码不保留旧 UI 包或 Qt 依赖；新代码通过应用层、API 和桌面桥接层协作。
 
-> 当前仓库以现有源码为准：配置、邮箱轮询和日志持久化分别由 `config_manager.py`、`application/email_poller.py` 和现有日志模块承担；未单独拆出的 infrastructure、scheduler 和浏览器 E2E 层属于当前交付边界。上图用于说明依赖方向，不代表必须保留的目录结构。
+> 当前仓库以现有源码为准：配置、手动邮箱收件和日志持久化分别由 `config_manager.py`、`api/routes/email.py` 与现有日志模块承担；后台邮箱轮询、单独的 infrastructure、scheduler 和浏览器 E2E 层不属于当前交付。上图用于说明依赖方向，不代表必须保留的目录结构。
 
 ## 5. 应用层设计
 
@@ -353,7 +353,7 @@ Pydantic 模型是 API 单一事实源。CI 由 FastAPI OpenAPI 生成 TypeScrip
 7. 停止后取消未开始任务，不再提交新任务；
 8. 本地审核始终执行，AI 审核失败不阻断主流程；
 9. 邮件使用 `BODY.PEEK`，附件和 Message-ID 继续去重；
-10. 仅自动收件箱任务在完成后归档源 PDF；
+10. 仅通过收件箱/邮箱来源触发的任务在完成后归档源 PDF；工作台手动选择目录处理时不归档；
 11. 密钥继续使用 Windows DPAPI，配置和日志中不出现明文；
 12. 业务核心不依赖 UI 框架。
 
@@ -361,7 +361,7 @@ Pydantic 模型是 API 单一事实源。CI 由 FastAPI OpenAPI 生成 TypeScrip
 
 | 层级 | 工具 | 必测内容 | v7.0 状态 |
 |---|---|---|---|
-| 核心回归 | pytest | 保留所有现有核心、邮箱、审核测试 | 已通过，163 条 |
+| 核心回归 | pytest | 保留所有现有核心、邮箱、审核测试 | 已通过，137 条 |
 | 应用层 | pytest + fake event bus/filesystem | 状态迁移、单任务互斥、取消、归档条件、事件顺序 | 已通过 |
 | API | FastAPI TestClient/httpx | DTO 校验、错误码、密钥脱敏、冲突与路径拒绝 | 已通过 |
 | WebSocket | pytest | 初始快照、事件顺序、断线重连校准、慢客户端策略 | 服务端契约已通过，真实浏览器重连待补 |
@@ -398,7 +398,7 @@ dist/SYNTEC-电子票据处理系统/
 
 ## 12. 交付状态与边界
 
-v7.1.3 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、邮箱自动收件、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。核心 Python 测试、API 契约、前端生产构建和打包合规已通过；更新功能为"仅检测提示 + 跳转 Release 页面手动下载"，不在程序内下载或安装更新。
+v7.1.3 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、手动邮箱收件、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。核心 Python 测试、API 契约、前端生产构建和打包合规已通过；更新功能为"仅检测提示 + 跳转 Release 页面手动下载"，不在程序内下载或安装更新。
 
 以下事项不属于当前版本功能，后续若实施必须同步补充测试和验收记录：
 

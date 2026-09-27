@@ -92,9 +92,6 @@ export interface UpdateResponse {
   available: boolean
   latest_version: string | null
   release_url: string | null
-  installable: boolean
-  asset_name: string | null
-  asset_size: number | null
 }
 
 export interface BusinessSettings {
@@ -103,14 +100,11 @@ export interface BusinessSettings {
 }
 
 export interface EmailSettings {
-  enabled: boolean
   imap_host: string
   imap_port: number
   username: string
   inbox_dir: string
   days_back: number
-  poll_minutes: number
-  auto_process: boolean
   senders: string[]
   keywords: string[]
   auth_code_configured: boolean
@@ -136,7 +130,6 @@ export interface EmailPullResponse {
     new_files: string[]
     errors: string[]
     total_scanned: number
-    job_error?: { code: string; message: string }
   }
   job: Job | null
 }

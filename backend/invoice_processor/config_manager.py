@@ -25,15 +25,12 @@ _DEFAULTS = {
         'max_workers': '8',
     },
     'email': {
-        'enabled': 'false',
         'imap_host': 'imap.qq.com',
         'imap_port': '993',
         'username': '',
         'auth_code': '',
         'inbox_dir': '发票收件箱',
         'days_back': '30',
-        'poll_minutes': '0',
-        'auto_process': 'false',
         'senders': (
             '12306@rails.com.cn,didifapiao@mailgate.xiaojukeji.com,'
             'fapiao@mailgate.hongyibo.com.cn,invoice@invoice01.huazhuhotels.com,'
@@ -50,48 +47,6 @@ _DEFAULTS = {
     },
 }
 
-# 配置模板内容（用于首次生成 config.ini）
-_TEMPLATE = """[business]
-# 购买方税号（统一社会信用代码，18 位）—— 不一致的发票移入「税号异常」
-target_tax_id = 91320594688334374M
-# 并发线程数（项目约定：无论文件数多少，固定 8 线程）
-max_workers = 8
-
-[email]
-# 邮箱自动拉取开关（true/false）
-enabled = false
-# IMAP 服务器与端口（QQ 邮箱默认 imap.qq.com:993）
-imap_host = imap.qq.com
-imap_port = 993
-# 邮箱账号（发票转发到此邮箱）
-username =
-# IMAP 授权码（QQ 邮箱设置→账户→开启 IMAP 服务后生成，非登录密码）
-# 保存时经 Windows DPAPI 加密（dpapi: 前缀），config.ini 不保留明文
-auth_code =
-# 本地发票收件箱目录（相对程序目录或绝对路径）
-inbox_dir = 发票收件箱
-# 只拉取最近 N 天的邮件
-days_back = 30
-# 邮件主题关键词白名单（任意一个命中即可）
-keywords = 发票,行程单,报销
-# 自动轮询间隔（分钟，0 = 不自动轮询，仅手动拉取）
-poll_minutes = 0
-# 拉取新附件后自动创建处理任务（true/false，默认 false；关闭时只保存附件）
-auto_process = false
-
-[ai]
-# AI 审核开关（true/false）—— 处理完成后自动审核发票与行程
-enabled = false
-# DeepSeek API Key（https://platform.deepseek.com 申请，sk- 开头）
-# 保存时经 Windows DPAPI 加密（dpapi: 前缀），config.ini 不保留明文
-api_key =
-# API 接口地址（OpenAI 兼容）
-api_base = https://api.deepseek.com
-# 模型名
-model = deepseek-v4-flash
-# 请求超时（秒）
-timeout = 60
-"""
 
 
 def _get_program_dir() -> str:
@@ -256,11 +211,6 @@ def _parse_email_list(raw) -> list[str]:
     return senders
 
 
-def get_email_enabled() -> bool:
-    """邮箱拉取是否启用"""
-    return get_email_config()['enabled'].lower() in ('1', 'true', 'yes', 'on')
-
-
 def get_email_username() -> str:
     """邮箱账号"""
     return get_email_config()['username'].strip()
@@ -285,19 +235,6 @@ def get_inbox_dir() -> str:
     if os.path.isabs(raw):
         return raw
     return os.path.join(_get_program_dir(), raw)
-
-
-def get_email_poll_minutes() -> int:
-    """自动轮询间隔（分钟，0 = 不轮询）"""
-    try:
-        return max(0, int(get_email_config()['poll_minutes']))
-    except (ValueError, TypeError):
-        return 0
-
-
-def get_email_auto_process() -> bool:
-    """拉取新附件后是否自动创建处理任务"""
-    return get_email_config()['auto_process'].lower() in ('1', 'true', 'yes', 'on')
 
 
 def get_email_days_back() -> int:

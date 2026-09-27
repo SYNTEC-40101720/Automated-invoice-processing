@@ -6,7 +6,6 @@ import imaplib
 
 from fastapi import APIRouter, Depends
 
-from ...application.job_service import JobService
 from ...config import reload_business_config
 from ...config_manager import (
     get_ai_api_base,
@@ -15,12 +14,9 @@ from ...config_manager import (
     get_ai_model,
     get_ai_timeout,
     get_email_auth_code,
-    get_email_auto_process,
     get_email_config,
     get_email_days_back,
-    get_email_enabled,
     get_email_keywords,
-    get_email_poll_minutes,
     get_email_senders,
     get_email_username,
     get_inbox_dir,
@@ -33,7 +29,7 @@ from ...config_manager import (
 )
 from ...core.ai_audit import test_connection as test_ai_connection
 from ...domain.errors import ApplicationError
-from ..dependencies import get_job_service, require_local_token
+from ..dependencies import require_local_token
 from ..schemas import (
     AiSettings,
     AiSettingsPatch,
@@ -62,14 +58,11 @@ def _settings() -> SettingsResponse:
             max_workers=get_max_workers(),
         ),
         email=EmailSettings(
-            enabled=get_email_enabled(),
             imap_host=str(email['imap_host']),
             imap_port=int(email['imap_port']),
             username=get_email_username(),
             inbox_dir=get_inbox_dir(),
             days_back=get_email_days_back(),
-            poll_minutes=get_email_poll_minutes(),
-            auto_process=get_email_auto_process(),
             senders=get_email_senders(),
             keywords=get_email_keywords(),
             auth_code_configured=bool(get_email_auth_code()),
@@ -92,7 +85,6 @@ def get_settings() -> SettingsResponse:
 @router.patch('', response_model=SettingsResponse)
 def patch_settings(
     request: SettingsPatch,
-    service: JobService = Depends(get_job_service),
 ) -> SettingsResponse:
     values = request.model_dump(exclude_unset=True)
     set_all_config(
@@ -113,7 +105,6 @@ def patch_settings(
         },
     )
     reload_business_config()
-    service.wake_background_tasks()
     return _settings()
 
 
@@ -131,7 +122,6 @@ def patch_business(request: BusinessSettingsPatch) -> BusinessSettings:
 @router.patch('/email', response_model=EmailSettings)
 def patch_email(
     request: EmailSettingsPatch,
-    service: JobService = Depends(get_job_service),
 ) -> EmailSettings:
     values = {
         key: value
@@ -140,7 +130,6 @@ def patch_email(
     }
     if values:
         set_email_config(**values)
-        service.wake_background_tasks()
     return _settings().email
 
 

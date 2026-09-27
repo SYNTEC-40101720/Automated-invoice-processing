@@ -21,7 +21,6 @@ from ..domain.errors import (
 )
 from ..domain.job import Job, JobPhase, JobStatus, JobTrigger
 from .audit_service import AuditService
-from .email_poller import EmailPoller
 from .event_bus import EventBus
 from .invoice_file_service import FileProcessResult, InvoiceFileService
 
@@ -59,15 +58,6 @@ class JobService:
         self._lock = threading.RLock()
         self._handles: dict[str, _JobHandle] = {}
         self._current_job_id: str | None = None
-        self._email_poller = EmailPoller(self.start_job)
-
-    def start_background_tasks(self) -> None:
-        """桌面模式不启动邮箱自动轮询，收取由用户手动触发。"""
-        return
-
-    def wake_background_tasks(self) -> None:
-        """保留配置更新钩子；手动收取模式无需唤醒后台任务。"""
-        return
 
     def start_job(
         self,
@@ -228,7 +218,6 @@ class JobService:
 
     def shutdown(self, timeout: float = 5.0) -> None:
         """请求当前任务停止并等待 worker 收敛，供桌面壳退出时调用。"""
-        self._email_poller.stop(timeout)
         with self._lock:
             job_id = self._current_job_id
             handle = self._handles.get(job_id) if job_id else None

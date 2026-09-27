@@ -188,7 +188,7 @@ def verify() -> None:
 
 
 def create_release_archive() -> Path:
-    """将完整安装目录压缩成可供应用自动更新的 Release 资产。"""
+    """将完整安装目录打包为供用户手动下载和替换的 Release 资产。"""
     package_dir = DIST_DIR / APP_NAME
     if not package_dir.is_dir():
         sys.exit(f"❌ 缺少打包目录: {package_dir}")

@@ -262,19 +262,16 @@ def test_settings_response_redacts_secret_values(monkeypatch, tmp_path):
     monkeypatch.setattr(settings_route, 'get_target_tax_id', lambda: 'TAX-ID')
     monkeypatch.setattr(settings_route, 'get_max_workers', lambda: 8)
     monkeypatch.setattr(settings_route, 'get_email_config', lambda: {
-        'enabled': 'true', 'imap_host': 'imap.example.com', 'imap_port': '993',
+        'imap_host': 'imap.example.com', 'imap_port': '993',
         'username': 'user@example.com', 'auth_code': 'secret-auth',
-        'inbox_dir': 'inbox', 'days_back': '30', 'poll_minutes': '0',
+        'inbox_dir': 'inbox', 'days_back': '30',
     })
-    monkeypatch.setattr(settings_route, 'get_email_enabled', lambda: True)
-    monkeypatch.setattr(settings_route, 'get_email_auto_process', lambda: False)
     monkeypatch.setattr(settings_route, 'get_inbox_dir', lambda: 'C:/invoice-inbox')
     monkeypatch.setattr(
         settings_route, 'get_email_username', lambda: 'user@example.com'
     )
     monkeypatch.setattr(settings_route, 'get_email_auth_code', lambda: 'secret-auth')
     monkeypatch.setattr(settings_route, 'get_email_days_back', lambda: 30)
-    monkeypatch.setattr(settings_route, 'get_email_poll_minutes', lambda: 0)
     monkeypatch.setattr(settings_route, 'get_ai_enabled', lambda: True)
     monkeypatch.setattr(settings_route, 'get_ai_api_base', lambda: 'https://ai.example.com')
     monkeypatch.setattr(settings_route, 'get_ai_model', lambda: 'model')
@@ -287,7 +284,7 @@ def test_settings_response_redacts_secret_values(monkeypatch, tmp_path):
     assert response.status_code == 200
     body = response.json()
     assert body['email']['auth_code_configured'] is True
-    assert body['email']['auto_process'] is False
+    assert 'auto_process' not in body['email']
     assert body['email']['inbox_dir'] == 'C:/invoice-inbox'
     assert body['ai']['api_key_configured'] is True
     assert 'secret-auth' not in response.text
@@ -366,7 +363,8 @@ def test_email_pull_only_downloads_files(monkeypatch, tmp_path):
     )
 
     assert response.status_code == 200
-    assert response.json()['job'] is None
+    assert response.json()['pull']['downloaded'] == 1
+    assert response.json()['pull']['new_files'] == [str(tmp_path / 'invoice.pdf')]
 
 
 def test_static_frontend_is_served_after_api_routes(tmp_path):
@@ -391,16 +389,12 @@ def test_email_patch_does_not_persist_none_values(monkeypatch, tmp_path):
         lambda **values: captured.update(values),
     )
     monkeypatch.setattr(settings_route, 'get_email_config', lambda: {
-        'enabled': 'false', 'imap_host': 'imap.example.com', 'imap_port': '993',
+        'imap_host': 'imap.example.com', 'imap_port': '993',
         'username': '', 'auth_code': '', 'inbox_dir': 'inbox', 'days_back': '30',
-        'poll_minutes': '0',
     })
-    monkeypatch.setattr(settings_route, 'get_email_enabled', lambda: False)
     monkeypatch.setattr(settings_route, 'get_email_username', lambda: '')
     monkeypatch.setattr(settings_route, 'get_email_auth_code', lambda: '')
     monkeypatch.setattr(settings_route, 'get_email_days_back', lambda: 30)
-    monkeypatch.setattr(settings_route, 'get_email_poll_minutes', lambda: 0)
-    monkeypatch.setattr(settings_route, 'get_email_auto_process', lambda: False)
 
     client = TestClient(make_app(tmp_path))
     response = client.patch(
@@ -431,8 +425,6 @@ def test_settings_patch_writes_all_sections_once(monkeypatch, tmp_path):
             'username': 'user@example.com',
             'inbox_dir': 'inbox',
             'days_back': 30,
-            'poll_minutes': 0,
-            'auto_process': False,
             'auth_code_configured': False,
         },
         ai={
@@ -450,7 +442,7 @@ def test_settings_patch_writes_all_sections_once(monkeypatch, tmp_path):
         headers={'X-Local-Token': 'test-token'},
         json={
             'business': {'target_tax_id': 'TAX-ID', 'max_workers': 4},
-            'email': {'enabled': True},
+            'email': {'imap_host': 'imap.example.com'},
             'ai': {'enabled': False},
         },
     )
@@ -458,6 +450,6 @@ def test_settings_patch_writes_all_sections_once(monkeypatch, tmp_path):
     assert response.status_code == 200
     assert captured == {
         'business': {'target_tax_id': 'TAX-ID', 'max_workers': 4},
-        'email': {'enabled': True},
+        'email': {'imap_host': 'imap.example.com'},
         'ai': {'enabled': False},
     }

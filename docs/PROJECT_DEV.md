@@ -193,7 +193,7 @@ python scripts/build_syntec.py
 
 ```
 
-截至 v7.1.3，本机 Windows 环境已验证：163 条 Python 测试通过，`compileall`、`pip check`、Ruff、前端 typecheck/build 和 SYNTEC PyInstaller 域控合规检查通过；本机发布包启动冒烟通过，真实 Releases API 的旧版本号/当前版本号检查均已通过。旧版 EXE 实际启动、真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户启动以及目标机 WebView2/DPI 验收仍需在目标环境执行。
+截至 v7.1.3，本机 Windows 环境已验证：137 条 Python 测试通过，`compileall`、`pip check`、Ruff、前端 typecheck/build 和 SYNTEC PyInstaller 域控合规检查通过；本机发布包启动冒烟通过，真实 Releases API 的旧版本号/当前版本号检查均已通过。旧版 EXE 实际启动、真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户启动以及目标机 WebView2/DPI 验收仍需在目标环境执行。
 
 测试文件：
 - `tests/test_processor.py`：核心逻辑单元测试
@@ -203,27 +203,25 @@ python scripts/build_syntec.py
 
 ---
 
-## 10. 邮箱自动拉取（v6.3）
+## 10. 手动邮箱收件（v6.3）
 
 ### 功能
 - 从邮箱（默认 QQ 邮箱 `imap.qq.com:993`）拉取发票附件到本地「发票收件箱」目录
 - 过滤：发件方白名单（12306/滴滴/网约车/华住/通行费）或主题含「发票/行程单/报销」
 - 附件：下载 PDF/ZIP，ZIP 自动解压只留 PDF；按 `message_id` 去重（`processed_messages.json`）
-- Web 工作台：收件箱页面独立指定并显示收件目录，提供「立即拉取」和「自动收件」开关；`poll_minutes` 可配置定时轮询；收件箱任务由应用层统一调度
-- 处理完成后源文件自动归档到 `收件箱/已处理`，避免重复处理
+- Web 工作台：收件箱页面可独立指定并显示收件目录，提供手动拉取邮箱附件；当前不启动后台自动轮询，也不会在拉取后自动创建处理任务
+- 通过 `inbox`/`email` trigger 启动的处理任务完成后归档源 PDF；当前手动拉取邮箱只保存附件，不会自动启动任务
 
 ### 配置（config.ini `[email]` 段）
-邮箱连接参数可在 Web 工作台「设置」视图填写，含「测试连接」按钮；收件目录、自动收件开关和轮询间隔在「收件箱」视图设置并显示。保存后通过设置接口即时生效（收件目录、开关和轮询间隔实时更新，无需重启）。处理工作区的源文件目录仍由处理页单独选择，不会被收件箱目录替换。
+邮箱连接参数可在 Web 工作台「设置」视图填写，含「测试连接」按钮；收件目录在「收件箱」视图设置并显示。邮箱附件仅在用户手动拉取时下载；处理工作区的源文件目录仍由处理页单独选择，不会被收件箱目录替换。
 ```ini
 [email]
-enabled = true                 # 启用开关
 imap_host = imap.qq.com
 imap_port = 993
 username = 你的邮箱@qq.com
 auth_code = IMAP授权码          # QQ邮箱设置→账户→开启IMAP后生成，非登录密码
 inbox_dir = 发票收件箱          # 相对程序目录或绝对路径
 days_back = 30                 # 只拉最近 N 天
-poll_minutes = 0               # 自动轮询分钟数，0 = 关闭（仅手动拉取）
 ```
 
 ### 实现位置

@@ -63,7 +63,6 @@ def run_desktop(
         allowed_origins={f'http://{host}:{port}'},
         static_dir=static_dir or _bundle_root() / 'web' / 'dist',
     )
-    job_service.start_background_tasks()
     config = uvicorn.Config(
         app,
         host=host,

@@ -9,16 +9,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from ..domain.job import JobTrigger
 
 
-class ErrorBody(BaseModel):
-    code: str
-    message: str
-    details: dict[str, Any] = Field(default_factory=dict)
-
-
-class ErrorResponse(BaseModel):
-    error: ErrorBody
-
-
 class StartJobRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
@@ -58,10 +48,6 @@ class OpenDirectoryResponse(BaseModel):
     opened: bool
 
 
-class CancelJobResponse(BaseModel):
-    job: dict[str, Any]
-
-
 class HealthResponse(BaseModel):
     status: str
     version: str
@@ -75,9 +61,6 @@ class UpdateResponse(BaseModel):
     available: bool
     latest_version: str | None = None
     release_url: str | None = None
-    installable: bool
-    asset_name: str | None = None
-    asset_size: int | None = None
 
 
 class LogEntry(BaseModel):
@@ -107,28 +90,17 @@ class ToolListResponse(BaseModel):
     tools: list[ToolDescriptorResponse]
 
 
-class EventEnvelope(BaseModel):
-    event_id: int
-    type: str
-    occurred_at: str
-    job_id: str | None
-    payload: dict[str, Any]
-
-
 class BusinessSettings(BaseModel):
     target_tax_id: str
     max_workers: int
 
 
 class EmailSettings(BaseModel):
-    enabled: bool
     imap_host: str
     imap_port: int
     username: str
     inbox_dir: str
     days_back: int
-    poll_minutes: int
-    auto_process: bool
     senders: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
     auth_code_configured: bool
@@ -158,15 +130,12 @@ class BusinessSettingsPatch(BaseModel):
 class EmailSettingsPatch(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
-    enabled: bool | None = None
     imap_host: str | None = Field(default=None, min_length=1)
     imap_port: int | None = Field(default=None, ge=1, le=65535)
     username: str | None = None
     auth_code: str | None = None
     inbox_dir: str | None = Field(default=None, min_length=1)
     days_back: int | None = Field(default=None, ge=1, le=365)
-    poll_minutes: int | None = Field(default=None, ge=0, le=1440)
-    auto_process: bool | None = None
     senders: list[str] | None = None
     keywords: list[str] | None = None
 
