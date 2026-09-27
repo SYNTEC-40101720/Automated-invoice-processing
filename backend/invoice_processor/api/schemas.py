@@ -80,21 +80,6 @@ class UpdateResponse(BaseModel):
     asset_size: int | None = None
 
 
-class UpdateApplyResponse(BaseModel):
-    status: str
-    message: str
-    latest_version: str | None = None
-
-
-class UpdateProgressResponse(BaseModel):
-    status: str
-    downloaded_bytes: int
-    total_bytes: int | None = None
-    progress_percent: float | None = None
-    latest_version: str | None = None
-    message: str = ''
-
-
 class LogEntry(BaseModel):
     event_id: int
     occurred_at: str

@@ -3,11 +3,7 @@
 from fastapi.testclient import TestClient
 from invoice_processor.api.app import create_app
 from invoice_processor.api.routes import system as system_route
-from invoice_processor.application.update_checker import (
-    UpdateApplyResult,
-    UpdateProgress,
-    UpdateResult,
-)
+from invoice_processor.application.update_checker import UpdateResult
 
 
 def test_update_endpoint_returns_release_information(monkeypatch):
@@ -49,68 +45,3 @@ def test_update_endpoint_requires_local_token():
     response = client.get('/api/v1/system/update')
 
     assert response.status_code == 401
-
-
-def test_update_apply_endpoint_uses_desktop_handler():
-    client = TestClient(create_app(
-        local_token='test-token',
-        update_apply=lambda _version: UpdateApplyResult(
-            status='started',
-            message='更新已准备，程序即将重启',
-            latest_version='7.0.5',
-        ),
-    ))
-
-    response = client.post(
-        '/api/v1/system/update/apply',
-        headers={'X-Local-Token': 'test-token'},
-    )
-
-    assert response.status_code == 200
-    assert response.json() == {
-        'status': 'started',
-        'message': '更新已准备，程序即将重启',
-        'latest_version': '7.0.5',
-    }
-
-
-def test_update_progress_endpoint_returns_idle_snapshot():
-    client = TestClient(create_app(local_token='test-token'))
-
-    response = client.get(
-        '/api/v1/system/update/progress',
-        headers={'X-Local-Token': 'test-token'},
-    )
-
-    assert response.status_code == 200
-    assert response.json() == {
-        'status': 'idle',
-        'downloaded_bytes': 0,
-        'total_bytes': None,
-        'progress_percent': None,
-        'latest_version': None,
-        'message': '',
-    }
-
-
-def test_update_progress_endpoint_returns_download_percentage():
-    client = TestClient(create_app(
-        local_token='test-token',
-        update_progress=lambda: UpdateProgress(
-            status='downloading',
-            downloaded_bytes=25,
-            total_bytes=100,
-            latest_version='7.0.12',
-            message='正在下载 v7.0.12',
-        ),
-    ))
-
-    response = client.get(
-        '/api/v1/system/update/progress',
-        headers={'X-Local-Token': 'test-token'},
-    )
-
-    assert response.status_code == 200
-    assert response.json()['progress_percent'] == 25.0
-    assert response.json()['downloaded_bytes'] == 25
-    assert response.json()['total_bytes'] == 100

@@ -1,26 +1,17 @@
-"""从 GitHub Releases 查询可用版本。"""
+"""从 GitHub Releases 查询可用版本（仅检测提示，不做下载安装）。"""
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import re
-import shutil
-import tempfile
-import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
-
-from devbase.desktop.update_helper import (
-    UpdateApplyError,
-    safe_extract_zip,
-)
 
 from ..version import __version__
 
@@ -33,13 +24,9 @@ GITHUB_API_URL = (
 GITHUB_RELEASES_URL = (
     f'https://github.com/{GITHUB_REPOSITORY}/releases/latest'
 )
-MAIN_EXECUTABLE_NAME = 'SYNTEC-电子票据处理系统.exe'
-UPDATE_HELPER_NAME = 'SYNTEC-电子票据更新器.exe'
 UPDATE_ASSET_PREFIX = 'SYNTEC-Invoice-Processor'
 LEGACY_UPDATE_ASSET_PREFIXES = ('SYNTEC-电子票据处理系统', 'SYNTEC-.-')
 REQUEST_TIMEOUT = 3.0
-MAX_UPDATE_BYTES = 512 * 1024 * 1024
-DOWNLOAD_CHUNK_SIZE = 1024 * 1024
 _VERSION_PATTERN = re.compile(r'^v?(\d+)\.(\d+)\.(\d+)$', re.IGNORECASE)
 _DIGEST_PATTERN = re.compile(r'^sha256:([0-9a-f]{64})$', re.IGNORECASE)
 
@@ -62,22 +49,6 @@ class UpdateResult:
 
 
 @dataclass(frozen=True)
-class UpdateApplyResult:
-    status: str
-    message: str
-    latest_version: str | None = None
-
-
-@dataclass(frozen=True)
-class UpdateProgress:
-    status: str = 'idle'
-    downloaded_bytes: int = 0
-    total_bytes: int | None = None
-    latest_version: str | None = None
-    message: str = ''
-
-
-@dataclass(frozen=True)
 class ReleaseAsset:
     name: str
     url: str
@@ -85,14 +56,8 @@ class ReleaseAsset:
     size: int | None = None
 
 
-@dataclass(frozen=True)
-class StagedUpdate:
-    temporary_dir: Path
-    package_dir: Path
-
-
 class UpdateError(RuntimeError):
-    """更新文件无法下载、校验或解压。"""
+    """更新检查失败。"""
 
 
 def _parse_version(value: object) -> tuple[int, int, int] | None:
@@ -154,7 +119,7 @@ def _select_release_asset(payload: dict[str, Any]) -> ReleaseAsset | None:
             not isinstance(name, str)
             or not name.startswith((UPDATE_ASSET_PREFIX, *LEGACY_UPDATE_ASSET_PREFIXES))
             or not name.lower().endswith('.zip')
-            or Path(name).name != name
+            or PurePosixPath(name).name != name
         ):
             continue
         url = _safe_download_url(item.get('browser_download_url'))
@@ -247,137 +212,3 @@ def check_for_update(
         asset_digest=asset.digest if asset else None,
         asset_size=asset.size if asset else None,
     )
-
-
-def _download_asset(
-    asset_url: str,
-    destination: Path,
-    current_version: str,
-    expected_digest: str | None,
-    opener: Callable[..., Any] | None,
-    expected_size: int | None = None,
-    progress_callback: Callable[[int, int | None], None] | None = None,
-) -> None:
-    request = Request(
-        asset_url,
-        headers={
-            'Accept': 'application/octet-stream',
-            'User-Agent': f'SYNTEC-Invoice-Processor/{current_version}',
-        },
-    )
-    open_url = opener or urlopen
-    digest = hashlib.sha256()
-    total = 0
-    try:
-        with open_url(request, timeout=REQUEST_TIMEOUT) as response:
-            content_length = getattr(response, 'headers', {}).get('Content-Length')
-            if content_length is not None and int(content_length) > MAX_UPDATE_BYTES:
-                raise UpdateError('更新文件超过 512 MB 限制')
-            total_size = expected_size
-            if total_size is None and content_length is not None:
-                total_size = int(content_length)
-            if total_size is not None and total_size > MAX_UPDATE_BYTES:
-                raise UpdateError('更新文件超过 512 MB 限制')
-            if progress_callback is not None:
-                progress_callback(0, total_size)
-            with destination.open('wb') as output:
-                while chunk := response.read(DOWNLOAD_CHUNK_SIZE):
-                    total += len(chunk)
-                    if total > MAX_UPDATE_BYTES:
-                        raise UpdateError('更新文件超过 512 MB 限制')
-                    digest.update(chunk)
-                    output.write(chunk)
-                    if progress_callback is not None:
-                        progress_callback(total, total_size)
-    except UpdateError:
-        raise
-    except (HTTPError, URLError, TimeoutError, OSError, TypeError, ValueError) as exc:
-        raise UpdateError('下载更新文件失败') from exc
-
-    if total == 0:
-        raise UpdateError('下载的更新文件为空')
-    if total_size is not None and total != total_size:
-        raise UpdateError('下载文件大小校验失败')
-    if expected_digest and digest.hexdigest().lower() != expected_digest.lower():
-        raise UpdateError('更新文件校验失败')
-
-
-def _extract_zip_safely(archive_path: Path, destination: Path) -> None:
-    try:
-        safe_extract_zip(archive_path, destination)
-    except UpdateApplyError as error:
-        raise UpdateError(str(error)) from error
-
-
-def _find_package_dir(extracted_dir: Path) -> Path:
-    if (extracted_dir / MAIN_EXECUTABLE_NAME).is_file():
-        return extracted_dir
-    candidates = [
-        child for child in extracted_dir.iterdir()
-        if child.is_dir() and (child / MAIN_EXECUTABLE_NAME).is_file()
-    ]
-    if len(candidates) == 1:
-        return candidates[0]
-    raise UpdateError('更新压缩包内找不到 SYNTEC 主程序')
-
-
-def _validate_package_bundle(package_dir: Path) -> None:
-    internal_dir = package_dir / '_internal'
-    missing: list[str] = []
-    if not (package_dir / MAIN_EXECUTABLE_NAME).is_file():
-        missing.append(MAIN_EXECUTABLE_NAME)
-    if not (package_dir / UPDATE_HELPER_NAME).is_file():
-        missing.append(UPDATE_HELPER_NAME)
-    if not internal_dir.is_dir():
-        missing.append('_internal/')
-    else:
-        if not any(
-            path.is_file() for path in internal_dir.glob('python*.dll')
-        ):
-            missing.append('_internal/python*.dll')
-        if not (internal_dir / '_ctypes.pyd').is_file():
-            missing.append('_internal/_ctypes.pyd')
-        if not (internal_dir / 'web' / 'dist' / 'index.html').is_file():
-            missing.append('_internal/web/dist/index.html')
-    if missing:
-        raise UpdateError(
-            '更新压缩包缺少必备项: ' + ', '.join(missing)
-        )
-
-
-def stage_update(
-    result: UpdateResult,
-    *,
-    temporary_parent: Path | None = None,
-    opener: Callable[..., Any] | None = None,
-    progress_callback: Callable[[int, int | None], None] | None = None,
-) -> StagedUpdate:
-    """下载并解压更新包；返回供独立更新器使用的临时目录。"""
-    if not result.installable or result.asset_name is None or result.asset_url is None:
-        raise UpdateError('当前 Release 没有可安装的 SYNTEC ZIP 文件')
-
-    temporary_dir = Path(tempfile.mkdtemp(
-        prefix='.syntec-update-',
-        dir=str(temporary_parent) if temporary_parent else None,
-    ))
-    archive_path = temporary_dir / result.asset_name
-    extracted_dir = temporary_dir / 'extracted'
-    try:
-        _download_asset(
-            result.asset_url,
-            archive_path,
-            result.current_version,
-            result.asset_digest,
-            opener,
-            expected_size=result.asset_size,
-            progress_callback=progress_callback,
-        )
-        _extract_zip_safely(archive_path, extracted_dir)
-        package_dir = _find_package_dir(extracted_dir)
-        _validate_package_bundle(package_dir)
-        return StagedUpdate(temporary_dir, package_dir)
-    except (UpdateError, OSError, ValueError, zipfile.BadZipFile) as exc:
-        shutil.rmtree(temporary_dir, ignore_errors=True)
-        if isinstance(exc, UpdateError):
-            raise
-        raise UpdateError('更新压缩包无法使用') from exc

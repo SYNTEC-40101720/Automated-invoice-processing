@@ -1,28 +1,24 @@
-# GitHub Release 自动更新 SOP
+# GitHub Release 发布 SOP
 
 ## 1. 目标
 
-为 Windows 桌面工具建立一条可重复、可验证、可回滚的 GitHub Release 自动更新链路：
+为 SYNTEC 电子票据处理系统建立一条可重复、可验证的 GitHub Release 发布流程：
 
 ```text
-查询 Release -> 比较版本 -> 选择资产 -> 下载校验 -> 安全解压
--> 关闭主程序 -> 同盘替换 -> 恢复用户数据 -> 重启 -> 验收
+同步版本 -> 构建 -> 合规校验 -> 生成 ZIP + SHA-256 -> 上传 Release -> 验证
 ```
 
-这份 SOP 适用于 Python/PyInstaller、.NET 或其他能生成独立安装目录的桌面应用。文中的应用名、仓库名、文件名和目录均为参数，不应直接照抄。
+应用支持更新检查：启动时查询 GitHub 最新 Release，发现新版本时提示用户并跳转 Release 页面手动下载。**应用不在程序内下载或安装更新。**
 
-## 2. 跨项目参数表
+## 2. 发布参数表
 
-| 参数 | 示例 | 说明 |
-|---|---|---|
-| GitHub 仓库 | `OWNER/REPOSITORY` | 只允许一个可信仓库 |
-| 标签格式 | `v1.2.3` | 使用三段数字版本 |
-| 主程序 | `SYNTEC-电子票据处理系统.exe` | 必须存在于安装目录根部 |
-| 更新器 | `SYNTEC-电子票据更新器.exe` | 必须能脱离主程序运行 |
-| Release 资产 | `SYNTEC-Invoice-Processor-v1.2.3.zip` | 使用 ASCII 文件名 |
-| ZIP 顶层目录 | `SYNTEC-电子票据处理系统/` | 解压后包含完整安装目录 |
-| 安装目录 | `D:\Apps\Product` | 运行时目录，通常位于 D 盘或其他数据盘 |
-| 保留数据 | `config.ini`、`logs/`、业务数据 | 替换时必须明确列出 |
+| 参数 | 值 |
+|---|---|
+| GitHub 仓库 | `SYNTEC-40101720/Automated-invoice-processing` |
+| 标签格式 | `vX.Y.Z`（三段数字版本） |
+| Release 资产 | `SYNTEC-Invoice-Processor-vX.Y.Z.zip`（ASCII 文件名） |
+| ZIP 顶层目录 | `SYNTEC-电子票据处理系统/`（完整安装目录） |
+| 手动更新需保留 | `config.ini`、`logs/`、`发票收件箱/`（不打进 ZIP） |
 
 ## 3. 前置条件
 
@@ -33,158 +29,58 @@
   gh auth status --hostname github.com
   ```
 
-- 已明确当前安装目录、主程序名、更新器名和必须保留的用户数据。
-- 主程序和更新器都能在目标 Windows 环境启动。
-- 更新器不会依赖正在被替换的安装目录中的自身文件。
+## 4. 版本检查行为
 
-## 4. 版本检查实现
-
-调用固定仓库的：
-
-```text
-GET https://api.github.com/repos/OWNER/REPOSITORY/releases/latest
-```
-
-实现要求：
+应用调用固定仓库的 `GET https://api.github.com/repos/SYNTEC-40101720/Automated-invoice-processing/releases/latest`：
 
 1. 只接受 `https` 的 GitHub API 响应。
-2. 解析 `vX.Y.Z` 或 `X.Y.Z` 为数字元组后比较，禁止按字符串排序。
-3. 网络错误、HTTP 错误、JSON 无效或标签无效时返回“检查未完成”。
-4. 只有最新版本大于当前版本时才继续选择安装资产。
-5. 版本相同或最新版本更低时不允许降级。
-
-资产选择必须同时满足：
-
-- 文件名以应用专属前缀开头。
-- 文件名以 `.zip` 结尾。
-- 资产名是单一文件名，不包含路径。
-- `browser_download_url` 是固定仓库的 `https://github.com/.../releases/download/` 地址。
-- 需要兼容旧包时，显式列出旧前缀，不要放宽成“任意 ZIP”。
+2. 解析 `vX.Y.Z` 为数字元组后比较，禁止按字符串排序。
+3. 网络错误、HTTP 错误、JSON 无效或标签无效时返回"检查未完成"，应用正常启动。
+4. 只有最新版本大于当前版本时才提示新版本；不降级。
+5. 资产选择用于横幅提示，要求文件名以 `SYNTEC-Invoice-Processor` 前缀开头且以 `.zip` 结尾，下载地址必须是固定仓库的 HTTPS 地址。
 
 ### 资产命名注意事项
 
-GitHub 会自动重命名包含中文或部分特殊字符的 Release 资产名。中文资产名可能被保存成类似 `Product-.-v1.2.3.zip`，导致本地更新器的前缀匹配失败。
+GitHub 会自动重命名包含中文或部分特殊字符的 Release 资产名，导致前缀匹配失败。因此统一使用 ASCII 资产名 `SYNTEC-Invoice-Processor-vX.Y.Z.zip`。
 
-因此新项目统一使用 ASCII 资产名，例如：
+## 5. Release 发布步骤
 
-```text
-SYNTEC-Invoice-Processor-vX.Y.Z.zip
-ProductName-v1.2.3.zip
-```
-
-## 5. 下载、校验和解压
-
-下载阶段：
-
-- 写入临时目录，不直接覆盖安装目录。
-- 使用流式读取并限制最大下载大小。
-- 下载在后台执行时应记录已下载字节数和总大小；若 Release 资产的 `size` 或响应 `Content-Length` 可用，界面显示百分比，否则显示已下载量和不确定进度。
-- Release 提供 `digest` 时校验 SHA-256；校验失败立即拒绝。
-- 拒绝空文件和不符合预期的内容类型。
-
-解压阶段：
-
-- 每个 ZIP 成员的解析后路径必须位于解压根目录内。
-- 拒绝 `../` 路径穿越、绝对路径和符号链接。
-- 解压后检查主程序、更新器和运行时依赖是否存在。
-- 允许 ZIP 顶层目录固定，也可以实现“唯一包含主程序的目录”发现，但不能静默选择多个候选目录。
-
-推荐的安装包结构：
-
-```text
-ProductName-v1.2.3.zip
-└── ProductName/
-    ├── ProductName.exe
-    ├── ProductName-updater.exe
-    └── _internal/
-```
-
-## 6. 替换和回滚
-
-推荐使用独立更新器，并按以下顺序执行：
-
-1. 主程序完成下载和解压。
-2. 将更新器复制到临时目录。
-3. 主程序退出，更新器等待主进程消失。
-4. 将旧安装目录移动到同一磁盘卷的备份目录。
-5. 将新目录移动到原安装路径。
-6. 从旧目录恢复配置、日志和业务数据。
-7. 启动新程序。
-8. 替换和启动流程确认成功后删除旧备份。
-
-### 必须遵守的安全规则
-
-- 临时目录、备份目录和安装目录必须位于同一磁盘卷。Windows 不能跨盘执行目录 `rename`。
-- 如果必须跨盘操作，使用明确的复制式替换、校验和回滚，不要直接把 `rename` 当成跨盘移动。
-- 在旧目录移动成功前，异常处理绝不能删除原安装目录。
-- 新目录替换失败时，恢复旧备份；恢复失败必须保留现场并报告错误。
-- 用户数据恢复失败也必须触发回滚或阻止启动，不能静默丢失配置。
-- 更新器自身应先复制到临时目录再运行，避免替换时锁住旧安装目录。
-- 更新成功后再清理旧备份和临时文件；失败现场至少保留更新日志。
-
-伪代码顺序：
-
-```python
-wait_for_process_exit(pid)
-old_dir = target_dir.parent / backup_name  # 与 target_dir 同一卷
-try:
-    target_dir.rename(old_dir)
-    source_dir.rename(target_dir)
-    restore_user_data(old_dir, target_dir)
-    start_application(target_dir)
-except Exception:
-    if target_dir.exists():
-        remove_path(target_dir)
-    if old_dir.exists() and not target_dir.exists():
-        old_dir.rename(target_dir)
-    raise
-else:
-    remove_path(old_dir)
-```
-
-注意：`target_dir.rename(old_dir)` 本身失败时，不能先执行 `remove_path(target_dir)`。应先判断旧目录是否已经成功移动，或把清理动作放在对应的成功分支内。
-
-## 7. Release 发布步骤
-
-### 7.1 同步版本
+### 5.1 同步版本
 
 统一递增版本并检查以下来源：
 
-- Python/C# 运行时版本
-- `package.json`、锁文件或其他前端版本
-- Windows `FileVersion`、`ProductVersion`
-- Release 标签
+- `pyproject.toml` 运行时版本（`scripts/bump_version.py` 同步）
+- `package.json` 前端版本
+- Windows `FileVersion`、`ProductVersion`（`version_info.txt`）
 
-### 7.2 构建
+### 5.2 构建
 
-根据项目技术栈执行构建。Python/PyInstaller 的 SYNTEC 域控项目还应确认：
+执行 `python scripts/build_syntec.py`，确认：
 
 - 输出文件名以 `SYNTEC` 开头。
 - CompanyName、ProductName、LegalCopyright 包含 `SYNTEC`。
 - Windows 版本使用四段数字。
-- 使用 `--onedir --windowed --noupx`，并包含独立更新器。
+- 使用 `--onedir --windowed --noupx`。
 - 在纯英文、无空格路径下执行 PyInstaller。
 
-### 7.3 生成和上传资产
+### 5.3 生成和上传资产
 
-`python scripts/build_syntec.py` 会在生成 ZIP 的同时落盘摘要文件
-`dist/SYNTEC-Invoice-Processor-vX.Y.Z.zip.sha256`（格式：`<sha256>  <文件名>`），
-无需再手工执行 Get-FileHash：
+`build_syntec.py` 会在生成 ZIP 的同时落盘摘要文件 `dist/SYNTEC-Invoice-Processor-vX.Y.Z.zip.sha256`（格式：`<sha256>  <文件名>`），无需再手工执行 Get-FileHash。
 
 创建 Release 并上传 ASCII 资产：
 
 ```powershell
-gh release create v1.2.3 `
-  .\dist\ProductName-v1.2.3.zip `
-  --repo OWNER/REPOSITORY `
-  --title "v1.2.3" `
+gh release create vX.Y.Z `
+  .\dist\SYNTEC-Invoice-Processor-vX.Y.Z.zip `
+  --repo SYNTEC-40101720/Automated-invoice-processing `
+  --title "vX.Y.Z" `
   --notes "Release notes"
 ```
 
 发布后验证：
 
 ```powershell
-gh release view v1.2.3 --repo OWNER/REPOSITORY --json tagName,isDraft,isPrerelease,url,assets
+gh release view vX.Y.Z --repo SYNTEC-40101720/Automated-invoice-processing --json tagName,isDraft,isPrerelease,url,assets
 ```
 
 重点确认：
@@ -196,59 +92,41 @@ gh release view v1.2.3 --repo OWNER/REPOSITORY --json tagName,isDraft,isPrerelea
 - 资产大小合理
 - GitHub digest 与本地 SHA-256 一致（以 `.zip.sha256` 文件为准）
 
-## 8. 验收矩阵
+## 6. 验收矩阵
 
 | 场景 | 期望结果 |
 |---|---|
-| 当前版本低于 Release | `available=true`、`installable=true` |
+| 当前版本低于 Release | `available=true`，横幅提示新版本 |
 | 当前版本等于 Release | `available=false` |
 | 当前版本高于 Release | 不降级，`available=false` |
-| Release 无合规 ZIP | `installable=false` |
+| Release 无合规 ZIP | 横幅仍提示版本号，无资产信息 |
 | 资产前缀错误 | 忽略资产 |
 | 下载地址非固定仓库 HTTPS | 忽略资产 |
-| 网络超时或 JSON 无效 | 检查未完成，不误报最新 |
-| SHA-256 不匹配 | 拒绝安装 |
-| ZIP 路径穿越或符号链接 | 拒绝解压 |
-| 缺少主程序或更新器 | 拒绝安装 |
-| 主进程仍运行 | 等待或返回忙碌，不覆盖文件 |
-| 临时目录与目标目录跨盘 | 阻止 `rename`，不得删除旧目录 |
-| 替换失败 | 恢复旧目录，保留日志 |
-| 配置和日志存在 | 更新后仍存在且内容不变 |
-| 更新成功 | 新程序启动，旧备份再清理 |
+| 网络超时或 JSON 无效 | 检查未完成，不误报最新，应用正常启动 |
 
-更新界面验收还应确认：点击更新后窗口不会因同步下载而无响应；下载期间能看到已下载量/总大小或不确定进度；下载失败可重试；只有下载、摘要校验和包结构校验完成后才关闭窗口并进入整体替换。
+至少执行两类测试：
 
-至少执行三类测试：
-
-1. 更新器单元测试：版本、资产、摘要、ZIP 安全和回滚路径。
+1. 更新检查单元测试：版本比较、资产选择、错误处理（`tests/application/test_update_checker.py`、`tests/api/test_update_endpoint.py`）。
 2. 真实 GitHub API 检查：旧版能发现当前 Release，当前版不误报。
-3. Windows 安装目录冒烟：真实关闭、替换、恢复数据和重启。
 
-## 9. 故障处理
+## 7. 故障处理
 
-### 检测到更新但不可安装
+### 检测到新版本但看不到资产信息
 
 依次检查：
 
-1. GitHub Release 是否为稳定 Release。
+1. GitHub Release 是否为稳定 Release（非 draft、非 prerelease）。
 2. 资产是否为 ASCII 文件名。
-3. 资产名是否符合应用专属前缀。
+3. 资产名是否以 `SYNTEC-Invoice-Processor` 开头。
 4. `browser_download_url` 是否为固定仓库的 HTTPS 地址。
 5. API 返回的资产是否已经被 GitHub 自动重命名。
 
-### 更新后配置丢失
+### 手动更新后配置丢失
 
-1. 立即停止再次更新。
-2. 保留更新日志和旧备份目录。
-3. 检查保留数据清单是否包含实际配置、日志和业务目录。
-4. 从旧备份恢复后再启动应用。
-5. 修复数据恢复和异常回滚顺序，再重新打包发布。
+1. 停止使用并保留原安装目录的 `config.ini`、`logs/` 和 `发票收件箱/`。
+2. 将它们复制回新安装目录对应位置。
 
-### Windows 报跨盘移动错误
-
-通常是 `WinError 17`。检查临时备份目录是否位于 `%TEMP%` 的 C 盘，而安装目录位于 D 盘。将 staging 和 backup 改到安装目录父级，或实现复制式替换；禁止通过删除旧目录来绕过错误。
-
-## 10. 发布记录模板
+## 8. 发布记录模板
 
 ```text
 应用：
@@ -260,55 +138,8 @@ Release URL：
 资产大小：
 SHA-256：
 主程序版本资源：
-更新器版本资源：
 旧版检测结果：
 当前版检测结果：
-配置/日志保留结果：
-Windows 冒烟结果：
 未覆盖的环境：
 已知限制：
 ```
-
-## 11. 本项目交付基线
-
-当前源码与发布流程对应 v7.1.3。历史版本说明保留在 README 的版本历史中，本节只保留当前交付所需的验收记录。
-
-- 应用：SYNTEC 电子票据处理系统
-- 仓库：`SYNTEC-40101720/Automated-invoice-processing`
-- 当前版本：`7.1.1`
-- 目标版本：`7.1.3`
-- Release URL：https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.1.3
-- 资产：`SYNTEC-Invoice-Processor-v7.1.3.zip`
-- 资产大小：`71,139,735` bytes（约 67.89 MiB）
-- 资产 SHA-256：待发布后补充
-- 主程序/更新器版本资源：`7.0.12.0`；CompanyName 为 `SYNTEC`；语言为中性
-- ZIP 结构：单一顶层目录，包含主程序、独立更新器和 `_internal/web/dist/index.html`
-- 完整 Python 测试：`171 passed`
-- 前端构建：`npm run build` 通过
-- Releases API 检查：传入 `7.1.1` 得到 `available=true`、`installable=true`；传入 `7.1.3` 得到 `available=false`（以发布后实测为准）
-- 旧版 EXE 实际启动检查：本次未执行
-- 配置、日志和业务数据保留：本机更新器冒烟已验证；真实 Windows 安装替换尚未执行
-- 未覆盖环境：真实域控机器、干净 Windows 环境和实际 GitHub Release 更新替换/回滚流程
-
-### 本机更新器验收
-
-当前实现包含三层保护，并已通过单元测试和本地 EXE 冒烟：
-
-1. **回滚顺序保护**：`replace_install()` 显式跟踪旧安装是否已移动、新安装是否已就位；首次 `rename` 失败不再删除原安装目录。
-2. **包完整性校验**：`stage_update()` 在解压后校验主程序、独立更新器、`_internal/`、Python DLL、`_ctypes.pyd` 和 `web/dist/index.html`；缺项直接拒绝并清理 staging。
-3. **启动确认握手**：独立更新器通过 `SYNTEC_UPDATE_READY_FILE` 环境变量等待新应用 WebView `loaded` 事件写入确认文件；超时或进程提前退出则终止新进程并恢复旧版本，`terminate()` 超时后追加 `kill()`。
-
-本地端到端冒烟（使用真实 PyInstaller onedir EXE）：
-
-- `python scripts/smoke/run_success_smoke.py`：stub 主程序写入确认文件 → 新版本提交、旧备份和 staging 清理；构建输出全部位于系统临时目录。
-- `python scripts/smoke/run_failure_smoke.py`：stub 主程序不写确认文件直接退出 → 旧版本恢复、`update.log` 保留；构建输出全部位于系统临时目录。
-
-已知仍无法本地覆盖的风险：
-
-- 真实 GitHub Releases API 资产检测（含网络、重定向、中文资产名自动重命名）。
-- 真实 Windows 域控环境下的文件锁、UAC、Defender 扫描和权限差异。
-- 干净 Windows 环境（无开发工具、无 Python、无 WebView2 runtime）的首次安装与更新。
-- 跨盘安装目录场景：`rename` 失败后的复制式替换尚未实现。
-- WebView2 真实页面加载失败或 EdgeChromium 初始化异常时的回滚。
-
-后续目标环境验收建议：从旧版本 EXE 调用一次真实 Release 检查，并在目标域控机器上执行一次真实更新/回滚。

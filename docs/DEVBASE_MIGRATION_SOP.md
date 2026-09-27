@@ -3,7 +3,7 @@
 > **目标**：将发票项目中通用的、已验证的能力提升到 [Zy-DevBase](https://github.com/SYNTEC-40101720/Zy-DevBase) 基础仓库，使其成为后续所有 SYNTEC 桌面工具的基础轮子。
 >
 > **日期**：2026-09-05
-> **状态**：已确认 14 项决策，待分批实施
+> **状态**：已确认 13 项决策，待分批实施
 
 ## 当前执行进度
 
@@ -18,7 +18,6 @@
 - 标准 `/jobs/start`、`/jobs/cancel` 和运行时快照端点已接入
 - 发票配置读写复用 DevBase 文件锁/原子替换，密钥和日志复用 DevBase 公共实现
 - 主程序已新增 `invoice_processor.spec`，并通过实际 PyInstaller 构建
-- 更新器 ZIP 安全解压已复用 DevBase，发票 Release 命名和完整性校验保持业务扩展
 - 前端处理工作台的启动动作已切换到 DevBase `/jobs/start`，详情和日志暂由兼容层提供
 - 前端工作台已同步 DevBase 壳体验：可调宽/折叠侧栏、工具描述导航、system/light/dark 主题
 - 浏览器模式同源 WebSocket Origin 已修复，预览服务健康检查和事件流可用
@@ -34,7 +33,6 @@
 
 - 旧 `/jobs` 业务兼容 API 还未完全切换为 DevBase 标准 JobRuntime 契约
 - 发票事件总线与 DevBase 事件游标尚未统一
-- 更新器仍保留发票项目资产命名和兼容旧 Release 的扩展实现
 - 旧发票 jobs API 仍作为详情/日志兼容层保留，后续可在不改变业务事件字段的前提下逐步收敛
 - 前端业务视图仍使用原有发票任务响应模型
 
@@ -54,12 +52,11 @@
 | 6 | `EventBus` 事件总线 | 两者融合（有界队列+游标重放） | DevBase `application/event_bus.py` |
 | 7 | `ResourceProvider` 资源提供者 | 完整提升 | DevBase `domain/resources.py` |
 | 8 | PyInstaller 打包 | `.spec` + 预检/后验脚本分离 | DevBase `devbase.spec` + `scripts/` |
-| 9 | GitHub Release 自动更新体系 | 完整提升 | DevBase `desktop/update_*.py` + `application/update_checker.py` + 前端 + SOP |
-| 10 | `NativeBridge` 本机桥接 | 通用方法提升，附扩展文档 | DevBase `desktop/native_bridge.py` |
-| 11 | 前端共享组件 | 全部通用组件提升 | DevBase `web/src/` |
-| 12 | 配置管理 + DPAPI 密钥 | 通用骨架提升 | DevBase `config_manager.py` + `secret_store.py` + `config.py` |
-| 13 | `logger_config.py` 日志配置 | 提升，`log_name` 参数化 | DevBase `logger_config.py` |
-| 14 | `bump_version.py` 版本同步 | 提升，路径适配 DevBase | DevBase `bump_version.py` |
+| 9 | `NativeBridge` 本机桥接 | 通用方法提升，附扩展文档 | DevBase `desktop/native_bridge.py` |
+| 10 | 前端共享组件 | 全部通用组件提升 | DevBase `web/src/` |
+| 11 | 配置管理 + DPAPI 密钥 | 通用骨架提升 | DevBase `config_manager.py` + `secret_store.py` + `config.py` |
+| 12 | `logger_config.py` 日志配置 | 提升，`log_name` 参数化 | DevBase `logger_config.py` |
+| 13 | `bump_version.py` 版本同步 | 提升，路径适配 DevBase | DevBase `bump_version.py` |
 
 ---
 
@@ -208,14 +205,14 @@
 **来源**：发票项目 `scripts/build_syntec.py` + `version_info.txt`
 
 **DevBase 目标文件**：
-- `devbase.spec` — 标准 PyInstaller spec（双 exe：主程序 + 更新器）
+- `devbase.spec` — 标准 PyInstaller spec（单 exe 主程序）
 - `scripts/precheck.py` — 版本一致性 + 中文路径检查
 - `scripts/postverify.py` — 域控合规验证 + Release ZIP + SHA-256
 - `scripts/build_release.py` — 一键串联：precheck → npm build → PyInstaller → postverify
 
 **验收标准**：
 - [ ] `.spec` 使用 `--noupx`（域控禁止 UPX）
-- [ ] `.spec` 含双 EXE + COLLECT（主程序 + 更新器）
+- [ ] `.spec` 含 EXE + COLLECT（主程序）
 - [ ] `version_info.txt` 含 SYNTEC 命名规范
 - [ ] `precheck.py` 校验 pyproject + package.json + version_info 版本一致
 - [ ] `precheck.py` 检查项目路径纯英文
@@ -225,32 +222,7 @@
 
 ---
 
-### 9. GitHub Release 自动更新体系
-
-**来源**：发票项目 `src/desktop/update_helper.py` + `update_manager.py` + `update_protocol.py` + `src/application/update_checker.py` + `UpdateBanner.tsx` + `docs/RELEASE_UPDATE_SOP.md`
-
-**DevBase 目标文件**：
-- `backend/devbase/desktop/update_helper.py` — 独立更新器
-- `backend/devbase/desktop/update_manager.py` — 更新管理器
-- `backend/devbase/desktop/update_protocol.py` — 协议常量
-- `backend/devbase/application/update_checker.py` — 版本比较 + 资产选择
-- `backend/devbase/api/routes/` — 更新端点
-- `web/src/components/UpdateBanner.tsx` — 前端更新 UI
-- `docs/RELEASE_UPDATE_SOP.md` — SOP 文档
-
-**验收标准**：
-- [ ] 版本比较：semver 比较，选出最新 Release
-- [ ] 资产选择：按命名规则匹配正确的 ZIP
-- [ ] 下载：ZIP 到临时目录 + SHA-256 校验
-- [ ] 触发更新器：写 ready 文件 → 启动独立 update_helper.exe
-- [ ] 更新器接管：等主程序退出 → 解压替换 → 重启
-- [ ] 回滚：替换失败时从备份恢复
-- [ ] 前端 UpdateBanner 显示更新进度 + 应用按钮
-- [ ] SOP 文档含完整流程 + 验收步骤
-
----
-
-### 10. `NativeBridge` 本机桥接
+### 9. `NativeBridge` 本机桥接
 
 **来源**：发票项目 `src/desktop/native_bridge.py`
 
@@ -276,7 +248,7 @@
 
 ---
 
-### 11. 前端共享组件
+### 10. 前端共享组件
 
 **来源**：发票项目 `web/src/`
 
@@ -291,7 +263,7 @@
 | `components/Sidebar.tsx` | 融合最完整版（折叠+拖拽+主题） |
 | `components/StatusBar.tsx` | 版本/状态显示 |
 | `components/BottomPanel.tsx` | 空态骨架，不含发票业务 |
-| `components/UpdateBanner.tsx` | 配合更新体系 |
+| `components/UpdateBanner.tsx` | 新版本检测提示 + Release 页面跳转 |
 
 **留项目级（发票专属）**：
 - `features/AuditView.tsx`
@@ -303,14 +275,14 @@
 - [ ] API client WS 自动重连含游标恢复
 - [ ] `workbench.ts` store 管理视图状态
 - [ ] Sidebar 从 `/api/v1/tools` 动态渲染导航
-- [ ] UpdateBanner 显示更新进度
+- [ ] UpdateBanner 显示新版本提示并提供 Release 页面链接
 - [ ] StatusBar 显示版本和连接状态
 - [ ] 主题切换 system/light/dark
 - [ ] `features/` 目录留空给派生项目
 
 ---
 
-### 12. 配置管理 + DPAPI 密钥
+### 11. 配置管理 + DPAPI 密钥
 
 **来源**：发票项目 `src/config_manager.py` + `src/secret_store.py` + `src/config.py`
 
@@ -331,7 +303,7 @@
 
 ---
 
-### 13. `logger_config.py` 日志配置
+### 12. `logger_config.py` 日志配置
 
 **来源**：发票项目 `src/logger_config.py`
 
@@ -346,7 +318,7 @@
 
 ---
 
-### 14. `bump_version.py` 版本同步
+### 13. `bump_version.py` 版本同步
 
 **来源**：发票项目 `scripts/bump_version.py`
 
@@ -367,12 +339,11 @@
 
 | 批次 | 项 | 理由 |
 |---|---|---|
-| P0 | 1, 2, 3, 5a, 5b, 7, 6, 13 | 纯后端基础，互相依赖少，改动小 |
+| P0 | 1, 2, 3, 5a, 5b, 7, 6, 12 | 纯后端基础，互相依赖少，改动小 |
 | P1 | 4, 5c | 依赖 ports + 状态机，架构核心 |
-| P1 | 12, 14 | 配置 + 版本工具链 |
-| P2 | 11 | 前端组件提升 |
-| P2 | 8, 10 | 打包 + NativeBridge |
-| P3 | 9 | 更新体系（最复杂，依赖前端+后端+打包） |
+| P1 | 11, 13 | 配置 + 版本工具链 |
+| P2 | 10 | 前端组件提升 |
+| P2 | 8, 9 | 打包 + NativeBridge |
 
 ---
 

@@ -1,13 +1,12 @@
-import { Download, Settings2, X } from 'lucide-react'
+import { Download, ExternalLink, X } from 'lucide-react'
 import { useState } from 'react'
 import type { UpdateResponse } from '../api/types'
 
 interface UpdateBannerProps {
   update: UpdateResponse
-  onOpenSettings: () => void
 }
 
-export function UpdateBanner({ update, onOpenSettings }: UpdateBannerProps) {
+export function UpdateBanner({ update }: UpdateBannerProps) {
   const [dismissedVersion, setDismissedVersion] = useState<string | null>(null)
 
   if (
@@ -23,11 +22,16 @@ export function UpdateBanner({ update, onOpenSettings }: UpdateBannerProps) {
       <Download className="update-banner-icon" size={18} />
       <div className="update-banner-copy">
         <strong>发现新版本 v{update.latest_version}</strong>
-        <span>当前版本 v{update.current_version}，请在设置中完成自动更新。</span>
+        <span>当前版本 v{update.current_version}，请前往 Release 页面下载安装包。</span>
       </div>
-      <button className="primary-button update-action" onClick={onOpenSettings}>
-        <Settings2 size={14} /> 前往更新设置
-      </button>
+      <a
+        className="primary-button update-action"
+        href={update.release_url ?? 'https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/latest'}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <ExternalLink size={14} /> 前往下载
+      </a>
       <button
         className="icon-button update-dismiss"
         title="关闭更新提示"

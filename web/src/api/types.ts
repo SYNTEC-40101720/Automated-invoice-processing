@@ -97,21 +97,6 @@ export interface UpdateResponse {
   asset_size: number | null
 }
 
-export interface UpdateApplyResponse {
-  status: string
-  message: string
-  latest_version: string | null
-}
-
-export interface UpdateProgress {
-  status: 'idle' | 'downloading' | 'preparing' | 'starting' | 'failed' | 'busy' | 'unsupported' | 'unavailable'
-  downloaded_bytes: number
-  total_bytes: number | null
-  progress_percent: number | null
-  latest_version: string | null
-  message: string
-}
-
 export interface BusinessSettings {
   target_tax_id: string
   max_workers: number

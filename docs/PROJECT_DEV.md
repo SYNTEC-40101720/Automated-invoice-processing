@@ -109,7 +109,7 @@ backend/
 	├── domain/         # Job、状态机、领域事件和错误码
 	├── application/    # JobService、EventBus、文件服务、审核和任务适配
 	├── api/            # FastAPI 路由、token、静态资源和 WebSocket
-	├── desktop/        # 发票桌面扩展、NativeBridge 和自动更新器
+	├── desktop/        # 发票桌面扩展和 NativeBridge
 	└── core/           # 发票处理业务，不依赖 Web
 web/
 └── web/src/            # React 工作台和前端状态管理
@@ -152,17 +152,15 @@ web/
 | 8 | 类型路由注册表 | `processor.py:@register_type` | 装饰器注册，无需改 determine_processor_type |
 | 9 | 集成测试 | `tests/test_integration.py` | 20 个集成测试覆盖新功能 |
 | 10 | 合并性能评估 | `processor.py:_merge_classified_pdfs` | PdfWriter.append 已是推荐 API，无需优化 |
-| 11 | 自动更新 | `update_checker.py` + `desktop/update_manager.py` + `desktop/update_helper.py` | 设置页下载并校验 Release ZIP，由独立更新器替换目录后重启 |
+| 11 | 更新检查 | `update_checker.py` | 查询 GitHub Release 并提示新版本，跳转 Release 页面手动下载 |
 
-### 自动更新发布约定
+### 更新检查发布约定
 
-- 通用实施、发布和验收流程见 [RELEASE_UPDATE_SOP.md](RELEASE_UPDATE_SOP.md)；Copilot 可复用工作流见 [.github/skills/github-release-updater/SKILL.md](../.github/skills/github-release-updater/SKILL.md)。
-- `scripts/build_syntec.py` 会在主程序和独立更新器构建、合规验证通过后生成 `dist/SYNTEC-Invoice-Processor-v{version}.zip`；Release 资产名使用 ASCII，避免 GitHub 自动重命名中文文件名。
-- ZIP 必须保留顶层 `SYNTEC-电子票据处理系统/` 目录，并包含主程序、`SYNTEC-电子票据更新器.exe` 和完整 `_internal/`。
-- 应用只接受目标 GitHub 仓库中版本更高的 Release；设置页点击更新后执行下载、大小限制、SHA-256（若 Release 提供）和安全解压校验。
-- 更新下载在后台执行，设置页通过 `/api/v1/system/update/progress` 显示已下载字节数、Release 声明的总大小和百分比；总大小未知时显示已下载量和不确定进度。
-- 主程序退出后由临时目录中的独立更新器完成替换，更新器日志也写入临时目录，避免 Windows 目录句柄锁定；成功后保留 `config.ini`、`logs/` 和 `发票收件箱/`。
-- 没有更新器的旧安装包不能自更新，首次需要人工部署一次包含更新器的版本；安装目录还必须对当前用户可写。
+- 应用仅查询 GitHub Releases API 检测新版本，在横幅和设置页提示并提供 Release 页面链接；**不提供程序内下载或安装**，用户手动下载 ZIP 并替换安装目录。
+- `scripts/build_syntec.py` 在主程序构建、合规验证通过后生成 `dist/SYNTEC-Invoice-Processor-v{version}.zip`；Release 资产名使用 ASCII，避免 GitHub 自动重命名中文文件名。
+- ZIP 必须保留顶层 `SYNTEC-电子票据处理系统/` 目录，并包含主程序和完整 `_internal/`。
+- 应用只接受目标 GitHub 仓库中版本更高的 Release；Release 标签必须为 `vX.Y.Z` 格式。
+- 替换安装目录时保留 `config.ini`、`logs/` 和 `发票收件箱/`（它们不打进 ZIP）。
 
 ## 8. 维护回归清单
 
@@ -195,14 +193,7 @@ python scripts/build_syntec.py
 
 ```
 
-截至 v7.1.3，本机 Windows 环境已验证：163 条 Python 测试通过，`compileall`、`pip check`、Ruff、前端 typecheck/build 和 SYNTEC PyInstaller 域控合规检查通过；本机发布包启动冒烟以及更新器成功提交、失败回滚冒烟均通过，真实 Releases API 的旧版本号/当前版本号检查均已通过。旧版 EXE 实际启动、真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户启动以及目标机 WebView2/DPI 验收仍需在目标环境执行。
-
-更新器冒烟脚本使用系统临时目录保存 PyInstaller 输出和替换现场，项目目录只保留脚本，不保留二进制测试产物：
-
-```bash
-python scripts/smoke/run_success_smoke.py
-python scripts/smoke/run_failure_smoke.py
-```
+截至 v7.1.3，本机 Windows 环境已验证：163 条 Python 测试通过，`compileall`、`pip check`、Ruff、前端 typecheck/build 和 SYNTEC PyInstaller 域控合规检查通过；本机发布包启动冒烟通过，真实 Releases API 的旧版本号/当前版本号检查均已通过。旧版 EXE 实际启动、真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户启动以及目标机 WebView2/DPI 验收仍需在目标环境执行。
 
 测试文件：
 - `tests/test_processor.py`：核心逻辑单元测试

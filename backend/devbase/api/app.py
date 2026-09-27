@@ -17,9 +17,8 @@ from devbase.application.errors import (
 from devbase.application.job_runtime import JobRuntime
 from devbase.application.lifecycle import LifecyclePolicy, WindowLifecycle
 from devbase.application.task import TaskNotFoundError
-from devbase.desktop.update_manager import UpdateManager
 
-from .routes import events, jobs, system, tools, updates
+from .routes import events, jobs, system, tools
 
 
 def create_app(
@@ -31,7 +30,6 @@ def create_app(
     static_dir: str | Path | None = None,
     lifecycle_policy: LifecyclePolicy | None = None,
     allowed_origins: Iterable[str] | None = None,
-    update_manager: UpdateManager | None = None,
     include_default_routes: bool = True,
     defer_static_mount: bool = False,
 ) -> FastAPI:
@@ -64,17 +62,6 @@ def create_app(
         local_token if local_token is not None else secrets.token_urlsafe(32)
     )
     app.state.allowed_origins = frozenset(resolved_origins)
-    install_dir = Path(
-        os.getenv(
-            "PLATFORM_INSTALL_DIR",
-            str(Path(__file__).resolve().parents[3]),
-        )
-    )
-    app.state.update_manager = update_manager or UpdateManager(
-        version,
-        install_dir=install_dir,
-        update_root=os.getenv("PLATFORM_UPDATE_DIR"),
-    )
     app.state.window_lifecycle = WindowLifecycle(
         lifecycle_policy or LifecyclePolicy(),
         stop_active_job=_stop_active_job(app.state.runtime),
@@ -99,7 +86,6 @@ def create_app(
         app.include_router(jobs.router, prefix="/api/v1")
         app.include_router(events.router, prefix="/api/v1")
         app.include_router(tools.router, prefix="/api/v1")
-        app.include_router(updates.router, prefix="/api/v1")
 
     if static_dir is not None and not defer_static_mount:
         mount_static_frontend(app, static_dir)

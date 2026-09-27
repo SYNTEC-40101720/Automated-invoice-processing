@@ -5,7 +5,6 @@ from pydantic import BaseModel
 
 from devbase.application.lifecycle import WindowCloseMode
 from devbase.application.manifest import ToolDescriptor
-from devbase.desktop.update_manager import UpdateProgress
 from devbase.domain.events import EventKind, RuntimeEvent
 from devbase.domain.job import JobSnapshot, JobStatus, RuntimeSnapshot
 
@@ -51,25 +50,6 @@ class ToolDescriptorResponse(BaseModel):
 
 class ToolListResponse(BaseModel):
     tools: list[ToolDescriptorResponse]
-
-
-class UpdateCheckResponse(BaseModel):
-    current: str
-    latest: str | None = None
-    available: bool = False
-    installable: bool = False
-    asset_name: str | None = None
-    release_url: str | None = None
-    error: str | None = None
-
-
-class UpdateProgressResponse(BaseModel):
-    status: str
-    percent: int
-    message: str
-    error: str | None = None
-    rollback: bool = False
-    ready_file: str | None = None
 
 
 def tool_descriptor_response(d: ToolDescriptor) -> ToolDescriptorResponse:
@@ -134,15 +114,4 @@ def snapshot_response(snapshot: RuntimeSnapshot) -> SnapshotResponse:
         job=job_response(snapshot.job),
         events=[event_response(event) for event in snapshot.events],
         event_cursor=snapshot.event_cursor,
-    )
-
-
-def update_progress_response(progress: UpdateProgress) -> UpdateProgressResponse:
-    return UpdateProgressResponse(
-        status=progress.status,
-        percent=progress.percent,
-        message=progress.message,
-        error=progress.error,
-        rollback=progress.rollback,
-        ready_file=progress.ready_file,
     )

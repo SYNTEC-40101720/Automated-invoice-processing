@@ -269,8 +269,6 @@ export function App() {
     return result.data ?? null
   }
 
-  const applyUpdate = () => api.applyUpdate()
-
   const startSidebarDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault()
     dragStartX.current = event.clientX
@@ -300,7 +298,7 @@ export function App() {
       onDragStart={startSidebarDrag}
     />
     <main className={`main-column ${updateQuery.data?.available ? 'has-update' : ''} ${bottomPanelOpen ? 'has-bottom-panel' : ''}`}>
-      {updateQuery.data?.available && <UpdateBanner update={updateQuery.data} onOpenSettings={() => setView('settings')} />}
+      {updateQuery.data?.available && <UpdateBanner update={updateQuery.data} />}
       <div className="main-content">
         {activeView === 'processing'
           ? <ProcessingView job={job} onChooseDirectory={chooseDirectory} onStart={start} onCancel={cancel} onOpenOutput={openOutput} />
@@ -312,7 +310,6 @@ export function App() {
                 version={healthQuery.data?.version ?? null}
                 update={updateQuery.data ?? null}
                 onCheckUpdate={checkForUpdate}
-                onApplyUpdate={applyUpdate}
                 theme={theme}
                 onThemeChange={setTheme}
               />}

@@ -30,7 +30,6 @@ def test_create_release_archive_contains_complete_install_directory(
     package_dir = dist_dir / build_syntec.APP_NAME
     (package_dir / '_internal').mkdir(parents=True)
     (package_dir / f'{build_syntec.APP_NAME}.exe').write_bytes(b'app')
-    (package_dir / f'{build_syntec.UPDATER_NAME}.exe').write_bytes(b'updater')
     (package_dir / '_internal' / 'python3.dll').write_bytes(b'python')
     monkeypatch.setattr(build_syntec, 'DIST_DIR', dist_dir)
 
@@ -42,7 +41,6 @@ def test_create_release_archive_contains_complete_install_directory(
     with zipfile.ZipFile(archive_path) as archive:
         names = set(archive.namelist())
     assert f'{build_syntec.APP_NAME}/{build_syntec.APP_NAME}.exe' in names
-    assert f'{build_syntec.APP_NAME}/{build_syntec.UPDATER_NAME}.exe' in names
     assert (
         f'{build_syntec.APP_NAME}/_internal/python3.dll' in names
     )

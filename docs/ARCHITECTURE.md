@@ -95,15 +95,15 @@ Automated-invoice-processing-main/
 ├── backend/
 │   ├── devbase/                    # Zy-DevBase 通用桌面框架
 │   │   ├── api/                    # 安全层、应用工厂、标准路由
-│   │   ├── application/            # JobRuntime、EventBus、更新检查、清单
+│   │   ├── application/            # JobRuntime、EventBus、清单
 │   │   ├── domain/                 # 通用 Job 状态机、事件、端口
-│   │   └── desktop/                # 通用 NativeBridge、更新器、日志
+│   │   └── desktop/                # 通用 NativeBridge、日志
 │   └── invoice_processor/          # 发票业务包（依赖 devbase）
 │       ├── api/                    # 业务路由：jobs/settings/email/events
 │       ├── application/            # JobService 编排、邮箱轮询、审核
 │       ├── core/                   # 票据算法：提取、类型注册表、合并
 │       ├── domain/                 # 业务 Job 聚合、错误码
-│       └── desktop/                # launcher、业务 NativeBridge、更新器
+│       └── desktop/                # launcher、业务 NativeBridge
 ├── web/
 │   ├── src/
 │   │   ├── app/                    # 路由、布局、全局初始化
@@ -114,13 +114,12 @@ Automated-invoice-processing-main/
 │   │   └── styles/                 # token、主题、响应式布局
 │   └── tests/                      # Vitest store 层单测
 ├── tests/
-│   ├── application/                # 状态机、编排、更新器测试
+│   ├── application/                # 状态机、编排、更新检查测试
 │   ├── api/                        # HTTP/WebSocket 契约测试
 │   └── core 算法与集成测试
 └── scripts/
     ├── build_syntec.py            # 前端构建、PyInstaller 打包、合规校验
-    ├── bump_version.py             # 版本递增与多源同步
-    └── smoke/                      # 更新器发布前冒烟
+    └── bump_version.py             # 版本递增与多源同步
 ```
 
 重构完成后，生产代码不保留旧 UI 包或 Qt 依赖；新代码通过应用层、API 和桌面桥接层协作。
@@ -399,7 +398,7 @@ dist/SYNTEC-电子票据处理系统/
 
 ## 12. 交付状态与边界
 
-v7.1.3 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、邮箱自动收件、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 自动更新。核心 Python 测试、API 契约、前端生产构建、打包合规以及更新器成功/回滚冒烟已通过；更新下载支持后台进度查询，完成校验后才进入整体替换。
+v7.1.3 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、邮箱自动收件、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。核心 Python 测试、API 契约、前端生产构建和打包合规已通过；更新功能为"仅检测提示 + 跳转 Release 页面手动下载"，不在程序内下载或安装更新。
 
 以下事项不属于当前版本功能，后续若实施必须同步补充测试和验收记录：
 
@@ -428,8 +427,8 @@ v7.1.3 当前交付包含：FastAPI 本地服务、React 工作台、pywebview �
 
 - 旧 UI 不再是交付路径，业务编排集中在应用层；
 - Python 核心、应用层、API、桌面壳和前端边界符合本文件约定；
-- HTTP/OpenAPI、WebSocket、更新检查和回滚路径已有自动化测试；
-- 业务规则清单、本机打包合规和更新器本地冒烟均已验证；
-- README、项目维护说明、打包脚本和更新 SOP 已同步到当前版本。
+- HTTP/OpenAPI、WebSocket 和更新检查路径已有自动化测试；
+- 业务规则清单和本机打包合规均已验证；
+- README、项目维护说明和打包脚本已同步到当前版本。
 
 真实浏览器、干净 Windows、WebView2/DPI 和域控权限差异仍需在目标环境验收，不能用本机测试结果替代。

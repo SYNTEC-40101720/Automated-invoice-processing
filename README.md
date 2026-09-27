@@ -54,14 +54,13 @@
 ├── docs/                         # 项目文档（架构、SOP、开发维护说明）
 ├── scripts/                     # 构建与工具脚本
 │   ├── build_syntec.py           # 前端构建、PyInstaller 打包和合规校验
-│   ├── bump_version.py           # 递增并同步发布版本号
-│   └── smoke/                    # 更新器发布前冒烟脚本
+│   └── bump_version.py           # 递增并同步发布版本号
 ├── backend/
 │   ├── devbase/                  # 通用桌面工具框架
 │   │   ├── domain/               # 状态、事件、端口和资源
-│   │   ├── application/          # JobRuntime、ToolRegistry、生命周期和更新
+│   │   ├── application/          # JobRuntime、ToolRegistry、生命周期和更新检查
 │   │   ├── api/                  # 安全 API 工厂和通用路由
-│   │   └── desktop/              # 桌面壳、NativeBridge 和更新器
+│   │   └── desktop/              # 桌面壳、NativeBridge 和日志
 │   └── invoice_processor/        # 发票业务包
 │       ├── config.py             # 业务配置常量（税号、线程数）
 │       ├── config_manager.py     # 发票业务配置读写
@@ -81,7 +80,7 @@
 | 模块 | 职责 |
 |---|---|
 | `main.py` | 桌面入口，启动本地 FastAPI 服务和 WebView2 |
-| `backend/devbase/` | 通用安全层、JobRuntime、ToolRegistry、生命周期、桌面壳和更新能力 |
+| `backend/devbase/` | 通用安全层、JobRuntime、ToolRegistry、生命周期、桌面壳和日志 |
 | `backend/invoice_processor/desktop/` | 发票桌面扩展、随机端口、业务桥接和退出清理 |
 | `backend/invoice_processor/api/` | 发票 HTTP/WebSocket 契约、设置、邮箱和业务兼容路由 |
 | `backend/invoice_processor/application/` | 发票流水线、审核、归档、邮箱和 DevBase Task 适配 |
@@ -156,17 +155,15 @@ python scripts/bump_version.py major   # 7.0.5 → 8.0.0
 [`SYNTEC-40101720/Automated-invoice-processing`](https://github.com/SYNTEC-40101720/Automated-invoice-processing)
 的公开 Releases API；网络不可用或 GitHub 暂时无法访问时，应用仍会正常启动。
 
-发现比当前版本更高且包含可安装 ZIP 的 Release 后，工作台顶部会提示更新，设置页会出现「立即更新」。点击后程序会在后台下载完整 ZIP，设置页通过进度接口显示已下载大小、总大小和百分比；下载完成后再校验 GitHub 提供的 SHA-256 摘要（Release 未提供摘要时使用 HTTPS 和包结构校验），然后关闭当前窗口，由独立更新器整体替换安装目录并启动新版本。`config.ini`、`logs/` 和默认收件箱会从旧版本保留。下载期间不会覆盖现有安装目录。
-
-支持自动安装的第一版需要先人工部署一次，因为旧版本安装目录中没有独立更新器；从该版本开始，后续 Release 可以完全免人工下载。安装目录还必须对当前用户可写，否则更新器无法替换文件。
+发现比当前版本更高的 Release 后，工作台顶部会提示新版本，并提供「前往下载」链接跳转到 Release 页面；设置页同样提供「检查更新」和 Release 链接。应用**不在程序内下载或安装更新**：用户需在 Release 页面手动下载 `SYNTEC-Invoice-Processor-vX.Y.Z.zip`，解压并替换安装目录（`config.ini`、`logs/` 和默认收件箱不打进 ZIP，替换时保留即可）。
 
 发布新版本时保持版本号一致：
 
 1. 执行 `python scripts/bump_version.py patch`（或 `minor`、`major`）。
-2. 执行 `python scripts/build_syntec.py`，生成新的 `dist/SYNTEC-电子票据处理系统/` 打包目录，其中包含主程序和 `SYNTEC-电子票据更新器.exe`。
+2. 执行 `python scripts/build_syntec.py`，生成新的 `dist/SYNTEC-电子票据处理系统/` 打包目录（主程序 + `_internal/`）。
 3. `build_syntec.py` 会生成 `dist/SYNTEC-Invoice-Processor-vX.Y.Z.zip`，直接使用该 ASCII 文件名作为资产。
 4. 在 GitHub 创建 Release，标签使用 `vX.Y.Z` 格式，上传该 ZIP 并发布。
-5. 发布 Release 后，用户在设置页点击「检查更新」即可下载并完成更新；Release 标签版本必须高于软件当前版本。
+5. 发布 Release 后，旧版本在设置页点击「检查更新」即可发现新版本并跳转 Release 页面手动下载。
 
 ## 版本历史
 

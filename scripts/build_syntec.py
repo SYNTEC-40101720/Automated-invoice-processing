@@ -7,7 +7,6 @@ SYNTEC 域控规范打包脚本
 输出：
     dist/SYNTEC-电子票据处理系统/
     ├── SYNTEC-电子票据处理系统.exe
-    ├── SYNTEC-电子票据更新器.exe
     └── _internal/  (Python 运行时 + 依赖)
 
 Release 资产：
@@ -55,14 +54,12 @@ def prepare_release_version() -> str:
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
 
 APP_NAME = "SYNTEC-电子票据处理系统"
-UPDATER_NAME = "SYNTEC-电子票据更新器"
 RELEASE_ARCHIVE_PREFIX = "SYNTEC-Invoice-Processor"
 VERSION_FILE = ROOT / "version_info.txt"
 PYPROJECT_FILE = ROOT / "pyproject.toml"
 WEB_PACKAGE_FILE = ROOT / "web" / "package.json"
 WEB_LOCK_FILE = ROOT / "web" / "package-lock.json"
 MAIN_SCRIPT = ROOT / "main.py"
-UPDATER_SCRIPT = ROOT / "backend" / "invoice_processor" / "desktop" / "update_helper.py"
 WEB_DIR = ROOT / "web"
 WEB_DIST_DIR = WEB_DIR / "dist"
 DIST_DIR = ROOT / "dist"
@@ -139,12 +136,6 @@ def verify() -> None:
         errors.append(f"exe 不存在: {exe}")
     else:
         print(f"✅ exe 存在: {exe.name}")
-
-    updater = DIST_DIR / APP_NAME / f"{UPDATER_NAME}.exe"
-    if not updater.exists():
-        errors.append(f"更新器不存在: {updater}")
-    else:
-        print(f"✅ 更新器存在: {updater.name}")
 
     # 2. 文件名以 SYNTEC 开头
     if not exe.name.startswith("SYNTEC"):
@@ -260,22 +251,6 @@ def main():
     ]
 
     run(cmd, "PyInstaller 打包")
-    updater_cmd = [
-        sys.executable, "-m", "PyInstaller",
-        "--onefile",
-        "--windowed",
-        "--name", UPDATER_NAME,
-        "--icon", str(ROOT / "logo.ico"),
-        "--version-file", str(VERSION_FILE),
-        "--noupx",
-        "--clean",
-        "--noconfirm",
-        "--distpath", str(DIST_DIR / APP_NAME),
-        "--workpath", str(BUILD_DIR / UPDATER_NAME),
-        "--specpath", str(BUILD_DIR / UPDATER_NAME),
-        str(UPDATER_SCRIPT),
-    ]
-    run(updater_cmd, "打包独立更新器")
     verify()
     create_release_archive()
 

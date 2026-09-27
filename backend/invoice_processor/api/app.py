@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from pathlib import Path
 
 from devbase.api.app import (
@@ -17,7 +17,6 @@ from fastapi import FastAPI
 
 from ..application.invoice_task import build_invoice_registry
 from ..application.job_service import JobService
-from ..application.update_checker import UpdateApplyResult, UpdateProgress
 from ..domain.errors import ApplicationError
 from ..version import __version__
 from .errors import application_error_handler
@@ -31,8 +30,6 @@ def create_app(
     version: str = __version__,
     static_dir: str | Path | None = None,
     allowed_origins: Iterable[str] | None = None,
-    update_apply: Callable[[str], UpdateApplyResult] | None = None,
-    update_progress: Callable[[], UpdateProgress] | None = None,
 ) -> FastAPI:
     service = job_service or JobService()
     runtime = JobRuntime(registry=build_invoice_registry(service))
@@ -50,8 +47,6 @@ def create_app(
     app.state.job_service = service
     app.state.devbase_runtime = runtime
     app.state.version = version
-    app.state.update_apply = update_apply
-    app.state.update_progress = update_progress
 
     app.include_router(system.router, prefix='/api/v1')
     app.include_router(jobs.router, prefix='/api/v1')
