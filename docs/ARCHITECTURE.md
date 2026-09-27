@@ -11,7 +11,7 @@
 
 本次重构采用“Python 本地后端 + Web 前端 + Windows WebView 桌面壳”模式：
 
-- 保留现有 `src/core/` 票据处理算法和测试资产；
+- 保留现有票据处理算法和测试资产（现位于 `backend/invoice_processor/core/`）；
 - 将业务流程从 Qt UI 抽到可测试的 Python 应用层；
 - 使用 FastAPI 提供本机 HTTP API，使用 WebSocket 推送实时任务事件；
 - 使用 React + TypeScript 构建类 VS Code 的工作台界面；
@@ -22,7 +22,7 @@
 
 1. 用户双击 EXE 后进入桌面窗口，不出现控制台和外部浏览器。
 2. 原有目录选择、拖入 PDF、开始/停止、实时进度、日志、输出目录、邮箱拉取、自动处理、设置、本地审核和 AI 审核能力均保留。
-3. 核心业务规则与当前测试结果不回归，且 `src/core/` 不依赖 FastAPI、pywebview 或前端代码。
+3. 核心业务规则与当前测试结果不回归，且 `backend/invoice_processor/core/` 不依赖 FastAPI、pywebview 或前端代码。
 4. UI 刷新、窗口关闭或 WebSocket 短暂断开不会中止后台任务；重新连接后可恢复当前快照。
 5. 前后端接口有稳定的数据模型，UI 不再直接编排线程或调用核心私有方法。
 
@@ -85,62 +85,42 @@ flowchart LR
 
 依赖方向固定为外层指向内层。FastAPI 路由只做参数验证、服务调用和响应转换；所有“能否开始、何时归档、如何停止、如何统计”的决定必须位于应用层。
 
-## 4. 目标目录结构
+## 4. 目录结构（v7.1.x 当前实际结构）
 
 ```text
 Automated-invoice-processing-main/
-├── main.py                         # 新桌面入口：启动 API、WebView、退出清理
-├── src/
-│   ├── core/                       # 保留现有票据算法
-│   ├── domain/
-│   │   ├── job.py                  # Job、JobStatus、统计、结果模型
-│   │   ├── events.py               # 领域事件模型
-│   │   └── errors.py               # 稳定错误码与领域异常
-│   ├── application/
-│   │   ├── job_service.py          # 处理编排、取消、快照、结果
-│   │   ├── invoice_file_service.py # 单文件处理和人工归集
-│   │   ├── audit_service.py        # 本地/AI 审核编排
-│   │   ├── email_service.py        # 拉取、自动处理、归档
-│   │   ├── config_service.py       # 配置校验、脱敏读写
-│   │   └── event_bus.py            # 线程安全事件发布订阅
-│   ├── infrastructure/
-│   │   ├── config_repository.py    # 适配现有 config_manager
-│   │   ├── file_system.py          # 路径扫描、复制、移动、打开
-│   │   ├── scheduler.py            # 邮箱轮询与目录监听
-│   │   └── log_sink.py             # 持久化日志与任务事件桥接
-│   ├── api/
-│   │   ├── app.py                  # FastAPI 工厂、生命周期
-│   │   ├── dependencies.py         # 服务注入
-│   │   ├── schemas.py              # API DTO
-│   │   ├── errors.py               # 异常到 HTTP 错误映射
-│   │   └── routes/
-│   │       ├── system.py
-│   │       ├── jobs.py
-│   │       ├── settings.py
-│   │       ├── email.py
-│   │       └── files.py
-│   └── desktop/
-│       ├── launcher.py             # 随机端口、令牌、就绪探测、退出
-│       └── native_bridge.py        # 原生目录选择与打开目录
+├── main.py                         # 桌面入口：启动 API、WebView、退出清理
+├── invoice_processor.spec         # PyInstaller 域控打包规格
+├── version_info.txt                # Windows 版本资源（构建时重写版本号）
+├── backend/
+│   ├── devbase/                    # Zy-DevBase 通用桌面框架
+│   │   ├── api/                    # 安全层、应用工厂、标准路由
+│   │   ├── application/            # JobRuntime、EventBus、更新检查、清单
+│   │   ├── domain/                 # 通用 Job 状态机、事件、端口
+│   │   └── desktop/                # 通用 NativeBridge、更新器、日志
+│   └── invoice_processor/          # 发票业务包（依赖 devbase）
+│       ├── api/                    # 业务路由：jobs/settings/email/events
+│       ├── application/            # JobService 编排、邮箱轮询、审核
+│       ├── core/                   # 票据算法：提取、类型注册表、合并
+│       ├── domain/                 # 业务 Job 聚合、错误码
+│       └── desktop/                # launcher、业务 NativeBridge、更新器
 ├── web/
 │   ├── src/
 │   │   ├── app/                    # 路由、布局、全局初始化
-│   │   ├── api/                    # HTTP 客户端、WebSocket、生成类型
-│   │   ├── features/
-│   │   │   ├── processing/
-│   │   │   ├── inbox/
-│   │   │   ├── audit/
-│   │   │   └── settings/
+│   │   ├── api/                    # HTTP 客户端、WebSocket、类型
+│   │   ├── features/               # processing/inbox/audit/settings 视图
 │   │   ├── components/             # 通用控件，不含业务编排
-│   │   ├── stores/                 # 连接、任务与布局状态
+│   │   ├── stores/                 # 连接、任务与布局状态（zustand）
 │   │   └── styles/                 # token、主题、响应式布局
-│   ├── package.json
-│   └── vite.config.ts
+│   └── tests/                      # Vitest store 层单测
 ├── tests/
-│   ├── application/                # 状态机与编排测试
+│   ├── application/                # 状态机、编排、更新器测试
 │   ├── api/                        # HTTP/WebSocket 契约测试
-│   └── e2e/                        # Playwright 桌面视口测试
-└── scripts/build_syntec.py          # 先构建 web，再打包 Python 与静态资源
+│   └── core 算法与集成测试
+└── scripts/
+    ├── build_syntec.py            # 前端构建、PyInstaller 打包、合规校验
+    ├── bump_version.py             # 版本递增与多源同步
+    └── smoke/                      # 更新器发布前冒烟
 ```
 
 重构完成后，生产代码不保留旧 UI 包或 Qt 依赖；新代码通过应用层、API 和桌面桥接层协作。

@@ -27,9 +27,11 @@ def _require_frontend_build() -> Path:
 def main() -> None:
     setup_logging()
     static_dir = _require_frontend_build()
+    # PLATFORM_PORT 未设置时由 launcher 选择随机空闲端口，避免固定端口冲突
+    port_env = os.getenv('PLATFORM_PORT')
     run_desktop(
         host=os.getenv('PLATFORM_HOST', '127.0.0.1'),
-        port=int(os.getenv('PLATFORM_PORT', '8000')),
+        port=int(port_env) if port_env else None,
         static_dir=static_dir,
     )
 
