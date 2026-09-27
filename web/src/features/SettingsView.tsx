@@ -80,7 +80,9 @@ export function SettingsView({ version, update, onCheckUpdate, onApplyUpdate, th
   }, [updateProgressQuery.data])
 
   useEffect(() => {
-    if (settingsQuery.data) setSettings(settingsQuery.data)
+    // 仅在本地没有编辑态时同步服务器设置，避免保存后的
+    // invalidateQueries 重取覆盖用户正在进行的其他字段编辑。
+    if (settingsQuery.data) setSettings((current) => current ?? settingsQuery.data)
   }, [settingsQuery.data])
 
   const save = useMutation({

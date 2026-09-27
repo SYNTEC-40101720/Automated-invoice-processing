@@ -23,6 +23,19 @@ from email.utils import parseaddr
 
 logger = logging.getLogger(__name__)
 
+# IMAP SEARCH 的 SINCE 日期必须用英文月份缩写（RFC 3501），
+# 硬编码月份表避免 strftime('%b') 受进程 LC_TIME locale 影响。
+_IMAP_MONTHS = (
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+)
+
+
+def _imap_since_date(days_back: int) -> str:
+    """生成 IMAP SINCE 用的 d-Mon-Y 日期串（locale 无关）。"""
+    date = datetime.now() - timedelta(days=days_back)
+    return f'{date.day:02d}-{_IMAP_MONTHS[date.month - 1]}-{date.year:04d}'
+
 # 常见发票发件方（可按需扩展）
 DEFAULT_SENDERS = [
     '12306@rails.com.cn',                          # 高铁票
@@ -223,7 +236,7 @@ def pull_invoices(host='imap.qq.com', port=993, username='', auth_code='',
     errors: list = []
     total_scanned = 0
 
-    since = (datetime.now() - timedelta(days=days_back)).strftime('%d-%b-%Y')
+    since = _imap_since_date(days_back)
 
     try:
         imap_timeout = max(1.0, min(300.0, float(timeout)))

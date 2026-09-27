@@ -82,60 +82,72 @@ class DesktopUpdateManager:
                     status='unsupported',
                     message='开发模式不支持自动安装更新',
                 )
-            if self._can_update is not None:
-                try:
-                    if not self._can_update():
-                        return UpdateApplyResult(
-                            status='busy',
-                            message='当前仍有任务运行，请完成或停止任务后再更新',
-                        )
-                except Exception:
-                    logger.exception('检查更新前的任务状态失败')
+
+        # 前置检查（can_update、更新器存在性）放在锁外执行，避免
+        # 网络请求（check_for_update）阻塞 progress() 的进度轮询。
+
+        if self._can_update is not None:
+            try:
+                if not self._can_update():
                     return UpdateApplyResult(
                         status='busy',
-                        message='暂时无法确认任务状态，请稍后再试',
+                        message='当前仍有任务运行，请完成或停止任务后再更新',
                     )
-
-            helper_source = self._target_dir / UPDATE_HELPER_NAME
-            if not helper_source.is_file():
+            except Exception:
+                logger.exception('检查更新前的任务状态失败')
                 return UpdateApplyResult(
-                    status='unsupported',
-                    message='当前安装包缺少更新器，请先手动安装一次支持自动更新的版本',
-                )
-
-            result = check_for_update(current_version)
-            if not result.checked:
-                self._set_progress(
-                    status='failed',
-                    message='无法连接 GitHub，暂时不能下载更新',
-                )
-                return UpdateApplyResult(
-                    status='failed',
-                    message='无法连接 GitHub，暂时不能下载更新',
-                )
-            if not result.available:
-                self._set_progress(
-                    status='idle',
-                    latest_version=result.latest_version,
-                    message=f'当前已经是最新版本 v{current_version}',
-                )
-                return UpdateApplyResult(
-                    status='latest',
-                    message=f'当前已经是最新版本 v{current_version}',
-                    latest_version=result.latest_version,
-                )
-            if not result.installable:
-                self._set_progress(
-                    status='unavailable',
-                    latest_version=result.latest_version,
-                    message='此 Release 没有可安装的 SYNTEC ZIP 文件',
-                )
-                return UpdateApplyResult(
-                    status='unavailable',
-                    message='此 Release 没有可安装的 SYNTEC ZIP 文件',
-                    latest_version=result.latest_version,
+                    status='busy',
+                    message='暂时无法确认任务状态，请稍后再试',
                 )
 
+        helper_source = self._target_dir / UPDATE_HELPER_NAME
+        if not helper_source.is_file():
+            return UpdateApplyResult(
+                status='unsupported',
+                message='当前安装包缺少更新器，请先手动安装一次支持自动更新的版本',
+            )
+
+        result = check_for_update(current_version)
+        if not result.checked:
+            self._set_progress(
+                status='failed',
+                message='无法连接 GitHub，暂时不能下载更新',
+            )
+            return UpdateApplyResult(
+                status='failed',
+                message='无法连接 GitHub，暂时不能下载更新',
+            )
+        if not result.available:
+            self._set_progress(
+                status='idle',
+                latest_version=result.latest_version,
+                message=f'当前已经是最新版本 v{current_version}',
+            )
+            return UpdateApplyResult(
+                status='latest',
+                message=f'当前已经是最新版本 v{current_version}',
+                latest_version=result.latest_version,
+            )
+        if not result.installable:
+            self._set_progress(
+                status='unavailable',
+                latest_version=result.latest_version,
+                message='此 Release 没有可安装的 SYNTEC ZIP 文件',
+            )
+            return UpdateApplyResult(
+                status='unavailable',
+                message='此 Release 没有可安装的 SYNTEC ZIP 文件',
+                latest_version=result.latest_version,
+            )
+
+        # 网络检查完成后，回到锁内翻转 _started 并启动下载线程，
+        # progress() 全程不被网络延迟阻塞。
+        with self._lock:
+            if self._started:
+                return UpdateApplyResult(
+                    status='busy',
+                    message='更新已经开始准备，请稍候',
+                )
             self._started = True
             self._set_progress(
                 status='downloading',
@@ -274,6 +286,25 @@ class DesktopUpdateManager:
         callback = self._close_window
         if callback is None:
             return
+        # 下载耗时可达数分钟，apply() 时点的 can_update 结果已过期；
+        # 重启前复核一次，避免正在运行的任务被无提示终止。
+        if self._can_update is not None:
+            try:
+                if not self._can_update():
+                    self._set_progress(
+                        status='busy',
+                        message='检测到任务正在运行，已暂停自动重启；请完成或停止任务后重试更新',
+                    )
+                    with self._lock:
+                        self._started = False
+                    return
+            except Exception:
+                logger.exception('更新重启前复核任务状态失败')
+                self._set_progress(
+                    status='failed',
+                    message='更新已就绪，但无法确认任务状态，请手动重启完成安装',
+                )
+                return
         time.sleep(0.3)
         try:
             callback()
