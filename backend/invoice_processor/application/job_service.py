@@ -8,6 +8,7 @@ import shutil
 import threading
 from collections.abc import Callable
 from concurrent.futures import CancelledError, ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 
 from ..config_manager import get_inbox_dir, get_max_workers
 from ..core.processor import InvoiceProcessor
@@ -25,6 +26,16 @@ from .event_bus import EventBus
 from .invoice_file_service import FileProcessResult, InvoiceFileService
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _JobHandle:
+    """单个任务的运行时资源，与 Job 一一对应，生命周期一致。"""
+
+    job: Job
+    cancel_event: threading.Event
+    thread: threading.Thread | None = None
+    progress_callback: Callable[[float, str], None] | None = None
 
 
 class JobService:
@@ -46,11 +57,8 @@ class JobService:
         self._audit_service_factory = audit_service_factory
         self._file_service_factory = file_service_factory
         self._lock = threading.RLock()
-        self._jobs: dict[str, Job] = {}
+        self._handles: dict[str, _JobHandle] = {}
         self._current_job_id: str | None = None
-        self._cancel_events: dict[str, threading.Event] = {}
-        self._threads: dict[str, threading.Thread] = {}
-        self._progress_callbacks: dict[str, Callable[[float, str], None]] = {}
         self._email_poller = EmailPoller(self.start_job)
 
     def start_background_tasks(self) -> None:
@@ -76,7 +84,7 @@ class JobService:
             daemon=True,
         )
         with self._lock:
-            self._threads[job.id] = thread
+            self._handles[job.id].thread = thread
         thread.start()
         return snapshot
 
@@ -103,13 +111,13 @@ class JobService:
         )
         if progress_callback is not None:
             with self._lock:
-                self._progress_callbacks[job.id] = progress_callback
+                self._handles[job.id].progress_callback = progress_callback
         self._publish_snapshot(job)
         try:
             self._run_job(job.id, pdf_files)
         finally:
             with self._lock:
-                self._progress_callbacks.pop(job.id, None)
+                self._handles[job.id].progress_callback = None
         return self.get_job(job.id)
 
     def scan_directory(self, source_dir: str) -> dict[str, str | int]:
@@ -145,30 +153,32 @@ class JobService:
         job.stats.total = len(pdf_files)
         with self._lock:
             if self._current_job_id:
-                current = self._jobs.get(self._current_job_id)
+                current = self._handles[self._current_job_id].job
                 if current and not current.status.is_terminal:
                     raise JobAlreadyRunning(current.id)
-            self._jobs[job.id] = job
-            self._current_job_id = job.id
-            self._cancel_events[job.id] = (
-                cancellation_event
-                if cancellation_event is not None
-                else threading.Event()
+            handle = _JobHandle(
+                job=job,
+                cancel_event=(
+                    cancellation_event
+                    if cancellation_event is not None
+                    else threading.Event()
+                ),
             )
+            self._handles[job.id] = handle
+            self._current_job_id = job.id
             snapshot = job.to_dict()
         return job, tuple(pdf_files), snapshot
 
     def cancel_job(self, job_id: str) -> dict:
         with self._lock:
-            job = self._jobs.get(job_id)
-            if job is None:
+            handle = self._handles.get(job_id)
+            if handle is None:
                 raise JobNotFound(job_id)
+            job = handle.job
             if job.status.is_terminal:
                 return job.to_dict()
             job.request_cancel()
-            cancel_event = self._cancel_events.get(job_id)
-            if cancel_event:
-                cancel_event.set()
+            handle.cancel_event.set()
             job.message = '正在停止…'
             snapshot = job.to_dict()
         self._publish_status(job)
@@ -179,23 +189,23 @@ class JobService:
         with self._lock:
             if not self._current_job_id:
                 return None
-            job = self._jobs.get(self._current_job_id)
-            return job.to_dict() if job else None
+            handle = self._handles.get(self._current_job_id)
+            return handle.job.to_dict() if handle else None
 
     def get_job(self, job_id: str) -> dict:
         with self._lock:
-            job = self._jobs.get(job_id)
-            if job is None:
+            handle = self._handles.get(job_id)
+            if handle is None:
                 raise JobNotFound(job_id)
-            return job.to_dict()
+            return handle.job.to_dict()
 
     def is_known_output_directory(self, path: str) -> bool:
         normalized = os.path.realpath(os.path.abspath(os.path.expanduser(path)))
         with self._lock:
             return any(
-                job.output_dir
-                and os.path.realpath(job.output_dir) == normalized
-                for job in self._jobs.values()
+                handle.job.output_dir
+                and os.path.realpath(handle.job.output_dir) == normalized
+                for handle in self._handles.values()
             )
 
     def is_known_directory(self, path: str) -> bool:
@@ -210,7 +220,8 @@ class JobService:
 
     def wait_for_job(self, job_id: str, timeout: float | None = None) -> dict:
         with self._lock:
-            thread = self._threads.get(job_id)
+            handle = self._handles.get(job_id)
+            thread = handle.thread if handle else None
         if thread:
             thread.join(timeout)
         return self.get_job(job_id)
@@ -220,7 +231,8 @@ class JobService:
         self._email_poller.stop(timeout)
         with self._lock:
             job_id = self._current_job_id
-            thread = self._threads.get(job_id) if job_id else None
+            handle = self._handles.get(job_id) if job_id else None
+            thread = handle.thread if handle else None
         if job_id:
             try:
                 self.cancel_job(job_id)
@@ -232,7 +244,7 @@ class JobService:
     def _run_job(self, job_id: str, pdf_files: tuple[str, ...]) -> None:
         job = self._get_job_object(job_id)
         with self._lock:
-            cancel_event = self._cancel_events.get(job_id)
+            cancel_event = self._handles[job_id].cancel_event
         if cancel_event is None:
             return
         processor = None
@@ -369,8 +381,12 @@ class JobService:
                 except Exception:
                     logger.exception('清理处理器缓存失败')
             with self._lock:
-                self._threads.pop(job_id, None)
-                self._cancel_events.pop(job_id, None)
+                # 保留 handle 供任务历史查询，仅释放运行时资源引用；
+                # 历史上限由 _trim_job_history_locked 统一裁剪。
+                handle = self._handles.get(job_id)
+                if handle is not None:
+                    handle.thread = None
+                    handle.progress_callback = None
                 self._trim_job_history_locked()
 
     def _process_files(
@@ -451,10 +467,10 @@ class JobService:
 
     def _get_job_object(self, job_id: str) -> Job:
         with self._lock:
-            job = self._jobs.get(job_id)
-            if job is None:
+            handle = self._handles.get(job_id)
+            if handle is None:
                 raise JobNotFound(job_id)
-            return job
+            return handle.job
 
     @staticmethod
     def _list_pdf_files(source_dir: str) -> list[str]:
@@ -493,7 +509,8 @@ class JobService:
             progress = job.progress
             phase = job.phase.value
             message = job.message
-            callback = self._progress_callbacks.get(job.id)
+            handle = self._handles.get(job.id)
+            callback = handle.progress_callback if handle else None
         self.events.publish(
             'job.progress', {'progress': progress, 'phase': phase}, job.id
         )
@@ -535,15 +552,16 @@ class JobService:
         )
 
     def _trim_job_history_locked(self) -> None:
-        terminal_jobs = [
-            job for job in self._jobs.values()
-            if job.status.is_terminal and job.id != self._current_job_id
+        terminal_handles = [
+            handle
+            for handle in self._handles.values()
+            if handle.job.status.is_terminal and handle.job.id != self._current_job_id
         ]
-        excess = len(terminal_jobs) - self._job_history_limit
+        excess = len(terminal_handles) - self._job_history_limit
         if excess <= 0:
             return
-        terminal_jobs.sort(
-            key=lambda job: job.finished_at or job.started_at,
+        terminal_handles.sort(
+            key=lambda handle: handle.job.finished_at or handle.job.started_at,
         )
-        for job in terminal_jobs[:excess]:
-            self._jobs.pop(job.id, None)
+        for handle in terminal_handles[:excess]:
+            self._handles.pop(handle.job.id, None)

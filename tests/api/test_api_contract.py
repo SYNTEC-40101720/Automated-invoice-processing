@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -214,8 +215,12 @@ def test_job_logs_endpoint_returns_only_job_logs(tmp_path):
     )
 
     # 注入一个已知任务，绕过启动线程，只测试日志过滤协议。
+    from invoice_processor.application.job_service import _JobHandle
     from invoice_processor.domain.job import Job
-    service._jobs['job-1'] = Job(source_dir=str(tmp_path), id='job-1')
+    job = Job(source_dir=str(tmp_path), id='job-1')
+    service._handles['job-1'] = _JobHandle(
+        job=job, cancel_event=threading.Event()
+    )
 
     response = client.get(
         '/api/v1/jobs/job-1/logs',
@@ -236,8 +241,12 @@ def test_job_logs_endpoint_supports_event_cursor(tmp_path):
         'job.log_appended', {'level': 'info', 'message': 'second'}, 'job-1'
     )
 
+    from invoice_processor.application.job_service import _JobHandle
     from invoice_processor.domain.job import Job
-    service._jobs['job-1'] = Job(source_dir=str(tmp_path), id='job-1')
+    job = Job(source_dir=str(tmp_path), id='job-1')
+    service._handles['job-1'] = _JobHandle(
+        job=job, cancel_event=threading.Event()
+    )
 
     response = client.get(
         f'/api/v1/jobs/job-1/logs?after_event_id={first.event_id}',
