@@ -147,7 +147,7 @@ python scripts/bump_version.py minor   # 7.0.5 → 7.1.0
 python scripts/bump_version.py major   # 7.0.5 → 8.0.0
 ```
 
-普通测试不会自动修改版本；正式发布时运行 `python scripts/build_syntec.py` 会自动把补丁版本递增一次，并同步到运行时、前端元数据和 Windows 资源。打包脚本会拒绝不一致的版本配置。
+普通测试不会自动修改版本；打包脚本 `build_syntec.py` 同样**不修改任何版本文件**——它只校验五个版本源一致，并拒绝打包远端已有 `vX.Y.Z` tag 的版本号。
 
 ## 手动邮箱收件
 
@@ -163,8 +163,8 @@ python scripts/bump_version.py major   # 7.0.5 → 8.0.0
 
 发布新版本时保持版本号一致：
 
-1. 执行 `python scripts/bump_version.py patch`（或 `minor`、`major`）。
-2. 执行 `python scripts/build_syntec.py`，生成新的 `dist/SYNTEC-电子票据处理系统/` 打包目录（主程序 + `_internal/`）。
+1. 执行 `python scripts/bump_version.py patch`（或 `minor`、`major`）递增版本号；若目标版本号已有 tag（已发布或已占用），命令会拒绝递增。
+2. 执行 `python scripts/build_syntec.py`，生成新的 `dist/SYNTEC-电子票据处理系统/` 打包目录（主程序 + `_internal/`）。已发布过的版本号会被拒绝打包。
 3. `build_syntec.py` 会生成 `dist/SYNTEC-Invoice-Processor-vX.Y.Z.zip`，直接使用该 ASCII 文件名作为资产。
 4. 在 GitHub 创建 Release，标签使用 `vX.Y.Z` 格式，上传该 ZIP 并发布。
 5. 发布 Release 后，旧版本在设置页点击「检查更新」即可发现新版本并跳转 Release 页面手动下载。

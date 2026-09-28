@@ -11,6 +11,11 @@ SYNTEC 域控规范打包脚本
 
 Release 资产：
     dist/SYNTEC-Invoice-Processor-v{version}.zip
+
+版本号约定（SemVer）：
+    本脚本不修改任何版本文件；版本号统一由
+    `python scripts/bump_version.py [patch|minor|major]` 显式递增。
+    远端已存在 vX.Y.Z tag 的版本号会被拒绝打包，防止重复发布。
 """
 import hashlib
 import json
@@ -29,26 +34,8 @@ if str(BACKEND_DIR) not in sys.path:
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from bump_version import update_files as sync_version_files
+from bump_version import version_tag_exists
 from invoice_processor.version import __version__
-
-
-def bump_patch_version(version: str) -> str:
-    """返回递增后的补丁版本。"""
-    major, minor, patch = (int(part) for part in version.split('.'))
-    return f"{major}.{minor}.{patch + 1}"
-
-
-def update_version_files(version: str) -> None:
-    """同步更新运行时版本、项目元数据和打包资源版本。"""
-    sync_version_files(version)
-
-
-def prepare_release_version() -> str:
-    """为发布准备递增补丁版本并同步所有版本源。"""
-    version = bump_patch_version(__version__)
-    update_version_files(version)
-    return version
 
 # 强制 UTF-8 输出，避免 emoji 在 GBK 终端报错
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
@@ -118,6 +105,18 @@ def validate_version_sources() -> None:
     if mismatches:
         sys.exit("❌ 版本信息不一致:\n   " + "\n   ".join(mismatches))
     print(f"✅ 版本信息一致: {__version__} / {windows_version}")
+
+
+def validate_release_not_published(version: str) -> None:
+    """拒绝打包已发布（本地或远端已有 tag）的版本号，避免重复发布。"""
+    tag = f"v{version}"
+    if version_tag_exists(version):
+        sys.exit(
+            f"❌ 版本 {version} 已发布（已存在 tag {tag}）。\n"
+            "   请先执行 `python scripts/bump_version.py patch`"
+            "（或 minor/major）递增版本号后再打包。"
+        )
+    print(f"✅ 版本 {version} 尚未发布，可以打包")
 
 
 def verify() -> None:
@@ -224,11 +223,8 @@ def main():
     if not WEB_DIR.exists():
         sys.exit("❌ 缺少 web/ 前端目录")
 
-    release_version = prepare_release_version()
-    global __version__
-    __version__ = release_version
-
     validate_version_sources()
+    validate_release_not_published(__version__)
     run([NPM_COMMAND, "--prefix", str(WEB_DIR), "run", "build"], "构建 Web 前端")
     if not (WEB_DIST_DIR / "index.html").exists():
         sys.exit("❌ Web 前端构建未生成 web/dist/index.html")

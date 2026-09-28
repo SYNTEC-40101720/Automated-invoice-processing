@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
+import sys
 from collections.abc import Callable
 from datetime import date
 from pathlib import Path
@@ -32,6 +34,25 @@ def bump(version: str, level: str) -> str:
     if level == 'minor':
         return f'{major}.{minor + 1}.0'
     return f'{major}.{minor}.{patch + 1}'
+
+
+def version_tag_exists(version: str) -> bool:
+    """检查本地或远端是否已有 vX.Y.Z tag（非 git 环境或网络不可用时返回 False）。"""
+    tag = f'refs/tags/v{version}'
+    try:
+        local = subprocess.run(
+            ['git', 'rev-parse', '-q', '--verify', tag],
+            cwd=str(ROOT), capture_output=True, text=True, timeout=15,
+        )
+        if local.returncode == 0:
+            return True
+        remote = subprocess.run(
+            ['git', 'ls-remote', '--tags', 'origin', tag],
+            cwd=str(ROOT), capture_output=True, text=True, timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return remote.returncode == 0 and bool(remote.stdout.strip())
 
 
 def replace_once(path: Path, replacements: list[tuple[str, Replacement]]) -> None:
@@ -111,6 +132,13 @@ def main() -> None:
         print(current)
         return
     next_version = bump(current, args.level)
+    if version_tag_exists(next_version):
+        sys.exit(
+            f'❌ 目标版本 {next_version} 已存在 tag v{next_version}'
+            '（已发布或已占用）。\n'
+            '   请先执行 git fetch --tags 确认本地版本文件是否落后于远端发布，'
+            '或改用更高的递增级别。'
+        )
     update_files(next_version)
     print(f'{current} -> {next_version}')
 

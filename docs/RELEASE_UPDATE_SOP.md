@@ -10,6 +10,8 @@
 
 应用支持更新检查：启动时查询 GitHub 最新 Release，发现新版本时提示用户并跳转 Release 页面手动下载。**应用不在程序内下载或安装更新。**
 
+版本号管理遵循 SemVer：版本只由 `bump_version.py` 显式递增；`build_syntec.py` 打包时校验版本源一致并拒绝已发布的版本号，保证 Release 标签与实际构建产物一一对应。
+
 ## 2. 发布参数表
 
 | 参数 | 值 |
@@ -52,6 +54,18 @@ GitHub 会自动重命名包含中文或部分特殊字符的 Release 资产名�
 - `pyproject.toml` 运行时版本（`scripts/bump_version.py` 同步）
 - `package.json` 前端版本
 - Windows `FileVersion`、`ProductVersion`（`version_info.txt`）
+
+**版本号规则（SemVer）**：
+
+1. 版本号只通过 `python scripts/bump_version.py [patch|minor|major]` 显式递增；打包脚本不修改任何版本文件。
+2. `bump_version.py` 拒绝递增到已有 tag 的版本号（本地或远端 `vX.Y.Z` 已存在即视为已发布或已占用）。
+3. `build_syntec.py` 打包前校验五个版本源一致，并拒绝打包远端已有 tag 的版本号，防止重复发布。
+
+```bash
+python scripts/bump_version.py patch   # 补丁：bug 修复
+python scripts/bump_version.py minor   # 次版本：新功能或有破坏性变更
+python scripts/bump_version.py major   # 主版本：重大架构变化
+```
 
 ### 5.2 构建
 
