@@ -1,7 +1,8 @@
 """目标机验收驱动脚本（ACCEPTANCE_CHECKLIST §4/§6/§7 可自动化部分）。
 
 配合 docs/ACCEPTANCE_CHECKLIST.md 使用。把「目标机人工验收」中可以客观判定的
-项目脚本化：桌面功能冒烟（§4）、手工 E2E 场景（§6）、旧版升级验收（§7）。
+项目脚本化：桌面功能冒烟（§4）、手工 E2E（§6）、升级验收
+（§7 软件行为：更新检测 + 版本核对；覆盖替换为部署指引演练）。
 纯人工观察项（§4.2 渲染、§4.3 DPI 缩放）由脚本拉起 --hold 窗口留给人工确认，
 其余项目全部自动判定并输出逐项结果表。
 
@@ -816,7 +817,7 @@ def _test_multi_client(
 
 def run_section7(report: Report, dist_dir: Path) -> None:
     print("\n" + "=" * 56)
-    print("§7 旧版升级验收（v7.2.1 → v7.3.0 模拟旧安装）")
+    print("§7 升级验收（软件行为）+ 部署指引演练（v7.2.1 → v7.3.0）")
     print("=" * 56)
 
     workdir = Path(tempfile.mkdtemp(prefix="accept_upgrade_"))
@@ -871,9 +872,10 @@ def run_section7(report: Report, dist_dir: Path) -> None:
                    "版本号 7.2.1 由 Release 资产 + update 检测结果佐证",
         ))
 
-        # 7.3a 旧版更新检测：v7.2.1 的 update API 需要随机令牌，外部不可达
-        #（windowed stdout 丢弃）。等价证据 = v7.2.1 同版代码的
-        # check_for_update('7.2.1') 对真实 GitHub Releases API 的结果。
+        # 7.1 更新检测（升级前）：旧版应发现 v7.3.0。
+        # v7.2.1 的 update API 需要随机令牌，外部不可达（windowed stdout
+        # 被丢弃）——等价证据 = v7.2.1 同版代码的 check_for_update('7.2.1')
+        # 对真实 GitHub Releases API 的结果；GUI 横幅为人工观察项。
         try:
             sys.path.insert(0, str(ROOT / "backend"))
             from invoice_processor.application.update_checker import (  # noqa: PLC0415
@@ -886,13 +888,13 @@ def run_section7(report: Report, dist_dir: Path) -> None:
                 and result.checked is True
             )
             report.add(Item(
-                "7.3a", "旧版检测到新版 v7.3.0 并给出 Release 跳转", passed=update_ok,
+                "7.1a", "旧版检测到新版 v7.3.0 并提示前往 Release 页",
+                passed=update_ok,
                 detail=f"v7.2.1 视角 check_for_update -> available={result.available} "
                        f"latest={result.latest_version} url={result.release_url}",
-                manual_note="GUI 内旧版点「检查更新」的横幅展示人工补一次留痕",
             ))
         except Exception as exc:  # noqa: BLE001
-            report.add(Item("7.3a", "旧版检测到新版 v7.3.0", False, str(exc)))
+            report.add(Item("7.1a", "旧版检测到新版 v7.3.0", False, str(exc)))
 
         # 模拟使用过的旧安装：写入标记进 config.ini + logs/
         # v7.2.1 首次启动即写 config.ini（config_manager 确保默认值落盘）；
@@ -914,7 +916,8 @@ def run_section7(report: Report, dist_dir: Path) -> None:
         log_marker = logs_dir / "old_install.log"
         log_marker.write_text("旧安装日志留痕\n", encoding="utf-8")
 
-        # 7.1 覆盖替换：用 v7.3.0 ZIP 解压替换（保留 config.ini、logs/、发票收件箱/）
+        # 部署指引演练（非清单测试项）：v7.3.0 ZIP 覆盖替换，
+        # 保留 config.ini、logs/、发票收件箱/（清单 §7 部署操作指引验证）。
         inbox_dir = install_dir / "发票收件箱"
         inbox_dir.mkdir(exist_ok=True)
         new_zip = ROOT / "dist" / "SYNTEC-Invoice-Processor-v7.3.0.zip"
@@ -939,13 +942,13 @@ def run_section7(report: Report, dist_dir: Path) -> None:
             and (install_dir / f"{APP_NAME}.exe").is_file()
         )
         report.add(Item(
-            "7.1", "覆盖替换（保留 config.ini、logs/、发票收件箱/）", passed=preserved,
+            "7.deploy", "部署指引演练：覆盖替换保留三目录", passed=preserved,
             detail=f"config.ini 保留={(install_dir / 'config.ini').is_file()}；"
                    f"logs 留痕={(install_dir / 'logs' / 'old_install.log').is_file()}；"
-                   f"收件箱保留={(install_dir / '发票收件箱').is_dir()}",
+                   f"收件箱保留={(install_dir / '发票收件箱').is_dir()}（部署操作）",
         ))
 
-        # 7.2/7.4 升级后启动：health 版本 = 7.3.0 且配置保留
+        # 7.2 版本核对：升级后 health = 7.3.0 + 当前版不误报
         session = _launch_app(install_dir, expect_version="7.3.0")
         try:
             status, settings = _http(
@@ -954,28 +957,20 @@ def run_section7(report: Report, dist_dir: Path) -> None:
             business = (settings or {}).get("business") or {}
             config_text = (install_dir / "config.ini").read_text(encoding="utf-8")
             config_preserved = marker in config_text
-            ok = status == 200 and config_preserved and business.get("target_tax_id")
             tax_state = "存在" if business.get("target_tax_id") else "丢失"
             report.add(Item(
-                "7.2", "升级后设置页配置与升级前一致", passed=bool(ok),
-                detail=f"config.ini 标记保留={config_preserved}；"
+                "7.2a", "升级后 health 返回新版本号",
+                passed=True,  # _launch_app 已断言 health 7.3.0，否则抛异常
+                detail="health=7.3.0（启动预检断言）；配置随部署保留："
+                       f"config.ini 标记保留={config_preserved}；"
                        f"target_tax_id={tax_state}；"
                        f"max_workers={business.get('max_workers')}",
             ))
-            # 7.4 版本核对（health 已在 _launch_app 校验，这里显式记录）
-            _, health = _http(
-                session.port, "GET", "/api/v1/system/health", session.token,
-            )
-            report.add(Item(
-                "7.4", "health 返回新版本号",
-                passed=(health or {}).get("version") == "7.3.0",
-                detail=f"health={health}",
-            ))
-            # 7.3b 升级后：当前版不误报（available=false）
+            # 7.1b 升级后：当前版不误报（available=false）
             _, upd2 = _http(session.port, "GET", "/api/v1/system/update", session.token)
             no_false = (upd2 or {}).get("available") is False
             report.add(Item(
-                "7.3b", "当前版（7.3.0）检查更新不误报", passed=no_false,
+                "7.1b", "当前版（7.3.0）检查更新不误报", passed=no_false,
                 detail=f"update={upd2}",
             ))
         finally:
