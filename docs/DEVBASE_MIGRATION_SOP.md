@@ -28,7 +28,7 @@
 - NativeBridge 复用 DevBase 通用目录能力，保留发票专属方法
 - `/api/v1/tools` 和前端 Sidebar 已接入工具清单
 - 旧 `/jobs` 业务兼容 API（`POST /jobs`、`GET /jobs/{id}`、`POST /jobs/{id}/cancel`、`GET /jobs/runtime/current`）已移除，启动/取消统一走 DevBase 契约；`/jobs/start` 对发票工具增加启动前同步预检，目录/触发来源错误同步返回 422 稳定错误码
-- 当前 Python 测试：`144 passed`（v7.2.1 基线；后续以实测为准）
+- 当前 Python 测试：`144 passed`（v7.3.0 基线；后续以实测为准）
 
 尚未完成：
 
