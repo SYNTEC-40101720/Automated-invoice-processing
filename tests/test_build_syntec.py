@@ -8,6 +8,21 @@ import build_syntec
 import bump_version
 
 
+def test_build_script_smoke_is_opt_in():
+    """--smoke 默认关闭：默认参数解析不得触发冒烟入口。"""
+    import sys
+
+    import build_syntec
+
+    saved = sys.argv
+    try:
+        sys.argv = ["build_syntec.py"]
+        args = build_syntec.parse_args()
+        assert args.smoke is False
+    finally:
+        sys.argv = saved
+
+
 def test_build_script_does_not_mutate_version_sources():
     """打包脚本必须零副作用：不存在修改版本文件的入口。"""
     assert not hasattr(build_syntec, 'prepare_release_version')

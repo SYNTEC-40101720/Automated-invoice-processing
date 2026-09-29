@@ -17,6 +17,7 @@ Release 资产：
     `python scripts/bump_version.py [patch|minor|major]` 显式递增。
     远端已存在 vX.Y.Z tag 的版本号会被拒绝打包，防止重复发布。
 """
+import argparse
 import hashlib
 import json
 import os
@@ -219,6 +220,15 @@ def create_release_archive() -> Path:
     return archive_path
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="SYNTEC 域控规范打包脚本")
+    parser.add_argument(
+        "--smoke", action="store_true",
+        help="归档后对 dist 产物执行启动冒烟（默认关闭，保持打包确定性）",
+    )
+    return parser.parse_args()
+
+
 def main():
     if not WEB_DIR.exists():
         sys.exit("❌ 缺少 web/ 前端目录")
@@ -248,7 +258,15 @@ def main():
 
     run(cmd, "PyInstaller 打包")
     verify()
+    # 冒烟必须在归档之后：冒烟会在打包目录生成 logs/，先归档防止 logs 混入 ZIP
     create_release_archive()
+
+    if parse_args().smoke:
+        print("\n▶ 归档完成，执行启动冒烟（--smoke）")
+        run(
+            [sys.executable, str(SCRIPTS_DIR / "smoke_launch.py"), "--target", "exe"],
+            "启动冒烟",
+        )
 
 
 if __name__ == "__main__":

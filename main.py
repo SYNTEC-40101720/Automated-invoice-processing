@@ -33,6 +33,7 @@ def main() -> None:
         host=os.getenv('PLATFORM_HOST', '127.0.0.1'),
         port=int(port_env) if port_env else None,
         static_dir=static_dir,
+        local_token=os.getenv('PLATFORM_LOCAL_TOKEN'),
     )
 
 

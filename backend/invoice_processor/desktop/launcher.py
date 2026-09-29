@@ -52,10 +52,15 @@ def run_desktop(
     host: str = '127.0.0.1',
     port: int | None = None,
     static_dir: str | Path | None = None,
+    local_token: str | None = None,
 ) -> None:
-    """启动桌面应用；pywebview 只在真正进入桌面模式时导入。"""
+    """启动桌面应用；pywebview 只在真正进入桌面模式时导入。
+
+    ``local_token`` 允许宿主注入已知令牌（冒烟脚本等外部探活场景）；
+    不传时每次启动自行生成高熵令牌，安全面无弱化——仍为 loopback+令牌强校验。
+    """
     port = port or _find_free_port()
-    token = secrets.token_urlsafe(32)
+    token = local_token or secrets.token_urlsafe(32)
     job_service = JobService()
     app = create_app(
         job_service,

@@ -35,6 +35,8 @@ select = ["E", "F", "W", "I"]
 [tool.ruff.lint.per-file-ignores]
 # 打包脚本需要先注入 sys.path 才能导入 backend/scripts 内模块
 "scripts/build_syntec.py" = ["E402"]
+# 冒烟脚本同样需要先注入 sys.path 才能读取版本号
+"scripts/smoke_launch.py" = ["E402"]
 # 桌面入口同样需要先注入 sys.path 才能导入 backend 包
 "main.py" = ["E402"]
 
