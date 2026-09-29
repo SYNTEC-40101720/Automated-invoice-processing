@@ -1,7 +1,7 @@
 # SYNTEC 电子票据处理系统 Web 桌面化重构架构设计
 
-> 文档状态：v7.1.3 当前实现基线与交付边界
-> 当前版本：v7.1.3
+> 文档状态：v7.2.1 当前实现基线与交付边界
+> 当前版本：v7.2.1
 > 适用平台：Windows 10/11、SYNTEC 域控环境
 > 本文记录 Web 桌面化重构的架构决策、实施边界与验收标准，具体实现以当前源码为准。
 
@@ -138,7 +138,7 @@ progress, stats, started_at, finished_at, cancel_requested,
 error_code, error_message, result
 ```
 
-`trigger` 取值：`manual | inbox | email`。`phase` 取值：`scan | process | post_process | local_audit | ai_audit | archive | done`。
+`trigger` 取值：`manual | inbox | email`。DevBase 启动词汇 `user` 由 `invoice_task.resolve_trigger` 集中映射为 `manual`；`schedule`/`pipeline` 等无业务对应物的来源显式拒绝（422 `INVALID_TRIGGER`），不做臆造映射。`phase` 取值：`scan | process | post_process | local_audit | ai_audit | archive | done`。
 
 ```mermaid
 stateDiagram-v2
@@ -360,15 +360,15 @@ Pydantic 模型是 API 单一事实源。CI 由 FastAPI OpenAPI 生成 TypeScrip
 
 ## 10. 测试策略
 
-| 层级 | 工具 | 必测内容 | v7.0 状态 |
+| 层级 | 工具 | 必测内容 | 当前状态 |
 |---|---|---|---|
-| 核心回归 | pytest | 保留所有现有核心、邮箱、审核测试 | 已通过，137 条 |
+| 核心回归 | pytest | 保留所有现有核心、邮箱、审核测试 | 已通过，144 条 |
 | 应用层 | pytest + fake event bus/filesystem | 状态迁移、单任务互斥、取消、归档条件、事件顺序 | 已通过 |
 | API | FastAPI TestClient/httpx | DTO 校验、错误码、密钥脱敏、冲突与路径拒绝 | 已通过 |
 | WebSocket | pytest | 初始快照、事件顺序、断线重连校准、慢客户端策略 | 服务端契约已通过，真实浏览器重连待补 |
-| 前端单测 | Vitest + Testing Library | store、按钮状态、设置校验、事件归并 | 当前版本未纳入 |
-| E2E | Playwright | 手动选择到完成、停止、断线恢复、设置、日志过滤 | 当前版本未纳入，目标环境需手工验收 |
-| 打包冒烟 | Windows 干净机/域控机 | 启动、WebView2、DPI、中文 PDF、输出打开、退出回收 | 本机更新成功/回滚冒烟已通过，目标机待验 |
+| 前端单测 | Vitest + Testing Library | store 层（8 条） | 已纳入，8 条通过 |
+| E2E | Playwright | 手动选择到完成、停止、断线恢复、设置、日志过滤 | 未纳入自动化；手工场景见 docs/ACCEPTANCE_CHECKLIST.md §6 |
+| 打包冒烟 | Windows 干净机/域控机 | 启动、WebView2、DPI、中文 PDF、输出打开、退出回收 | 本机 smoke_launch.py 通过（源码模式 + 旧产物降级探活）；目标机按 ACCEPTANCE_CHECKLIST.md §4 |
 
 每个阶段最低质量门槛：Python 测试全绿、前端类型检查全绿、无新增 Pylance/ESLint 错误。最终必须使用合成 PDF 和一份脱敏业务样本完成端到端验收。
 
@@ -382,7 +382,7 @@ Pydantic 模型是 API 单一事实源。CI 由 FastAPI OpenAPI 生成 TypeScrip
 4. 执行 Python 测试；
 5. PyInstaller 收集 `web/dist`、图标和 Python 依赖；
 6. 执行现有 CompanyName、LegalCopyright、SYNTEC 命名与 `--noupx` 合规检查；
-7. 在无 Node.js、无 Python 的测试账户下做启动和处理冒烟测试。
+7. 归档后可选执行 `python scripts/smoke_launch.py --target exe` 启动冒烟（或 `build_syntec.py --smoke` 一步到位）；真实浏览器/目标机验收按 `docs/ACCEPTANCE_CHECKLIST.md` 执行。
 
 发布仍采用 onedir：
 
@@ -399,15 +399,17 @@ dist/SYNTEC-电子票据处理系统/
 
 ## 12. 交付状态与边界
 
-v7.1.3 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、手动邮箱收件、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。核心 Python 测试、API 契约、前端生产构建和打包合规已通过；更新功能为"仅检测提示 + 跳转 Release 页面手动下载"，不在程序内下载或安装更新。
+v7.2.1 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、手动邮箱收件、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。任务启动/取消已收敛为 DevBase 契约（旧 `/jobs` 兼容端点已移除，`/jobs/start` 带启动前同步预检）；邮箱后台轮询与程序内自动更新链路已移除（收件统一手动拉取；更新为"仅检测提示 + Release 页面手动下载"）。核心 Python 测试（144 条）、API 契约、前端 typecheck/Vitest/生产构建和打包合规已通过；发布包启动冒烟 `scripts/smoke_launch.py` 本机通过。目标机验收要求收敛至 `docs/ACCEPTANCE_CHECKLIST.md`，真实浏览器/WebView2/DPI/域控环境仍需按清单在目标环境执行。
 
 以下事项不属于当前版本功能，后续若实施必须同步补充测试和验收记录：
 
 - 单实例锁和目录监听；
-- Vitest/Playwright 自动化套件；
-- 真实浏览器 WebSocket 断线恢复；
-- 干净 Windows、WebView2 和 SYNTEC 域控目标机验收；
+- Playwright 自动化 E2E 套件（手工场景已由 ACCEPTANCE_CHECKLIST.md §6 覆盖）；
 - 跨磁盘安装目录的复制式替换。
+
+### 12.1 显式后续项：事件总线融合
+
+DevBase 事件游标（`sequence`）与发票事件总线（`event_id`）编号空间不同、progress 双写语义分歧（DevBase 0-100 int 快照 vs 发票 0-1 float 事件），且 DevBase 冲突 409 尚未走项目错误信封。融合两者为单一实现（同一次序、同一 WS 通道、业务事件以 DevBase 扩展事件类型承载）属于独立后续项，实施前须单独设计与测试。
 
 ## 14. 主要风险与控制
 
@@ -424,7 +426,7 @@ v7.1.3 当前交付包含：FastAPI 本地服务、React 工作台、pywebview �
 
 ## 15. 当前交付定义
 
-当前源码可作为 v7.1.3 的维护和发布基线，理由如下：
+当前源码可作为 v7.2.1 的维护和发布基线，理由如下：
 
 - 旧 UI 不再是交付路径，业务编排集中在应用层；
 - Python 核心、应用层、API、桌面壳和前端边界符合本文件约定；

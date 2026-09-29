@@ -28,12 +28,12 @@
 - NativeBridge 复用 DevBase 通用目录能力，保留发票专属方法
 - `/api/v1/tools` 和前端 Sidebar 已接入工具清单
 - 旧 `/jobs` 业务兼容 API（`POST /jobs`、`GET /jobs/{id}`、`POST /jobs/{id}/cancel`、`GET /jobs/runtime/current`）已移除，启动/取消统一走 DevBase 契约；`/jobs/start` 对发票工具增加启动前同步预检，目录/触发来源错误同步返回 422 稳定错误码
-- 当前 Python 测试：`166 passed`
+- 当前 Python 测试：`144 passed`（v7.2.1 基线；后续以实测为准）
 
 尚未完成：
 
-- 发票事件总线与 DevBase 事件游标尚未统一
-- 前端业务视图仍使用原有发票任务响应模型
+- 发票事件总线与 DevBase 事件游标尚未统一（显式独立后续项：编号空间、progress 双写语义、冲突 409 错误信封，见 ARCHITECTURE.md §12.1）
+- 前端业务视图仍使用原有发票任务响应模型（`/jobs/current` 快照由发票侧保留为业务契约，迁移与否随事件总线融合一并评估）
 
 ---
 

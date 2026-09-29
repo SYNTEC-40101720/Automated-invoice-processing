@@ -1,7 +1,7 @@
 # 项目维护说明（PROJECT_DEV）
 
 > 本文件记录发票处理系统的核心业务规则、技术约定与历史踩坑点。
-> 当前交付基线：v7.1.3。
+> 当前交付基线：v7.2.1。
 > **修改业务逻辑前，请先阅读本文件，避免重复踩坑。**
 
 ---
@@ -138,7 +138,7 @@ web/
 | 10 | 配置硬编码 | 税号写死在 config.py | `config_manager.py` 读写 INI + Web 设置视图 | 修改税号后下次处理生效 |
 | 11 | 类型路由 if-elif 难扩展 | 新增类型要改核心方法 | `@register_type` 装饰器 + `_TYPE_REGISTRY` 注册表 | 新增类型只加装饰器 |
 
-## 7. 当前能力（v7.1.3）
+## 7. 当前能力（v7.2.1）
 
 | # | 改进 | 实现位置 | 说明 |
 |---|---|---|---|
@@ -188,18 +188,25 @@ python -m ruff check backend tests
 npm --prefix web run typecheck
 npm --prefix web run build
 
+# 前端单测（Vitest）
+npm --prefix web run test
+
 # 生成并验证桌面发布包
 python scripts/build_syntec.py
 
+# 发布包启动冒烟（仅交互式 Windows 桌面会话）
+python scripts/smoke_launch.py --target exe
+
 ```
 
-截至 v7.1.3，本机 Windows 环境已验证：137 条 Python 测试通过，`compileall`、`pip check`、Ruff、前端 typecheck/build 和 SYNTEC PyInstaller 域控合规检查通过；本机发布包启动冒烟通过，真实 Releases API 的旧版本号/当前版本号检查均已通过。旧版 EXE 实际启动、真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户启动以及目标机 WebView2/DPI 验收仍需在目标环境执行。
+截至 v7.2.1，本机 Windows 环境已验证：144 条 Python 测试通过，Ruff、前端 typecheck/build、Vitest（8 条）和 SYNTEC PyInstaller 域控合规检查通过；发布包启动冒烟（`scripts/smoke_launch.py`，含旧产物降级探活）通过，真实 Releases API 的旧版本号/当前版本号检查均已通过。目标机验收（旧版 EXE 升级、真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户、WebView2/DPI）按 `docs/ACCEPTANCE_CHECKLIST.md` 在目标环境执行。
 
 测试文件：
 - `tests/test_processor.py`：核心逻辑单元测试
 - `tests/application/`：任务服务、事件总线和文件服务测试
 - `tests/api/`：HTTP、WebSocket、设置脱敏和静态资源契约测试
 - `tests/test_integration.py`：核心处理集成测试
+- `web/tests/`：前端 store 层 Vitest 单测
 
 ---
 

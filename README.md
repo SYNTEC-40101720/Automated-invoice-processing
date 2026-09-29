@@ -1,4 +1,4 @@
-# SYNTEC 电子票据处理系统 v7.1.3
+# SYNTEC 电子票据处理系统 v7.2.1
 
 基于 Python 3.12+、FastAPI 的业务底层、React/Vite Web 工作台和 pywebview/WebView2 桌面壳，用于批量识别、重命名、校验与合并 PDF 电子发票。
 
@@ -135,18 +135,24 @@ python -m pytest tests/test_integration.py -v
 
 # Python 静态检查
 python -m ruff check backend tests
+
+# 前端单测（Vitest）
+npm --prefix web run test
+
+# 发布包启动冒烟（仅交互式 Windows 桌面会话）
+python scripts/smoke_launch.py --target source
 ```
 
-当前 v7.1.3 发布基线已验证 Python 测试通过（137 条）、Ruff 静态检查通过，前端类型检查和生产构建通过；DevBase 工具清单已提供 `invoice_processing` 任务入口。旧版 EXE 实际启动、干净域控账户启动和目标机 WebView2 验收仍需单独执行。
+当前 v7.2.1 发布基线已验证 Python 测试通过（144 条）、Ruff 静态检查通过，前端类型检查、Vitest 单测（8 条）和生产构建通过；DevBase 工具清单已提供 `invoice_processing` 任务入口。发布包启动冒烟使用 `python scripts/smoke_launch.py`；目标机验收按 `docs/ACCEPTANCE_CHECKLIST.md` 执行。
 
 ## 版本发布
 
 版本源为 `backend/invoice_processor/version.py`，递增命令会同步 `pyproject.toml`、Web 包元数据和 PyInstaller 资源：
 
 ```bash
-python scripts/bump_version.py patch   # 7.0.5 → 7.0.6
-python scripts/bump_version.py minor   # 7.0.5 → 7.1.0
-python scripts/bump_version.py major   # 7.0.5 → 8.0.0
+python scripts/bump_version.py patch   # 7.2.1 → 7.2.2
+python scripts/bump_version.py minor   # 7.2.1 → 7.3.0
+python scripts/bump_version.py major   # 7.2.1 → 8.0.0
 ```
 
 普通测试不会自动修改版本；打包脚本 `build_syntec.py` 同样**不修改任何版本文件**——它只校验五个版本源一致，并拒绝打包远端已有 `vX.Y.Z` tag 的版本号。
@@ -175,6 +181,7 @@ python scripts/bump_version.py major   # 7.0.5 → 8.0.0
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v7.2.1 | 2026-09-28 | 移除程序内自动更新链路（检测提示 + Release 页面手动下载）与邮箱后台自动轮询（收件统一手动拉取）；修复更新器锁阻塞、重启竞态、设置覆盖、IMAP locale 四个中等问题；CI 升级 actions v7；前端 store 层 Vitest 单测；打包自动落盘 Release ZIP SHA-256 摘要；显式 SemVer 版本管理 |
 | v7.1.3 | 2026-09-05 | 目录规范化（docs/、scripts/、pyproject 统一依赖）、默认打开「发票收取」、修复窄视口侧边栏错位并简化 main.py 入口 |
 | v7.1.1 | 2026-09-05 | DevBase 框架迁移：任务运行时、更新安全、生命周期复用 DevBase；工作台外壳对齐 DevBase 侧边栏与导航；邮箱收件箱简化并新增打开目录 API；清理死代码（171 条测试通过，域控打包合规验证通过） |
 | v7.0.12 | 2026-09-01 | 完善自动更新启动确认、回滚保护、安装包完整性校验和发布前冒烟验证；隔离测试构建产物 |
