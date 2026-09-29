@@ -76,3 +76,6 @@ smoke/v2/
 
 # TRAE 内部文件（保留 skills 和 specs，忽略 documents 临时规划）
 .trae/documents/
+
+# 目标机验收报告（本地留痕，不入库）
+acceptance_report.json

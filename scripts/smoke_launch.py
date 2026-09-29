@@ -223,6 +223,18 @@ def main() -> None:
         action="store_true",
         help="降级探活模式：不注入令牌，收到 401 即判定存活（用于旧产物）",
     )
+    parser.add_argument(
+        "--hold",
+        type=float,
+        default=None,
+        help="就绪后保持窗口存活指定秒数再退出（人工检查渲染/DPI/交互用）",
+    )
+    parser.add_argument(
+        "--token-file",
+        type=Path,
+        default=None,
+        help="把本次注入令牌写入该文件（供 --hold 期间的外部驱动/人工接管 API）",
+    )
     args = parser.parse_args()
 
     _require_windows_desktop()
@@ -245,6 +257,16 @@ def main() -> None:
     }
     if token:
         env["PLATFORM_LOCAL_TOKEN"] = token
+    if args.token_file:
+        args.token_file.parent.mkdir(parents=True, exist_ok=True)
+        args.token_file.write_text(
+            json.dumps(
+                {"port": port, "token": token or "", "pid": None},
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        print(f"📝 令牌信息已写入: {args.token_file}")
 
     print("=" * 56)
     print(f"🚀 启动冒烟: {' '.join(cmd)}")
@@ -264,6 +286,13 @@ def main() -> None:
         exited = proc.poll()
         if exited is not None:
             sys.exit(f"❌ 观察期内进程意外退出（exit={exited}）")
+        if args.hold is not None:
+            # 人工检查模式：窗口保持存活，供人工确认渲染/DPI/交互后正常关窗
+            print(f"⏸️ 窗口保持存活 {args.hold:.0f}s，供人工检查（渲染/DPI/交互）...")
+            time.sleep(args.hold)
+            exited = proc.poll()
+            if exited is not None:
+                sys.exit(f"❌ 保持期内进程意外退出（exit={exited}）")
         if args.legacy_alive_only:
             # 旧产物降级模式：确认存活即结束，强制终止
             subprocess.run(
