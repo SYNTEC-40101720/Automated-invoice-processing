@@ -47,6 +47,15 @@ class NoPdfFiles(ApplicationError):
         )
 
 
+class InvalidTrigger(ApplicationError):
+    def __init__(self, value: str):
+        super().__init__(
+            'INVALID_TRIGGER',
+            f'不支持的任务触发来源: {value}',
+            {'trigger': value},
+        )
+
+
 class InvalidJobTransition(ApplicationError):
     def __init__(self, current: str, target: str):
         super().__init__(

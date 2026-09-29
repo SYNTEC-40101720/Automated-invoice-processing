@@ -96,11 +96,13 @@
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/v1/tools` | 返回已注册工具清单 |
-| POST | `/api/v1/jobs/start` | 按 `kind` 启动 DevBase 任务，发票工具为 `invoice_processing` |
-| GET | `/api/v1/jobs/runtime/current` | 返回 DevBase 运行时快照 |
+| POST | `/api/v1/jobs/start` | 按 `kind` 启动 DevBase 任务，发票工具为 `invoice_processing`；启动前同步预检目录与触发来源，错误以 422 稳定错误码返回 |
 | POST | `/api/v1/jobs/cancel` | 取消当前 DevBase 任务 |
+| GET | `/api/v1/jobs/current` | 当前发票任务快照 |
+| POST | `/api/v1/jobs/scan` | 预扫描目录顶层 PDF |
+| GET | `/api/v1/jobs/{id}/logs` | 分页任务日志 |
 
-原有 `/api/v1/jobs`、设置、邮箱和日志接口暂时保留，作为发票工作台兼容层；前端业务视图迁移完成后再收敛重复契约。
+任务启动/取消已统一为 DevBase 契约；设置、邮箱和日志接口由发票侧保留。
 
 ## 配置说明
 

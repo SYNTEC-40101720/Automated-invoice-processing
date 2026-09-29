@@ -229,9 +229,8 @@ API 前缀固定为 `/api/v1`。错误统一返回：
 | `GET /system/health` | 启动就绪探测 | 版本、构建号、运行模式 |
 | `GET /jobs/current` | 当前任务快照 | Job DTO 或 `null` |
 | `POST /jobs/scan` | 选择目录后预扫描顶层 PDF | 规范化目录与 PDF 数量 |
-| `POST /jobs` | 启动目录处理 | `202` + Job DTO |
-| `POST /jobs/{id}/cancel` | 请求协作式停止 | `202` + Job DTO |
-| `GET /jobs/{id}` | 获取任务快照 | Job DTO |
+| `POST /jobs/start` | 按 `kind` 启动 DevBase 任务，发票工具为 `invoice_processing` | `201` + 运行时快照 |
+| `POST /jobs/cancel` | 取消当前 DevBase 任务 | 运行时快照 |
 | `GET /jobs/{id}/logs` | 获取日志快照/导出基础 | 分页日志 |
 | `POST /email/pull` | 手动拉取邮箱 | `202` + 操作状态 |
 | `GET /settings` | 获取脱敏配置 | 不返回密钥明文 |
@@ -243,12 +242,14 @@ API 前缀固定为 `/api/v1`。错误统一返回：
 | `POST /settings/ai/test` | 测试 AI 兼容接口 | 成功/稳定错误码 |
 | `POST /native/select-directory` | 浏览器调试模式的受限占位 | 桌面模式应走 Native Bridge |
 
-`POST /jobs` 示例：
+`POST /jobs/start` 发票任务在启动前同步预检：目录不存在、无 PDF 文件、触发来源非法分别在任务创建前同步返回 `INVALID_SOURCE_DIRECTORY`、`NO_PDF_FILES`、`INVALID_TRIGGER` 的 `422` 稳定错误码；DevBase worker 内的同一校验保留为兜底。
+
+`POST /jobs/start` 示例：
 
 ```json
 {
-  "source_dir": "D:\\Invoices\\2026-08",
-  "trigger": "manual"
+  "kind": "invoice_processing",
+  "input": {"source_dir": "D:\\Invoices\\2026-08", "trigger": "manual"}
 }
 ```
 

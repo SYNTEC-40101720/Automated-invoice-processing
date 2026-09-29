@@ -5,6 +5,7 @@ from __future__ import annotations
 from devbase.application.job_runtime import JobRuntime
 from fastapi import APIRouter, Depends, status
 
+from ...application.invoice_task import INVOICE_TOOL_KIND, validate_start_input
 from ...application.job_service import JobService
 from ..dependencies import get_devbase_runtime, get_job_service, require_local_token
 from ..schemas import (
@@ -37,14 +38,6 @@ def scan_directory(
     return DirectoryScanResponse(**result)
 
 
-@router.post('', response_model=dict, status_code=status.HTTP_202_ACCEPTED)
-def start_job(
-    request: StartJobRequest,
-    service: JobService = Depends(get_job_service),
-) -> dict:
-    return service.start_job(request.source_dir, request.trigger)
-
-
 @router.post(
     '/start',
     response_model=RuntimeJobResponse,
@@ -54,6 +47,10 @@ def start_runtime_job(
     request: RuntimeJobStartRequest,
     runtime: JobRuntime = Depends(get_devbase_runtime),
 ) -> RuntimeJobResponse:
+    # 发票任务先同步预检，保证目录/触发来源错误以 422 稳定错误码返回；
+    # worker 内同一校验保留为兜底。
+    if request.kind == INVOICE_TOOL_KIND:
+        validate_start_input(request.input)
     snapshot = runtime.start(request.kind, input=request.input)
     return RuntimeJobResponse(
         id=snapshot.job_id,
@@ -80,36 +77,6 @@ def cancel_runtime_job(
         created_at=snapshot.created_at.isoformat(),
         updated_at=snapshot.updated_at.isoformat(),
     )
-
-
-@router.get('/runtime/current', response_model=RuntimeJobResponse | None)
-def current_runtime_job(
-    runtime: JobRuntime = Depends(get_devbase_runtime),
-) -> RuntimeJobResponse | None:
-    snapshot = runtime.current_job()
-    if snapshot is None:
-        return None
-    return RuntimeJobResponse(
-        id=snapshot.job_id,
-        kind=snapshot.kind,
-        status=snapshot.status.value,
-        progress=snapshot.progress,
-        message=snapshot.message,
-        created_at=snapshot.created_at.isoformat(),
-        updated_at=snapshot.updated_at.isoformat(),
-    )
-
-
-@router.get('/{job_id}', response_model=dict)
-def get_job(job_id: str, service: JobService = Depends(get_job_service)) -> dict:
-    return service.get_job(job_id)
-
-
-@router.post(
-    '/{job_id}/cancel', response_model=dict, status_code=status.HTTP_202_ACCEPTED
-)
-def cancel_job(job_id: str, service: JobService = Depends(get_job_service)) -> dict:
-    return service.cancel_job(job_id)
 
 
 @router.get('/{job_id}/logs', response_model=LogListResponse)

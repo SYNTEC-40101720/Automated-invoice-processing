@@ -77,9 +77,6 @@ export const api = {
   cancelRuntimeJob: () => request<RuntimeJobResponse>('/jobs/cancel', {
     method: 'POST',
   }),
-  cancelJob: (jobId: string) => request<Job>(`/jobs/${jobId}/cancel`, {
-    method: 'POST',
-  }),
   logs: (jobId: string, afterEventId = 0) => request<{
     items: LogEntry[]
     next_event_id: number | null

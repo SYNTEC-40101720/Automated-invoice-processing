@@ -253,13 +253,8 @@ export function App() {
       await api.cancelRuntimeJob()
       const nextJob = await api.currentJob()
       if (nextJob) setJob(nextJob)
-    } catch {
-      try {
-        const nextJob = await api.cancelJob(job.id)
-        setJob(nextJob)
-      } catch (error) {
-        window.alert((error as Error).message)
-      }
+    } catch (error) {
+      window.alert((error as Error).message)
     }
   }
 

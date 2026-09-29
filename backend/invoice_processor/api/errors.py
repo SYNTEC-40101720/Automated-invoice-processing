@@ -17,6 +17,7 @@ async def application_error_handler(
         'JOB_NOT_FOUND': 404,
         'NO_PDF_FILES': 422,
         'INVALID_SOURCE_DIRECTORY': 422,
+        'INVALID_TRIGGER': 422,
         'INVALID_JOB_TRANSITION': 409,
         'EMAIL_CONFIGURATION_INCOMPLETE': 422,
         'EMAIL_CONNECTION_FAILED': 502,

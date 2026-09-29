@@ -2,15 +2,62 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from devbase.application.manifest import ToolDescriptor, ToolRegistry
 from devbase.application.task import TaskContext
 
+from ..domain.errors import (
+    InvalidSourceDirectory,
+    InvalidTrigger,
+    NoPdfFiles,
+)
 from ..domain.job import JobTrigger
 from .job_service import JobService
 
 INVOICE_TOOL_KIND = "invoice_processing"
+
+# DevBase 与发票两侧的触发来源词汇在此集中映射：
+# DevBase 的 user 归并为发票的 manual；inbox/email 两侧同词。
+# schedule/pipeline 当前没有对应业务语义，显式拒绝而不是臆造映射。
+TRIGGER_ALIASES: dict[str, JobTrigger] = {
+    "manual": JobTrigger.MANUAL,
+    "user": JobTrigger.MANUAL,
+    "inbox": JobTrigger.INBOX,
+    "email": JobTrigger.EMAIL,
+}
+
+
+def resolve_trigger(value: str) -> JobTrigger:
+    """把 DevBase 输入中的 trigger 词汇解析为发票业务枚举。"""
+    trigger = TRIGGER_ALIASES.get(str(value).strip().lower())
+    if trigger is None:
+        raise InvalidTrigger(value)
+    return trigger
+
+
+def validate_start_input(input: dict[str, Any]) -> None:
+    """启动前同步预检，保证 422 稳定错误码同步返回给调用方。
+
+    DevBase worker 内的同一校验保留为兜底；此处先执行可避免错误
+    在后台线程抛出后前端只能看到任务 FAILED。
+    """
+    source_dir = input.get("source_dir")
+    if not isinstance(source_dir, str) or not source_dir.strip():
+        raise InvalidSourceDirectory(str(source_dir))
+    normalized = os.path.abspath(os.path.expanduser(source_dir))
+    if not os.path.isdir(normalized) or not os.access(normalized, os.R_OK):
+        raise InvalidSourceDirectory(normalized)
+    pdf_files = [
+        filename
+        for filename in os.listdir(normalized)
+        if filename.lower().endswith(".pdf")
+        and os.path.isfile(os.path.join(normalized, filename))
+    ]
+    if not pdf_files:
+        raise NoPdfFiles(normalized)
+    resolve_trigger(str(input.get("trigger", JobTrigger.MANUAL.value)))
 
 
 def run_invoice_pipeline(
@@ -23,7 +70,7 @@ def run_invoice_pipeline(
     """Run the existing invoice pipeline inside the DevBase worker."""
     result = service.run_job_sync(
         source_dir,
-        JobTrigger(trigger),
+        resolve_trigger(trigger),
         job_id=ctx.job_id,
         cancellation_event=ctx.cancellation_event,
         progress_callback=ctx.report_progress,
@@ -71,4 +118,11 @@ def build_invoice_registry(service: JobService) -> ToolRegistry:
     return registry
 
 
-__all__ = ["INVOICE_TOOL_KIND", "build_invoice_registry", "run_invoice_pipeline"]
+__all__ = [
+    "INVOICE_TOOL_KIND",
+    "TRIGGER_ALIASES",
+    "build_invoice_registry",
+    "resolve_trigger",
+    "run_invoice_pipeline",
+    "validate_start_input",
+]

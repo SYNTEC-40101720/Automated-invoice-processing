@@ -60,6 +60,7 @@ def test_tools_endpoint_exposes_invoice_descriptor(tmp_path):
 
 
 def test_runtime_start_endpoint_uses_devbase_task_registry(tmp_path):
+    (tmp_path / 'invoice-a.pdf').write_bytes(b'%PDF')
     client = TestClient(make_app(tmp_path))
 
     response = client.post(
@@ -73,6 +74,48 @@ def test_runtime_start_endpoint_uses_devbase_task_registry(tmp_path):
 
     assert response.status_code == 201
     assert response.json()['kind'] == 'invoice_processing'
+
+
+def test_runtime_start_precheck_rejects_bad_input_with_stable_code(tmp_path):
+    # 目录不存在、目录无 PDF、非法 trigger 均在启动前同步返回 422 稳定错误码，
+    # 而不是任务在后台线程 FAILED。
+    client = TestClient(make_app(tmp_path))
+
+    missing_dir = client.post(
+        '/api/v1/jobs/start',
+        headers={'X-Local-Token': 'test-token'},
+        json={
+            'kind': 'invoice_processing',
+            'input': {'source_dir': str(tmp_path / 'missing')},
+        },
+    )
+    assert missing_dir.status_code == 422
+    assert missing_dir.json()['error']['code'] == 'INVALID_SOURCE_DIRECTORY'
+
+    empty_dir = tmp_path / 'empty'
+    empty_dir.mkdir()
+    no_pdfs = client.post(
+        '/api/v1/jobs/start',
+        headers={'X-Local-Token': 'test-token'},
+        json={
+            'kind': 'invoice_processing',
+            'input': {'source_dir': str(empty_dir)},
+        },
+    )
+    assert no_pdfs.status_code == 422
+    assert no_pdfs.json()['error']['code'] == 'NO_PDF_FILES'
+
+    (empty_dir / 'invoice-a.pdf').write_bytes(b'%PDF')
+    bad_trigger = client.post(
+        '/api/v1/jobs/start',
+        headers={'X-Local-Token': 'test-token'},
+        json={
+            'kind': 'invoice_processing',
+            'input': {'source_dir': str(empty_dir), 'trigger': 'schedule'},
+        },
+    )
+    assert bad_trigger.status_code == 422
+    assert bad_trigger.json()['error']['code'] == 'INVALID_TRIGGER'
 
 
 def test_runtime_cancel_endpoint_returns_runtime_snapshot(tmp_path):
@@ -126,19 +169,6 @@ def test_api_rejects_untrusted_origin_and_sets_security_headers(tmp_path):
         },
     )
     assert untrusted.status_code == 403
-
-
-def test_empty_source_returns_stable_error(tmp_path):
-    source = tmp_path / 'empty'
-    source.mkdir()
-    client = TestClient(make_app(tmp_path))
-    response = client.post(
-        '/api/v1/jobs',
-        headers={'X-Local-Token': 'test-token'},
-        json={'source_dir': str(source)},
-    )
-    assert response.status_code == 422
-    assert response.json()['error']['code'] == 'NO_PDF_FILES'
 
 
 def test_scan_directory_returns_top_level_pdf_count(tmp_path):

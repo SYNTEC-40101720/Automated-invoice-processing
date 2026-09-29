@@ -18,22 +18,21 @@
 - 标准 `/jobs/start`、`/jobs/cancel` 和运行时快照端点已接入
 - 发票配置读写复用 DevBase 文件锁/原子替换，密钥和日志复用 DevBase 公共实现
 - 主程序已新增 `invoice_processor.spec`，并通过实际 PyInstaller 构建
-- 前端处理工作台的启动动作已切换到 DevBase `/jobs/start`，详情和日志暂由兼容层提供
+- 前端处理工作台的启动动作已切换到 DevBase `/jobs/start`，详情和日志由发票侧 `/jobs/current`、`/jobs/{id}/logs` 提供
 - 前端工作台已同步 DevBase 壳体验：可调宽/折叠侧栏、工具描述导航、system/light/dark 主题
 - 浏览器模式同源 WebSocket Origin 已修复，预览服务健康检查和事件流可用
-- 工作台取消动作已优先接入 DevBase `/jobs/cancel`，失败时回退发票兼容取消接口
+- 工作台取消动作已接入 DevBase `/jobs/cancel`，旧发票兼容取消端点已移除
 - Sidebar 已按 GitHub DevBase 模板重排为工作台、注册工具、业务扩展和底部设置，折叠 rail 固定为 56px
 - 事件模型完成边界评估：DevBase 运行时负责任务生命周期，发票 EventBus 保留日志、统计和业务阶段事件，避免把业务字段硬塞进通用事件值对象
 - 根入口支持桌面/浏览器调试模式
 - NativeBridge 复用 DevBase 通用目录能力，保留发票专属方法
 - `/api/v1/tools` 和前端 Sidebar 已接入工具清单
+- 旧 `/jobs` 业务兼容 API（`POST /jobs`、`GET /jobs/{id}`、`POST /jobs/{id}/cancel`、`GET /jobs/runtime/current`）已移除，启动/取消统一走 DevBase 契约；`/jobs/start` 对发票工具增加启动前同步预检，目录/触发来源错误同步返回 422 稳定错误码
 - 当前 Python 测试：`166 passed`
 
 尚未完成：
 
-- 旧 `/jobs` 业务兼容 API 还未完全切换为 DevBase 标准 JobRuntime 契约
 - 发票事件总线与 DevBase 事件游标尚未统一
-- 旧发票 jobs API 仍作为详情/日志兼容层保留，后续可在不改变业务事件字段的前提下逐步收敛
 - 前端业务视图仍使用原有发票任务响应模型
 
 ---
