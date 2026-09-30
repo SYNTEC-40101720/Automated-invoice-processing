@@ -82,7 +82,7 @@ export interface DomainEvent {
 export interface HealthResponse {
   status: string
   version: string
-  build: string
+  devbase_version: string
   mode: string
 }
 

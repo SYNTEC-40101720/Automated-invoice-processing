@@ -303,6 +303,7 @@ export function App() {
               ? <AuditView job={job} />
               : <SettingsView
                 version={healthQuery.data?.version ?? null}
+                devbaseVersion={healthQuery.data?.devbase_version ?? null}
                 update={updateQuery.data ?? null}
                 onCheckUpdate={checkForUpdate}
                 theme={theme}

@@ -226,7 +226,7 @@ API 前缀固定为 `/api/v1`。错误统一返回：
 
 | 方法与路径 | 用途 | 主要响应 |
 |---|---|---|
-| `GET /system/health` | 启动就绪探测 | 版本、构建号、运行模式 |
+| `GET /system/health` | 启动就绪探测 | 版本、DevBase 基础版本、运行模式 |
 | `GET /jobs/current` | 当前任务快照 | Job DTO 或 `null` |
 | `POST /jobs/scan` | 选择目录后预扫描顶层 PDF | 规范化目录与 PDF 数量 |
 | `POST /jobs/start` | 按 `kind` 启动 DevBase 任务，发票工具为 `invoice_processing` | `201` + 运行时快照 |

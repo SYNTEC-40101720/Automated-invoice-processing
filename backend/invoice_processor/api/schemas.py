@@ -51,7 +51,7 @@ class OpenDirectoryResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     version: str
-    build: str
+    devbase_version: str
     mode: str
 
 

@@ -6,6 +6,7 @@ import os
 import webbrowser
 from pathlib import Path
 
+from devbase import __version__ as devbase_version
 from fastapi import APIRouter, Depends, Request
 
 from ...application.job_service import JobService
@@ -43,7 +44,7 @@ def health(request: Request) -> HealthResponse:
     return HealthResponse(
         status='ok',
         version=request.app.state.version,
-        build='web-refactor-preview',
+        devbase_version=devbase_version,
         mode='local',
     )
 

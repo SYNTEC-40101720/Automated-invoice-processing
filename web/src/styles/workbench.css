@@ -1027,7 +1027,7 @@ h1 {
   background: var(--surface-fill);
 }
 
-/* Zy-DevBase v0.3.3 Fluent palette overrides for the invoice features. */
+/* Zy-DevBase v0.3.2 Fluent palette overrides for the invoice features. */
 body {
   background: var(--canvas);
   color: var(--ink);

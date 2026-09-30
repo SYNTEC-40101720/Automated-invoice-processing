@@ -8,6 +8,7 @@ import { useWorkbench } from '../stores/workbench'
 
 interface SettingsViewProps {
   version: string | null
+  devbaseVersion: string | null
   update: UpdateResponse | null
   onCheckUpdate: () => Promise<UpdateResponse | null>
   theme: ThemeMode
@@ -47,7 +48,7 @@ const settingsSectionMeta: Record<SettingsSection, { label: string; eyebrow: str
 const invoiceSettingsOrder: SettingsSection[] = ['business', 'email', 'ai']
 const settingsSectionOrder: SettingsSection[] = ['devbase', ...invoiceSettingsOrder]
 
-export function SettingsView({ version, update, onCheckUpdate, theme, onThemeChange }: SettingsViewProps) {
+export function SettingsView({ version, update, onCheckUpdate, theme, onThemeChange, devbaseVersion }: SettingsViewProps) {
   const queryClient = useQueryClient()
   const settingsSection = useWorkbench((state) => state.settingsSection)
   const setSettingsSection = useWorkbench((state) => state.setSettingsSection)
@@ -186,8 +187,8 @@ export function SettingsView({ version, update, onCheckUpdate, theme, onThemeCha
 
         <SettingsCard icon={<LayoutGrid size={17} />} title="关于 DevBase">
           <div className="settings-about-grid">
-            <div><span className="field-label">名称</span><strong>SYNTEC Invoice Workbench</strong></div>
-            <div><span className="field-label">基础版本</span><strong>DevBase 0.3.3</strong></div>
+            <div><span className="field-label">名称</span><strong>SYNTEC-电子票据处理系统</strong></div>
+            <div><span className="field-label">基础版本</span><strong>DevBase {devbaseVersion ?? '--'}</strong></div>
             <div><span className="field-label">技术栈</span><strong>Python · FastAPI · React · Vite</strong></div>
           </div>
         </SettingsCard>

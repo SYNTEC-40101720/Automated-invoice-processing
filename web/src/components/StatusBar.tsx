@@ -43,7 +43,7 @@ export function StatusBar({ connected, job, version, onTogglePanel, panelOpen }:
       <span className="status-divider" />
       <span>本地模式</span>
       <span className="status-divider" />
-      <span className="status-version">ZySco {version ?? '--'}</span>
+      <span className="status-version">SYNTEC {version ?? '--'}</span>
     </footer>
   )
 }
