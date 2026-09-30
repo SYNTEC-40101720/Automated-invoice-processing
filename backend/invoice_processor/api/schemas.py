@@ -75,6 +75,25 @@ class LogListResponse(BaseModel):
     next_event_id: int | None = None
 
 
+class JobHistoryEntry(BaseModel):
+    model_config = ConfigDict(extra='ignore')
+
+    job_id: str
+    source_dir: str
+    output_dir: str | None = None
+    trigger: str
+    status: str
+    stats: dict[str, int] = Field(default_factory=dict)
+    started_at: str | None = None
+    finished_at: str | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+
+
+class JobHistoryResponse(BaseModel):
+    items: list[JobHistoryEntry]
+
+
 class ToolDescriptorResponse(BaseModel):
     kind: str
     title: str

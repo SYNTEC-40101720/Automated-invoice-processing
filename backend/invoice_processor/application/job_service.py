@@ -24,6 +24,7 @@ from ..domain.errors import (
 from ..domain.job import Job, JobPhase, JobStatus, JobTrigger
 from .audit_service import AuditService
 from .invoice_file_service import FileProcessResult, InvoiceFileService
+from .job_history import JobHistoryStore
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ class JobService:
         audit_service_factory: Callable[..., AuditService] = AuditService,
         file_service_factory: Callable[..., InvoiceFileService] = InvoiceFileService,
         job_history_limit: int = 100,
+        job_history_store: JobHistoryStore | None = None,
     ):
         self.events = event_bus or EventBus()
         self._processor_factory = processor_factory
@@ -59,6 +61,8 @@ class JobService:
         self._max_workers = max_workers_provider
         self._audit_service_factory = audit_service_factory
         self._file_service_factory = file_service_factory
+        # 跨启动处理历史（终态旁路落盘）；None 时历史功能停用
+        self._job_history_store = job_history_store
         self._lock = threading.RLock()
         self._handles: dict[str, _JobHandle] = {}
         self._current_job_id: str | None = None
@@ -186,14 +190,24 @@ class JobService:
             )
 
     def is_known_directory(self, path: str) -> bool:
-        """判断目录是否为配置的收件目录或任务输出目录。"""
+        """判断目录是否为配置的收件目录、任务输出目录或历史输出目录。"""
         normalized = os.path.realpath(os.path.abspath(os.path.expanduser(path)))
         inbox_dir = os.path.realpath(
             os.path.abspath(os.path.expanduser(get_inbox_dir()))
         )
         if normalized == inbox_dir:
             return True
-        return self.is_known_output_directory(normalized)
+        if self.is_known_output_directory(normalized):
+            return True
+        # 重启后内存 handles 已空：跨启动历史中的输出目录同样放行，
+        # 供「打开输出目录」按历史回溯（目录是否仍存在由调用方判定）。
+        if self._job_history_store is None:
+            return False
+        return any(
+            entry.get('output_dir')
+            and os.path.realpath(str(entry['output_dir'])) == normalized
+            for entry in self._job_history_store.list()
+        )
 
     def shutdown(self, timeout: float = 5.0) -> None:
         """请求当前任务停止，供桌面壳退出时调用。
@@ -348,6 +362,10 @@ class JobService:
                     processor.clear_cache()
                 except Exception:
                     logger.exception('清理处理器缓存失败')
+            # 终态旁路落盘处理历史（锁序约束：不得在持 service 锁时做
+            # 磁盘 IO；store 自身线程安全，IO 失败在 store 内部降级）。
+            if self._job_history_store is not None and job.status.is_terminal:
+                self._job_history_store.append(job.to_dict())
             with self._lock:
                 # 保留 handle 供任务历史查询，仅释放运行时资源引用；
                 # 历史上限由 _trim_job_history_locked 统一裁剪。

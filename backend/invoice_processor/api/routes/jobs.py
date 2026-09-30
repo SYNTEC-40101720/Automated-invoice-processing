@@ -10,6 +10,8 @@ from ...application.job_service import JobService
 from ..dependencies import get_devbase_runtime, get_job_service, require_local_token
 from ..schemas import (
     DirectoryScanResponse,
+    JobHistoryEntry,
+    JobHistoryResponse,
     LogEntry,
     LogListResponse,
     RuntimeJobResponse,
@@ -27,6 +29,20 @@ router = APIRouter(
 @router.get('/current', response_model=dict | None)
 def current_job(service: JobService = Depends(get_job_service)) -> dict | None:
     return service.current_job()
+
+
+@router.get('/history', response_model=JobHistoryResponse)
+def job_history(
+    limit: int = 20,
+    service: JobService = Depends(get_job_service),
+) -> JobHistoryResponse:
+    """跨启动处理历史（新→旧）；limit 限定 1..50。"""
+    bounded = max(1, min(limit, 50))
+    items = [
+        JobHistoryEntry(**entry)
+        for entry in reversed(service.job_history_entries())
+    ]
+    return JobHistoryResponse(items=items[:bounded])
 
 
 @router.post('/scan', response_model=DirectoryScanResponse)

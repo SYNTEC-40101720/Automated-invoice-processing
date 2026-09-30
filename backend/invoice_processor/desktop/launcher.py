@@ -16,6 +16,7 @@ import uvicorn
 from ..api.app import create_app
 from ..application.job_service import JobService
 from .native_bridge import NativeBridge
+from .single_instance import acquire_single_instance_lock
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,11 @@ def run_desktop(
     ``local_token`` 允许宿主注入已知令牌（冒烟脚本等外部探活场景）；
     不传时每次启动自行生成高熵令牌，安全面无弱化——仍为 loopback+令牌强校验。
     """
+    # 单实例锁：已有实例时本次启动直接退出（windowed EXE 无控制台，
+    # 静默退出即可——第一实例窗口本就在前台，行为直觉）。
+    if acquire_single_instance_lock() is None:
+        logger.error('检测到已有实例正在运行，本次启动退出')
+        return
     port = port or _find_free_port()
     token = local_token or secrets.token_urlsafe(32)
     job_service = JobService()

@@ -16,6 +16,7 @@ from devbase.application.job_runtime import JobRuntime
 from fastapi import FastAPI
 
 from ..application.invoice_task import build_invoice_registry
+from ..application.job_history import JobHistoryStore, default_history_path
 from ..application.job_service import JobService
 from ..domain.errors import ApplicationError
 from ..version import __version__
@@ -31,7 +32,7 @@ def create_app(
     static_dir: str | Path | None = None,
     allowed_origins: Iterable[str] | None = None,
 ) -> FastAPI:
-    service = job_service or JobService()
+    service = job_service or JobService(job_history_store=JobHistoryStore(default_history_path()))
     # 总线单实例化（融合二期）：runtime 复用 service 的总线，业务事件
     # 与生命周期事件共享同一 event_id 编号空间。注入 service 的场景
     # （测试、launcher）同样保证单实例。
