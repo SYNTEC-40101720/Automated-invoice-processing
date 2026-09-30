@@ -94,7 +94,7 @@ def get_logs(
     items = [
         LogEntry(
             event_id=event.event_id,
-            occurred_at=event.occurred_at,
+            occurred_at=event.created_at.isoformat(),
             level=str(event.payload.get('level', 'info')),
             message=str(event.payload.get('message', '')),
         )

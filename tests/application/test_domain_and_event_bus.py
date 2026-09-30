@@ -1,10 +1,15 @@
-"""领域模型和事件总线的第一批回归测试。"""
+"""领域模型和统一事件总线的第一批回归测试。
+
+总线已融合至 DevBase 侧（融合二期）：订阅通道与游标重放同一实现，
+``EventStreamClosed`` 随总线迁至 ``devbase.application.errors``。
+"""
 
 import threading
 
 import pytest
-from invoice_processor.application.event_bus import EventBus
-from invoice_processor.domain.errors import EventStreamClosed, InvalidJobTransition
+from devbase.application.errors import EventStreamClosed
+from devbase.application.event_bus import EventBus
+from invoice_processor.domain.errors import InvalidJobTransition
 from invoice_processor.domain.job import Job, JobStatus, JobTrigger
 
 

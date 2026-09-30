@@ -32,7 +32,13 @@ def create_app(
     allowed_origins: Iterable[str] | None = None,
 ) -> FastAPI:
     service = job_service or JobService()
-    runtime = JobRuntime(registry=build_invoice_registry(service))
+    # 总线单实例化（融合二期）：runtime 复用 service 的总线，业务事件
+    # 与生命周期事件共享同一 event_id 编号空间。注入 service 的场景
+    # （测试、launcher）同样保证单实例。
+    runtime = JobRuntime(
+        registry=build_invoice_registry(service),
+        event_bus=service.events,
+    )
     app = create_devbase_app(
         runtime=runtime,
         title='SYNTEC Invoice Processor API',

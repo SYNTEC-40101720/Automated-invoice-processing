@@ -10,6 +10,8 @@ from collections.abc import Callable
 from concurrent.futures import CancelledError, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 
+from devbase.application.event_bus import EventBus
+
 from ..config_manager import get_inbox_dir, get_max_workers
 from ..core.processor import InvoiceProcessor
 from ..domain.errors import (
@@ -21,7 +23,6 @@ from ..domain.errors import (
 )
 from ..domain.job import Job, JobPhase, JobStatus, JobTrigger
 from .audit_service import AuditService
-from .event_bus import EventBus
 from .invoice_file_service import FileProcessResult, InvoiceFileService
 
 logger = logging.getLogger(__name__)
@@ -29,11 +30,14 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class _JobHandle:
-    """单个任务的运行时资源，与 Job 一一对应，生命周期一致。"""
+    """单个任务的运行时资源，与 Job 一一对应，生命周期一致。
+
+    融合二期后不再持有 worker 线程引用：任务由宿主（DevBase runtime）
+    在自己的线程里经 ``run_job_sync`` 驱动，本服务只管状态与事件。
+    """
 
     job: Job
     cancel_event: threading.Event
-    thread: threading.Thread | None = None
     progress_callback: Callable[[float, str], None] | None = None
 
 
@@ -59,25 +63,6 @@ class JobService:
         self._handles: dict[str, _JobHandle] = {}
         self._current_job_id: str | None = None
 
-    def start_job(
-        self,
-        source_dir: str,
-        trigger: JobTrigger | str = JobTrigger.MANUAL,
-    ) -> dict:
-        job, pdf_files, snapshot = self._prepare_job(source_dir, trigger)
-
-        self._publish_snapshot(job)
-        thread = threading.Thread(
-            target=self._run_job,
-            args=(job.id, tuple(pdf_files)),
-            name=f'invoice-job-{job.id[:8]}',
-            daemon=True,
-        )
-        with self._lock:
-            self._handles[job.id].thread = thread
-        thread.start()
-        return snapshot
-
     def run_job_sync(
         self,
         source_dir: str,
@@ -91,7 +76,9 @@ class JobService:
 
         DevBase owns the worker thread. This method only prepares the business
         job and executes the existing pipeline in the caller's thread, so the
-        invoice service does not create a second task thread.
+        invoice service does not create a second task thread. It is the only
+        production entry point since the legacy self-thread ``start_job``
+        path was removed in the phase-2 bus fusion.
         """
         job, pdf_files, _snapshot = self._prepare_job(
             source_dir,
@@ -208,27 +195,19 @@ class JobService:
             return True
         return self.is_known_output_directory(normalized)
 
-    def wait_for_job(self, job_id: str, timeout: float | None = None) -> dict:
-        with self._lock:
-            handle = self._handles.get(job_id)
-            thread = handle.thread if handle else None
-        if thread:
-            thread.join(timeout)
-        return self.get_job(job_id)
-
     def shutdown(self, timeout: float = 5.0) -> None:
-        """请求当前任务停止并等待 worker 收敛，供桌面壳退出时调用。"""
+        """请求当前任务停止，供桌面壳退出时调用。
+
+        融合二期后本服务不再持有 worker 线程：任务由宿主 runtime 的
+        daemon 线程驱动，此处只协作式请求取消，进程退出即收敛。
+        """
         with self._lock:
             job_id = self._current_job_id
-            handle = self._handles.get(job_id) if job_id else None
-            thread = handle.thread if handle else None
         if job_id:
             try:
                 self.cancel_job(job_id)
             except ApplicationError:
                 pass
-        if thread:
-            thread.join(timeout)
 
     def _run_job(self, job_id: str, pdf_files: tuple[str, ...]) -> None:
         job = self._get_job_object(job_id)
@@ -374,7 +353,6 @@ class JobService:
                 # 历史上限由 _trim_job_history_locked 统一裁剪。
                 handle = self._handles.get(job_id)
                 if handle is not None:
-                    handle.thread = None
                     handle.progress_callback = None
                 self._trim_job_history_locked()
 
@@ -493,6 +471,12 @@ class JobService:
         self._publish_snapshot(job)
 
     def _set_progress(self, job: Job, ratio: float) -> None:
+        # progress 单一发布者（融合二期）：注册了宿主回调（DevBase runtime
+        # 生产路径）时仅调回调，由 runtime 统一发布 job.progress；无回调
+        # （直调本服务的调用方）时才在总线上自发布。两者互斥，任一时刻
+        # 只有一个发布者，避免每个 tick 双写两套编号。
+        # 锁序：必须在释放本服务锁之后再调回调——回调链会拿 runtime
+        # _lock 再拿总线 _lock，不得在持 service 锁时回调 runtime。
         with self._lock:
             job.set_progress(ratio)
             progress = job.progress
@@ -500,14 +484,15 @@ class JobService:
             message = job.message
             handle = self._handles.get(job.id)
             callback = handle.progress_callback if handle else None
-        self.events.publish(
-            'job.progress', {'progress': progress, 'phase': phase}, job.id
-        )
         if callback is not None:
             try:
                 callback(progress, message)
             except Exception:
                 logger.exception('外部进度回调失败: %s', job.id)
+            return
+        self.events.publish(
+            'job.progress', {'progress': progress, 'phase': phase}, job.id
+        )
 
     def _publish_stats(self, job: Job) -> None:
         with self._lock:

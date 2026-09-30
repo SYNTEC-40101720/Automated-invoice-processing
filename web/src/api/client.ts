@@ -106,11 +106,15 @@ export const api = {
 export function connectEvents(
   onEvent: (event: DomainEvent) => void,
   onStatus: (connected: boolean) => void,
+  afterEventId = 0,
 ): () => void {
   const base = apiBase || window.location.origin
   const url = new URL('/api/v1/events', base)
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
   if (localToken) url.searchParams.set('token', localToken)
+  // 显式带 after 游标：服务端按游标重放漏掉的事件（缺省行为是只发
+  // ready + 快照，不重放）。首连传 0 等价旧语义（重连才需要游标）。
+  if (afterEventId > 0) url.searchParams.set('after', String(afterEventId))
   const socket = new WebSocket(url.toString())
   socket.addEventListener('open', () => onStatus(true))
   socket.addEventListener('close', () => onStatus(false))

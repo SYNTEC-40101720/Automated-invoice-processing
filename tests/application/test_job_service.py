@@ -1,4 +1,9 @@
-"""JobService 应用编排测试。"""
+"""JobService 应用编排测试。
+
+融合二期后 JobService 不再持有 worker 线程：生产路径由 DevBase
+runtime 的线程经 ``run_job_sync`` 驱动。本文件直调 ``run_job_sync``
+复现同一入口（同步阻塞直到终态），等价于宿主线程驱动。
+"""
 
 from __future__ import annotations
 
@@ -6,7 +11,7 @@ import os
 import threading
 
 import pytest
-from invoice_processor.application.event_bus import EventBus
+from devbase.application.event_bus import EventBus
 from invoice_processor.application.invoice_file_service import FileProcessResult
 from invoice_processor.application.job_service import JobService
 from invoice_processor.domain.errors import JobAlreadyRunning, NoPdfFiles
@@ -106,8 +111,7 @@ def test_job_service_runs_pipeline_and_publishes_terminal_snapshot(tmp_path):
     service, processor = make_service(tmp_path, event_bus)
     source = make_source(tmp_path)
 
-    snapshot = service.start_job(str(source))
-    final = service.wait_for_job(snapshot['id'], timeout=5)
+    final = service.run_job_sync(str(source))
 
     assert final['status'] == JobStatus.SUCCEEDED.value
     assert final['progress'] == 1.0
@@ -147,8 +151,7 @@ def test_processor_factory_failure_marks_job_failed(tmp_path):
         processor_factory=failing_factory,
         max_workers_provider=lambda: 2,
     )
-    snapshot = service.start_job(str(source))
-    final = service.wait_for_job(snapshot['id'], timeout=5)
+    final = service.run_job_sync(str(source))
 
     assert final['status'] == JobStatus.FAILED.value
     assert final['error_code'] == 'INTERNAL_ERROR'
@@ -158,8 +161,7 @@ def test_processor_factory_failure_marks_job_failed(tmp_path):
 def test_inbox_job_archives_only_initial_pdf_files(tmp_path):
     service, _ = make_service(tmp_path)
     source = make_source(tmp_path, count=1)
-    snapshot = service.start_job(str(source), JobTrigger.INBOX)
-    final = service.wait_for_job(snapshot['id'], timeout=5)
+    final = service.run_job_sync(str(source), JobTrigger.INBOX)
 
     assert final['status'] == JobStatus.SUCCEEDED.value
     assert final['result']['archived'] == 1
@@ -181,30 +183,51 @@ def test_start_job_rejects_empty_source_and_running_conflict(tmp_path):
 
     service, _ = make_service(tmp_path, processor=BlockingProcessor())
     with pytest.raises(NoPdfFiles):
-        service.start_job(str(empty))
+        service.run_job_sync(str(empty))
 
     source = make_source(tmp_path)
-    first = service.start_job(str(source))
+    worker = threading.Thread(
+        target=lambda: service.run_job_sync(str(source)), daemon=True,
+    )
+    worker.start()
     try:
         assert started.wait(timeout=5)
         with pytest.raises(JobAlreadyRunning):
-            service.start_job(str(source))
-        service.cancel_job(first['id'])
+            service.run_job_sync(str(source))
+        current = service.current_job()
+        service.cancel_job(current['id'])
     finally:
         release.set()
-        service.wait_for_job(first['id'], timeout=5)
+        worker.join(timeout=5)
 
 
 def test_cancelled_job_does_not_run_post_process(tmp_path):
     class SlowProcessor(FakeProcessor):
+        # reset_dedup 在处理线程池启动前执行：到达即发信号，随后挂起，
+        # 保证取消发生在文件处理阶段内、后处理开始前。
+        def reset_dedup(self):
+            in_process.set()
+            resume.wait(timeout=5)
+            super().reset_dedup()
+
         def post_process(self, output_dir, progress_callback=None):
             raise AssertionError('取消后不应执行后处理')
 
+    in_process = threading.Event()
+    resume = threading.Event()
     service, _ = make_service(tmp_path, processor=SlowProcessor())
     source = make_source(tmp_path, count=4)
-    snapshot = service.start_job(str(source))
-    service.cancel_job(snapshot['id'])
-    final = service.wait_for_job(snapshot['id'], timeout=5)
+    worker = threading.Thread(
+        target=lambda: service.run_job_sync(str(source)), daemon=True,
+    )
+    worker.start()
+    # 等待进入文件处理阶段（reset_dedup 已到达）后再取消，取消后放行
+    assert in_process.wait(timeout=5), '任务未进入处理阶段'
+    current = service.current_job()
+    service.cancel_job(current['id'])
+    resume.set()
+    worker.join(timeout=5)
+    final = service.get_job(current['id'])
     assert final['status'] == JobStatus.CANCELLED.value
 
 
@@ -229,12 +252,18 @@ def test_cancel_during_post_process_skips_audit_and_archive(tmp_path):
         file_service_factory=FakeFileService,
     )
     source = make_source(tmp_path, count=1)
-    snapshot = service.start_job(str(source), JobTrigger.EMAIL)
+    worker = threading.Thread(
+        target=lambda: service.run_job_sync(str(source), JobTrigger.EMAIL),
+        daemon=True,
+    )
+    worker.start()
 
     assert post_started.wait(timeout=5)
-    service.cancel_job(snapshot['id'])
+    current = service.current_job()
+    service.cancel_job(current['id'])
     release_post.set()
-    final = service.wait_for_job(snapshot['id'], timeout=5)
+    worker.join(timeout=5)
+    final = service.get_job(current['id'])
 
     assert final['status'] == JobStatus.CANCELLED.value
     assert audit_calls == []

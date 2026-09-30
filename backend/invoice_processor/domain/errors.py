@@ -63,7 +63,3 @@ class InvalidJobTransition(ApplicationError):
             f'不允许任务状态从 {current} 变更为 {target}',
             {'current': current, 'target': target},
         )
-
-
-class EventStreamClosed(RuntimeError):
-    """事件订阅已关闭。"""

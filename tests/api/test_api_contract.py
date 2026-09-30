@@ -6,6 +6,7 @@ import threading
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
+from devbase.application.event_bus import EventBus
 from devbase.domain.job import JobStatus
 from fastapi.testclient import TestClient
 from invoice_processor.api.app import create_app
@@ -13,7 +14,6 @@ from invoice_processor.api.routes import email as email_route
 from invoice_processor.api.routes import settings as settings_route
 from invoice_processor.api.routes import system as system_route
 from invoice_processor.api.schemas import SettingsResponse
-from invoice_processor.application.event_bus import EventBus
 from invoice_processor.application.job_service import JobService
 from invoice_processor.version import __version__
 
@@ -230,6 +230,69 @@ def test_websocket_sends_ready_and_current_snapshot(tmp_path):
         ready = websocket.receive_json()
         assert ready['type'] == 'system.ready'
         assert ready['payload']['version'] == __version__
+
+
+def test_websocket_without_cursor_does_not_replay_history(tmp_path):
+    # 游标缺席保持旧行为：只发 ready + 快照，不重放历史日志。
+    # 注入一个当前任务使快照帧立即到达：ready 后紧跟 job.snapshot
+    # 即证明没有先重放历史（重放若有，日志帧会夹在 ready 与快照之间）。
+    service = JobService(event_bus=EventBus())
+    app = create_app(service, local_token='test-token')
+    client = TestClient(app)
+    service.events.publish(
+        'job.log_appended', {'level': 'info', 'message': '历史日志'}, 'job-1'
+    )
+    from invoice_processor.application.job_service import _JobHandle
+    from invoice_processor.domain.job import Job
+    service._handles['job-1'] = _JobHandle(
+        job=Job(source_dir=str(tmp_path), id='job-1'),
+        cancel_event=threading.Event(),
+    )
+    service._current_job_id = 'job-1'
+
+    with client.websocket_connect('/api/v1/events?token=test-token') as websocket:
+        ready = websocket.receive_json()
+        assert ready['type'] == 'system.ready'
+        snapshot = websocket.receive_json()
+        assert snapshot['type'] == 'job.snapshot'
+        assert snapshot['job_id'] == 'job-1'
+
+
+def test_websocket_replays_missed_events_after_cursor(tmp_path):
+    # 融合二期：带 after 游标重连，服务端一次性重放漏掉的事件。
+    service = JobService(event_bus=EventBus())
+    app = create_app(service, local_token='test-token')
+    client = TestClient(app)
+    first = service.events.publish(
+        'job.log_appended', {'level': 'info', 'message': '断线前'}, 'job-1'
+    )
+    service.events.publish(
+        'job.log_appended', {'level': 'info', 'message': '断线后'}, 'job-1'
+    )
+
+    with client.websocket_connect(
+        f'/api/v1/events?token=test-token&after={first.event_id}'
+    ) as websocket:
+        assert websocket.receive_json()['type'] == 'system.ready'
+        replayed = websocket.receive_json()
+        assert replayed['event_id'] == first.event_id + 1
+        assert replayed['type'] == 'job.log_appended'
+        assert replayed['payload']['message'] == '断线后'
+
+
+def test_fused_bus_shares_numbering_between_runtime_and_service(tmp_path):
+    # 总线单实例化：runtime 生命周期事件与 service 业务事件共享同一
+    # 编号空间（连续无空洞），单条 WS 可按序收到两侧事件。
+    service = JobService(event_bus=EventBus())
+    app = create_app(service, local_token='test-token')
+    runtime = app.state.devbase_runtime
+
+    business = service.events.publish('job.snapshot', {'id': 'job-1'}, 'job-1')
+    lifecycle = runtime.event_bus.publish('job.progress', {'progress': 0.5}, 'job-1')
+
+    assert lifecycle.event_id == business.event_id + 1
+    ids = [event.event_id for event in service.events.history()]
+    assert ids == list(range(1, len(ids) + 1))
 
 
 def test_job_logs_endpoint_returns_only_job_logs(tmp_path):

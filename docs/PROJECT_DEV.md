@@ -104,10 +104,10 @@
 
 ```
 backend/
-├── devbase/            # 通用 JobRuntime、ToolRegistry、API 安全层和桌面壳
+├── devbase/            # 通用 JobRuntime、ToolRegistry、EventBus、API 安全层和桌面壳
 └── invoice_processor/  # 发票业务包
-	├── domain/         # Job、状态机、领域事件和错误码
-	├── application/    # JobService、EventBus、文件服务、审核和任务适配
+	├── domain/         # Job、状态机和错误码
+	├── application/    # JobService、文件服务、审核和任务适配（EventBus 在 devbase 侧）
 	├── api/            # FastAPI 路由、token、静态资源和 WebSocket
 	├── desktop/        # 发票桌面扩展和 NativeBridge
 	└── core/           # 发票处理业务，不依赖 Web

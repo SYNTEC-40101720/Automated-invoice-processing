@@ -173,7 +173,7 @@ export function App() {
             connect()
           }, delay)
         }
-      })
+      }, lastEventId.current)
     }
     connect()
     return () => {

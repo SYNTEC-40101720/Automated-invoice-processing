@@ -260,6 +260,7 @@ API 前缀固定为 `/api/v1`。错误统一返回：
 - 地址：`/api/v1/events`；
 - 建立后服务端先发送 `system.ready` 和当前 `job.snapshot`；
 - 前端采用 1.5 秒起步、10 秒封顶的指数退避重连，并保留事件游标；
+- 重连可带 `after` 游标查询参数：服务端先订阅再取快照、重放游标之后的漏发事件并按事件号去重（先订阅再快照保证重放 ∪ 实时无间隙）；游标缺席保持旧行为（只发 ready + 快照，不重放）；
 - WebSocket 只传服务端事件，不承载开始、停止、保存设置等命令；
 - 日志初始快照通过 HTTP 获取，WebSocket 只推增量；重连按 `after_event_id` 恢复并按事件号去重，避免重连时发送无限历史。
 
@@ -407,16 +408,18 @@ v7.3.0 当前交付包含：FastAPI 本地服务、React 工作台、pywebview �
 - Playwright 自动化 E2E 套件（手工场景已由 ACCEPTANCE_CHECKLIST.md §6 覆盖）；
 - 跨磁盘安装目录的复制式替换。
 
-### 12.1 事件总线融合（一期已完成 2026-09-30）
+### 12.1 事件总线融合（一期+二期均已完成 2026-09-30）
 
-一期（编号空间/进度语义/错误信封，提交 530bf39）已完成并全绿（pytest 147、Vitest 8、tsc、源码模式冒烟）：
+一期（编号空间/进度语义/错误信封，提交 530bf39）：DevBase 侧 `InMemoryEventBus` 重写为订阅式 `EventBus`——`EventSubscription` 有界双通道（progress 只保留最新一条，关键事件溢出关流强制慢客户端重连），`history`/`snapshot` 以全局单调 `event_id` 游标重放，历史不合并保证编号连续；`RuntimeEvent` 统一信封（`event_id: int` / `type` / `job_id` / `payload`），`EventKind.PROGRESS` 即前端 `job.progress`；progress 全链路统一 0..1 float；DevBase 409/404 统一 `{"error": {code, message, details}}` 信封。
 
-- DevBase 侧 `InMemoryEventBus` 重写为订阅式 `EventBus`：`EventSubscription` 有界双通道（progress 只保留最新一条，关键事件溢出关流强制慢客户端重连），`history`/`snapshot` 以全局单调 `event_id` 游标重放，历史不合并保证编号连续；
-- `RuntimeEvent` 统一信封（`event_id: int` / `type` / `job_id` / `payload`），`EventKind.PROGRESS` 即前端 `job.progress`；
-- progress 全链路统一 0..1 float：`JobSnapshot.progress`、`RuntimeJobResponse.progress`、前端 `client.ts` 去掉 `/100` 现场换算；
-- DevBase 409/404 统一 `{"error": {code, message, details}}` 信封，`DevBaseRuntimeError` 携带稳定错误码。
+二期（总线单实例化，当日完成）：
 
-**二期边界（下一步实施项，breaking 级需设计先行）**：发票 `JobService` 与 DevBase `JobRuntime` 在同一 app 内仍是两个 `EventBus` 实例、两套编号——发票 WS 只订阅 service 总线，progress 每个 tick 双写（service 自发布 + runtime 回调各一次）。二期目标：总线单实例化、progress 单一发布者（runtime）、统一 WS 通道与节奏、`/jobs/current` 业务快照模型迁移评估，完成后复跑验收 §6 五场景。
+- **总线单实例**：`create_app` 里 `JobRuntime(event_bus=service.events)`——发票业务事件（`job.snapshot`/`job.log_appended`/`job.stats_changed`/`job.completed`）与 DevBase 生命周期事件（`job_started`/`job.progress`/终态）共享同一 `event_id` 编号空间，全 app 单一 `EventBus` 实例；
+- **progress 单一发布者**：`JobService._set_progress` 注册了宿主回调（DevBase runtime 生产路径）时仅调回调、由 runtime 统一发布 `job.progress`，无回调（直调 service 的调用方）时才自发布，两者互斥不再双写；锁序为 service 锁 → runtime 锁 → 总线锁，回调只在释放 service 锁后进行；
+- **旧发票总线退役**：`invoice_processor/application/event_bus.py` 与 `domain/events.py`（`DomainEvent`）删除，`EventStreamClosed` 统一来自 `devbase.application.errors`；`JobService` 自线程入口 `start_job`/`wait_for_job` 移除，`run_job_sync` 为唯一生产入口（宿主 DevBase worker 线程驱动）；
+- **发票 WS 游标重放**：`/api/v1/events` 支持显式 `after` 查询参数——缺席时保持旧行为（ready + 快照，不重放，避免前端日志无条件重放整段历史）；带游标时先订阅再取快照、按 `last_replayed` 去重，重放 ∪ 实时无间隙；前端 `connectEvents` 重连时携带 `lastEventId` 游标，断线期间漏掉的事件由服务端一次性补齐。
+
+**遗留评估项（非阻塞）**：发票 WS 心跳 30s 与 DevBase 模板 WS 0.5s 轮询节奏仍不一致（两条 WS 路由并存，但生产 app 只挂发票侧——`include_default_routes=False` 时不挂模板 WS）；`/jobs/current` 业务快照模型迁移评估延后。验收 §6 五场景在融合后复跑通过（`scripts/acceptance_driver.py`，进度单调断言兼容 float 语义）。
 
 ## 14. 主要风险与控制
 
