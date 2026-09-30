@@ -56,5 +56,5 @@ def test_invoice_task_receives_runtime_input() -> None:
     assert current is not None
     assert current.job_id == started.job_id
     assert current.status is JobStatus.SUCCEEDED
-    assert current.progress == 100
+    assert current.progress == 1.0
     assert service.calls == [("C:/invoices", "email")]

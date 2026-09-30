@@ -93,28 +93,31 @@ def create_app(
     @app.exception_handler(JobAlreadyRunningError)
     async def handle_job_conflict(
         _request: Request,
-        _exception: JobAlreadyRunningError,
+        exception: JobAlreadyRunningError,
     ) -> JSONResponse:
         return JSONResponse(
             status_code=409,
-            content={"detail": "a non-terminal job is already running"},
+            content=_error_envelope(exception),
         )
 
     @app.exception_handler(NoCurrentJobError)
     async def handle_missing_job(
         _request: Request,
-        _exception: NoCurrentJobError,
+        exception: NoCurrentJobError,
     ) -> JSONResponse:
-        return JSONResponse(status_code=404, content={"detail": "no current job"})
+        return JSONResponse(
+            status_code=404,
+            content=_error_envelope(exception),
+        )
 
     @app.exception_handler(JobNotCancellableError)
     async def handle_terminal_job(
         _request: Request,
-        _exception: JobNotCancellableError,
+        exception: JobNotCancellableError,
     ) -> JSONResponse:
         return JSONResponse(
             status_code=409,
-            content={"detail": "the current job is already terminal"},
+            content=_error_envelope(exception),
         )
 
     @app.exception_handler(TaskNotFoundError)
@@ -124,10 +127,30 @@ def create_app(
     ) -> JSONResponse:
         return JSONResponse(
             status_code=404,
-            content={"detail": f"task kind not registered: {exception.kind!r}"},
+            content=_error_envelope(
+                exception,
+                code="TASK_NOT_FOUND",
+                message=f"任务类型未注册: {exception.kind!r}",
+            ),
         )
 
     return app
+
+
+def _error_envelope(
+    exception: Exception,
+    *,
+    code: str | None = None,
+    message: str | None = None,
+) -> dict:
+    """Project-standard ``{"error": {code, message, details}}`` envelope."""
+    return {
+        "error": {
+            "code": code or getattr(exception, "code", "INTERNAL_ERROR"),
+            "message": message or getattr(exception, "message", str(exception)),
+            "details": {},
+        }
+    }
 
 
 def mount_static_frontend(app: FastAPI, static_dir: str | Path | None) -> None:

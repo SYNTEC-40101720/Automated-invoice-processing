@@ -72,7 +72,7 @@ class JobSnapshot:
     job_id: str
     kind: str
     status: JobStatus
-    progress: int
+    progress: float
     message: str
     created_at: datetime
     updated_at: datetime

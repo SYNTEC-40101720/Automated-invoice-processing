@@ -10,6 +10,12 @@ The runtime follows the ports pattern: :class:`TaskContext` implements
 User-facing strings flow through a :class:`ResourceProvider` so logic
 never hard-codes localization.
 
+Progress semantics (fused event bus): the runtime is the single
+``job.progress`` publisher. Tasks report a 0..1 float through
+``TaskContext.report_progress``; the value is stored on the job as-is
+and published once — business services observe progress via their own
+callbacks, never by re-publishing.
+
 Demo tool (``demo_long_task``) is registered by default so the template
 works out of the box.
 """
@@ -32,7 +38,7 @@ from .errors import (
     JobNotCancellableError,
     NoCurrentJobError,
 )
-from .event_bus import InMemoryEventBus
+from .event_bus import EventBus
 from .manifest import ToolDescriptor, ToolRegistry
 from .task import TaskContext, TaskNotFoundError
 
@@ -42,7 +48,7 @@ class _MutableJob:
     job_id: str
     kind: str
     status: JobStatus
-    progress: int
+    progress: float
     message: str
     created_at: datetime
     updated_at: datetime
@@ -55,12 +61,13 @@ class JobRuntime:
     Pass a :class:`ToolRegistry` so ``start(kind)`` can look up the tool;
     the default registry has only the built-in demo tool. Pass a
     :class:`ResourceProvider` to localize messages; defaults to the
-    in-process Chinese table.
+    in-process Chinese table. Pass a shared :class:`EventBus` so runtime
+    lifecycle events and business events share one numbering space.
     """
 
     def __init__(
         self,
-        event_bus: InMemoryEventBus | None = None,
+        event_bus: EventBus | None = None,
         *,
         registry: ToolRegistry | None = None,
         resources: ResourceProvider | None = None,
@@ -71,7 +78,7 @@ class JobRuntime:
             raise ValueError("total_steps must be positive")
         if step_delay < 0:
             raise ValueError("step_delay must not be negative")
-        self._event_bus = event_bus or InMemoryEventBus()
+        self._event_bus = event_bus or EventBus()
         self._registry = registry or _default_registry(total_steps, step_delay)
         self._resources = resources or get_default()
         self._total_steps = total_steps
@@ -100,10 +107,10 @@ class JobRuntime:
 
             now = _utc_now()
             job = _MutableJob(
-                job_id=str(uuid4()),
+                job_id=_new_job_id(),
                 kind=kind,
                 status=JobStatus.QUEUED,
-                progress=0,
+                progress=0.0,
                 message=self._resources.string("job.queued", kind=kind),
                 created_at=now,
                 updated_at=now,
@@ -152,26 +159,24 @@ class JobRuntime:
                 return None
             return self._snapshot_locked(self._active)
 
-    def current_snapshot(self, after_sequence: int = 0) -> RuntimeSnapshot:
+    def current_snapshot(self, after_event_id: int = 0) -> RuntimeSnapshot:
         with self._lock:
             job = (
                 None
                 if self._active is None
                 else self._snapshot_locked(self._active)
             )
-            event_snapshot = self._event_bus.snapshot(after_sequence)
-            return RuntimeSnapshot(
-                job=job,
-                events=event_snapshot.events,
-                event_cursor=event_snapshot.cursor,
-            )
+        event_snapshot = self._event_bus.snapshot(after_event_id)
+        return RuntimeSnapshot(
+            job=job,
+            events=event_snapshot.events,
+            event_cursor=event_snapshot.cursor,
+        )
 
-    def wait_for_events(
-        self,
-        after_sequence: int,
-        timeout: float | None = None,
-    ) -> tuple[RuntimeEvent, ...]:
-        return self._event_bus.wait_for_events(after_sequence, timeout)
+    @property
+    def event_bus(self) -> EventBus:
+        """Expose the shared bus so hosts and business services co-publish."""
+        return self._event_bus
 
     def registry(self) -> ToolRegistry:
         """Expose the tool registry for the API/frontend nav layer."""
@@ -211,7 +216,7 @@ class JobRuntime:
                         job,
                         status=JobStatus.RUNNING,
                         kind=EventKind.PROGRESS,
-                        progress=round(max(0.0, min(1.0, progress)) * 100),
+                        progress=max(0.0, min(1.0, progress)),
                         message=message or job.message,
                     )
 
@@ -248,7 +253,7 @@ class JobRuntime:
                             job,
                             status=JobStatus.COMPLETED_WITH_WARNINGS,
                             kind=EventKind.JOB_COMPLETED_WITH_WARNINGS,
-                            progress=100,
+                            progress=1.0,
                             message=result_message,
                         )
                     else:
@@ -256,7 +261,7 @@ class JobRuntime:
                             job,
                             status=JobStatus.SUCCEEDED,
                             kind=EventKind.JOB_SUCCEEDED,
-                            progress=100,
+                            progress=1.0,
                             message=result_message,
                         )
         except Exception as exc:
@@ -284,7 +289,7 @@ class JobRuntime:
         status: JobStatus,
         kind: EventKind,
         message: str,
-        progress: int | None = None,
+        progress: float | None = None,
     ) -> None:
         job.status = status
         job.message = message
@@ -294,17 +299,19 @@ class JobRuntime:
         self._emit_locked(job, kind)
 
     def _emit_locked(self, job: _MutableJob, kind: EventKind) -> None:
+        """Publish one event for ``kind`` on the fused bus.
+
+        Lifecycle events carry ``{status, progress, message}`` in the
+        payload; PROGRESS is the front-end ``job.progress`` event.
+        """
         self._event_bus.publish(
-            RuntimeEvent(
-                sequence=0,
-                event_id=str(uuid4()),
-                job_id=job.job_id,
-                kind=kind,
-                status=job.status,
-                progress=job.progress,
-                message=job.message,
-                created_at=job.updated_at,
-            )
+            kind.value,
+            {
+                "status": job.status.value,
+                "progress": job.progress,
+                "message": job.message,
+            },
+            job.job_id,
         )
 
     @staticmethod
@@ -357,6 +364,10 @@ def _default_registry(total_steps: int, step_delay: float) -> ToolRegistry:
         )
     )
     return registry
+
+
+def _new_job_id() -> str:
+    return str(uuid4())
 
 
 def _utc_now() -> datetime:

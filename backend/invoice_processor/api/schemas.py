@@ -27,7 +27,7 @@ class RuntimeJobResponse(BaseModel):
     id: str
     kind: str
     status: str
-    progress: int
+    progress: float
     message: str
     created_at: str
     updated_at: str

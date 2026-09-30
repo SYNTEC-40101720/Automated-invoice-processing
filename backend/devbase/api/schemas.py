@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from devbase.application.lifecycle import WindowCloseMode
 from devbase.application.manifest import ToolDescriptor
-from devbase.domain.events import EventKind, RuntimeEvent
+from devbase.domain.events import RuntimeEvent
 from devbase.domain.job import JobSnapshot, JobStatus, RuntimeSnapshot
 
 
@@ -20,7 +20,7 @@ class JobResponse(BaseModel):
     id: str
     kind: str
     status: JobStatus
-    progress: int
+    progress: float
     message: str
     created_at: datetime
     updated_at: datetime
@@ -66,14 +66,11 @@ def tool_descriptor_response(d: ToolDescriptor) -> ToolDescriptorResponse:
 
 
 class EventResponse(BaseModel):
-    sequence: int
-    event_id: str
-    job_id: str
-    kind: EventKind
-    status: JobStatus
-    progress: int
-    message: str
-    created_at: datetime
+    event_id: int
+    type: str
+    job_id: str | None
+    payload: dict[str, Any]
+    occurred_at: datetime
 
 
 class SnapshotResponse(BaseModel):
@@ -98,14 +95,11 @@ def job_response(job: JobSnapshot | None) -> JobResponse | None:
 
 def event_response(event: RuntimeEvent) -> EventResponse:
     return EventResponse(
-        sequence=event.sequence,
         event_id=event.event_id,
+        type=event.type,
         job_id=event.job_id,
-        kind=event.kind,
-        status=event.status,
-        progress=event.progress,
-        message=event.message,
-        created_at=event.created_at,
+        payload=event.payload,
+        occurred_at=event.created_at,
     )
 
 

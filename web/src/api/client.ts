@@ -63,7 +63,7 @@ export const api = {
       trigger: 'manual' as const,
       status: runtimeJob.status,
       phase: 'scan' as const,
-      progress: runtimeJob.progress / 100,
+      progress: runtimeJob.progress,
       message: runtimeJob.message,
       stats: { total: 0, success: 0, failure: 0, tax_issues: 0 },
       started_at: runtimeJob.created_at,

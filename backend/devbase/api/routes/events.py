@@ -5,6 +5,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from devbase.api.dependencies import validate_websocket_token
 from devbase.api.schemas import event_response, snapshot_response
+from devbase.application.errors import EventStreamClosed
 
 router = APIRouter(tags=["events"])
 
@@ -20,9 +21,10 @@ async def events(websocket: WebSocket) -> None:
     disconnect_task = asyncio.create_task(
         _watch_disconnect(websocket, disconnected)
     )
+    subscription = runtime_events_subscribe(runtime)
     try:
-        after_sequence = _read_cursor(websocket)
-        initial_snapshot = runtime.current_snapshot(after_sequence)
+        after_event_id = _read_cursor(websocket)
+        initial_snapshot = runtime.current_snapshot(after_event_id)
         await websocket.send_json(
             {
                 "type": "health",
@@ -47,31 +49,49 @@ async def events(websocket: WebSocket) -> None:
             }
         )
 
-        cursor = initial_snapshot.event_cursor
+        last_replayed = after_event_id
+        for event in initial_snapshot.events:
+            await websocket.send_json(
+                {
+                    "type": "event",
+                    "data": event_response(event).model_dump(mode="json"),
+                }
+            )
+            last_replayed = event.event_id
+
         while True:
             if disconnected.is_set():
                 return
-            new_events = await asyncio.to_thread(
-                runtime.wait_for_events,
-                cursor,
-                0.5,
-            )
+            try:
+                event = await asyncio.to_thread(subscription.get, 0.5)
+            except TimeoutError:
+                continue
+            except EventStreamClosed:
+                return
             if disconnected.is_set():
                 return
-            for event in new_events:
-                await websocket.send_json(
-                    {
-                        "type": "event",
-                        "data": event_response(event).model_dump(mode="json"),
-                    }
-                )
-                cursor = event.sequence
+            if event.event_id <= last_replayed:
+                # 订阅建立早于快照，重放并集里已推过的事件丢弃。
+                continue
+            await websocket.send_json(
+                {
+                    "type": "event",
+                    "data": event_response(event).model_dump(mode="json"),
+                }
+            )
+            last_replayed = event.event_id
     except WebSocketDisconnect:
         return
     finally:
         disconnect_task.cancel()
         with suppress(asyncio.CancelledError):
             await disconnect_task
+        subscription.close()
+
+
+def runtime_events_subscribe(runtime):
+    """订阅运行时共享总线（模板宿主与业务共享同一编号空间）。"""
+    return runtime.event_bus.subscribe(maxsize=256)
 
 
 async def _watch_disconnect(
