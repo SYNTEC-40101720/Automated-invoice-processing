@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
-
 from devbase.api.app import create_app
 from devbase.application.job_runtime import JobRuntime
+from fastapi.testclient import TestClient
 
 
 def make_devbase_app() -> tuple[TestClient, JobRuntime]:

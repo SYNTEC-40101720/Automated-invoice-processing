@@ -29,7 +29,7 @@ from threading import Event, RLock, Thread
 from typing import Any
 from uuid import uuid4
 
-from devbase.domain.events import EventKind, RuntimeEvent
+from devbase.domain.events import EventKind
 from devbase.domain.job import JobSnapshot, JobStatus, RuntimeSnapshot
 from devbase.domain.resources import ResourceProvider, get_default
 
