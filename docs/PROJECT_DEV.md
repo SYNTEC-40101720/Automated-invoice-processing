@@ -199,7 +199,7 @@ python scripts/smoke_launch.py --target exe
 
 ```
 
-截至 v7.3.0，本机 Windows 环境已验证：144 条 Python 测试通过，Ruff、前端 typecheck/build、Vitest（8 条）和 SYNTEC PyInstaller 域控合规检查通过；发布包启动冒烟（`scripts/smoke_launch.py`，含旧产物降级探活）通过，真实 Releases API 的旧版本号/当前版本号检查均已通过。目标机验收（旧版 EXE 升级、真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户、WebView2/DPI）按 `docs/ACCEPTANCE_CHECKLIST.md` 在目标环境执行。
+截至 v7.3.0，本机 Windows 环境已验证：147 条 Python 测试通过（含事件总线融合一期新增 3 条），Ruff、前端 typecheck/build、Vitest（8 条）和 SYNTEC PyInstaller 域控合规检查通过；发布包启动冒烟（`scripts/smoke_launch.py`，含旧产物降级探活）通过，真实 Releases API 的旧版本号/当前版本号检查均已通过。目标机验收（旧版 EXE 升级、真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户、WebView2/DPI）按 `docs/ACCEPTANCE_CHECKLIST.md` 在目标环境执行。
 
 测试文件：
 - `tests/test_processor.py`：核心逻辑单元测试

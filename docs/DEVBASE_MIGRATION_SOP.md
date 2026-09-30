@@ -28,12 +28,13 @@
 - NativeBridge 复用 DevBase 通用目录能力，保留发票专属方法
 - `/api/v1/tools` 和前端 Sidebar 已接入工具清单
 - 旧 `/jobs` 业务兼容 API（`POST /jobs`、`GET /jobs/{id}`、`POST /jobs/{id}/cancel`、`GET /jobs/runtime/current`）已移除，启动/取消统一走 DevBase 契约；`/jobs/start` 对发票工具增加启动前同步预检，目录/触发来源错误同步返回 422 稳定错误码
-- 当前 Python 测试：`144 passed`（v7.3.0 基线；后续以实测为准）
+- 事件总线融合一期已完成（2026-09-30，提交 530bf39）：DevBase 侧重写为订阅式 `EventBus`（`event_id` 游标 + 有界双通道订阅）、`RuntimeEvent` 统一信封、progress 全链路 0..1 float、409/404 统一错误信封；新增 `tests/api/test_devbase_ws_contract.py` 三场景回归
+- 当前 Python 测试：`147 passed`（含融合一期新增 3 条；后续以实测为准）
 
-尚未完成：
+尚未完成（二期边界，见 ARCHITECTURE.md §12.1）：
 
-- 发票事件总线与 DevBase 事件游标尚未统一（显式独立后续项：编号空间、progress 双写语义、冲突 409 错误信封，见 ARCHITECTURE.md §12.1）
-- 前端业务视图仍使用原有发票任务响应模型（`/jobs/current` 快照由发票侧保留为业务契约，迁移与否随事件总线融合一并评估）
+- 发票 `JobService` 与 DevBase `JobRuntime` 仍各持一个 `EventBus` 实例、两套编号；发票 WS 只订阅 service 总线，progress 每 tick 双写。二期目标：总线单实例化、progress 单一发布者、统一 WS 通道与节奏
+- 前端业务视图仍使用原有发票任务响应模型（`/jobs/current` 快照由发票侧保留为业务契约，迁移与否随二期一并评估）
 
 ---
 
@@ -168,18 +169,18 @@
 
 ### 6. `EventBus` 融合
 
-**来源**：发票项目 `src/application/event_bus.py` + DevBase `InMemoryEventBus`
+**来源**：发票项目 `src/application/event_bus.py` + DevBase `InMemoryEventBus`（后者已于融合一期重写为订阅式 `EventBus`，规格见 ARCHITECTURE.md §12.1）
 
 **DevBase 目标文件**：`backend/devbase/application/event_bus.py`
 
-**验收标准**：
-- [ ] `EventSubscription` 有界队列（`maxsize`）+ 关键事件不丢
-- [ ] `_latest_progress` progress 去重（只保留最新一条）
-- [ ] 阻塞读 `get(timeout)` 适配 WebSocket 循环
-- [ ] `close()` 优雅关闭 + `EventStreamClosed` 异常
-- [ ] `RuntimeSnapshot(events, event_cursor)` 游标重放
-- [ ] WebSocket 重连时先发快照 + 从游标续推
-- [ ] 线程安全（Condition + Lock）
+**验收标准**（一期已达成，2026-09-30 核验）：
+- [x] `EventSubscription` 有界队列（`maxsize`）+ 关键事件不丢
+- [x] `_latest_progress` progress 去重（只保留最新一条）
+- [x] 阻塞读 `get(timeout)` 适配 WebSocket 循环
+- [x] `close()` 优雅关闭 + `EventStreamClosed` 异常
+- [x] `RuntimeSnapshot(events, event_cursor)` 游标重放
+- [x] WebSocket 重连时先发快照 + 从游标续推
+- [x] 线程安全（Condition + Lock）
 
 ---
 

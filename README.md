@@ -143,7 +143,7 @@ npm --prefix web run test
 python scripts/smoke_launch.py --target source
 ```
 
-当前 v7.3.0 发布基线已验证 Python 测试通过（144 条）、Ruff 静态检查通过，前端类型检查、Vitest 单测（8 条）和生产构建通过；DevBase 工具清单已提供 `invoice_processing` 任务入口。发布包启动冒烟使用 `python scripts/smoke_launch.py`；目标机验收按 `docs/ACCEPTANCE_CHECKLIST.md` 执行。
+当前 v7.3.0 发布基线已验证 Python 测试通过（147 条，含事件总线融合一期新增 3 条）、Ruff 静态检查通过，前端类型检查、Vitest 单测（8 条）和生产构建通过；DevBase 工具清单已提供 `invoice_processing` 任务入口。发布包启动冒烟使用 `python scripts/smoke_launch.py`；目标机验收按 `docs/ACCEPTANCE_CHECKLIST.md` 执行。
 
 ## 版本发布
 

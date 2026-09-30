@@ -362,7 +362,7 @@ Pydantic 模型是 API 单一事实源。CI 由 FastAPI OpenAPI 生成 TypeScrip
 
 | 层级 | 工具 | 必测内容 | 当前状态 |
 |---|---|---|---|
-| 核心回归 | pytest | 保留所有现有核心、邮箱、审核测试 | 已通过，144 条 |
+| 核心回归 | pytest | 保留所有现有核心、邮箱、审核测试 | 已通过，147 条 |
 | 应用层 | pytest + fake event bus/filesystem | 状态迁移、单任务互斥、取消、归档条件、事件顺序 | 已通过 |
 | API | FastAPI TestClient/httpx | DTO 校验、错误码、密钥脱敏、冲突与路径拒绝 | 已通过 |
 | WebSocket | pytest | 初始快照、事件顺序、断线重连校准、慢客户端策略 | 服务端契约已通过，真实浏览器重连待补 |
@@ -399,7 +399,7 @@ dist/SYNTEC-电子票据处理系统/
 
 ## 12. 交付状态与边界
 
-v7.3.0 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、手动邮箱收件、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。任务启动/取消已收敛为 DevBase 契约（旧 `/jobs` 兼容端点已移除，`/jobs/start` 带启动前同步预检）；邮箱后台轮询与程序内自动更新链路已移除（收件统一手动拉取；更新为"仅检测提示 + Release 页面手动下载"）。核心 Python 测试（144 条）、API 契约、前端 typecheck/Vitest/生产构建和打包合规已通过；发布包启动冒烟 `scripts/smoke_launch.py` 本机通过。目标机验收要求收敛至 `docs/ACCEPTANCE_CHECKLIST.md`，真实浏览器/WebView2/DPI/域控环境仍需按清单在目标环境执行。
+v7.3.0 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、手动邮箱收件、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。任务启动/取消已收敛为 DevBase 契约（旧 `/jobs` 兼容端点已移除，`/jobs/start` 带启动前同步预检）；邮箱后台轮询与程序内自动更新链路已移除（收件统一手动拉取；更新为"仅检测提示 + Release 页面手动下载"）。核心 Python 测试（147 条）、API 契约、前端 typecheck/Vitest/生产构建和打包合规已通过；发布包启动冒烟 `scripts/smoke_launch.py` 本机通过。目标机验收要求收敛至 `docs/ACCEPTANCE_CHECKLIST.md`，真实浏览器/WebView2/DPI/域控环境仍需按清单在目标环境执行。
 
 以下事项不属于当前版本功能，后续若实施必须同步补充测试和验收记录：
 
@@ -407,9 +407,16 @@ v7.3.0 当前交付包含：FastAPI 本地服务、React 工作台、pywebview �
 - Playwright 自动化 E2E 套件（手工场景已由 ACCEPTANCE_CHECKLIST.md §6 覆盖）；
 - 跨磁盘安装目录的复制式替换。
 
-### 12.1 显式后续项：事件总线融合
+### 12.1 事件总线融合（一期已完成 2026-09-30）
 
-DevBase 事件游标（`sequence`）与发票事件总线（`event_id`）编号空间不同、progress 双写语义分歧（DevBase 0-100 int 快照 vs 发票 0-1 float 事件），且 DevBase 冲突 409 尚未走项目错误信封。融合两者为单一实现（同一次序、同一 WS 通道、业务事件以 DevBase 扩展事件类型承载）属于独立后续项，实施前须单独设计与测试。
+一期（编号空间/进度语义/错误信封，提交 530bf39）已完成并全绿（pytest 147、Vitest 8、tsc、源码模式冒烟）：
+
+- DevBase 侧 `InMemoryEventBus` 重写为订阅式 `EventBus`：`EventSubscription` 有界双通道（progress 只保留最新一条，关键事件溢出关流强制慢客户端重连），`history`/`snapshot` 以全局单调 `event_id` 游标重放，历史不合并保证编号连续；
+- `RuntimeEvent` 统一信封（`event_id: int` / `type` / `job_id` / `payload`），`EventKind.PROGRESS` 即前端 `job.progress`；
+- progress 全链路统一 0..1 float：`JobSnapshot.progress`、`RuntimeJobResponse.progress`、前端 `client.ts` 去掉 `/100` 现场换算；
+- DevBase 409/404 统一 `{"error": {code, message, details}}` 信封，`DevBaseRuntimeError` 携带稳定错误码。
+
+**二期边界（下一步实施项，breaking 级需设计先行）**：发票 `JobService` 与 DevBase `JobRuntime` 在同一 app 内仍是两个 `EventBus` 实例、两套编号——发票 WS 只订阅 service 总线，progress 每个 tick 双写（service 自发布 + runtime 回调各一次）。二期目标：总线单实例化、progress 单一发布者（runtime）、统一 WS 通道与节奏、`/jobs/current` 业务快照模型迁移评估，完成后复跑验收 §6 五场景。
 
 ## 14. 主要风险与控制
 
