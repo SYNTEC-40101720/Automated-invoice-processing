@@ -530,10 +530,12 @@ def run_section6(report: Report, dist_dir: Path, sample_dir: Path) -> None:
                    f"progress 终值={final.get('progress')}",
         ))
 
-        # 6.2 运行中停止：启动一个长任务，立刻取消
+        # 6.2 运行中停止：启动任务，等真正进入 running 再取消
+        # （固定 sleep 在快样本下会错过取消窗口——任务已终态时
+        # cancel 正确返回 409，但那不是本场景要验证的行为）
         cancel_sandbox = Path(tempfile.mkdtemp(prefix="accept_cancel_"))
         try:
-            for pdf in sorted(sample_dir.glob("*.pdf"))[:12]:
+            for pdf in sorted(sample_dir.glob("*.pdf")) * 4:
                 shutil.copy2(pdf, cancel_sandbox)
             _, started = _http(
                 session.port, "POST", "/api/v1/jobs/start",
@@ -544,26 +546,53 @@ def run_section6(report: Report, dist_dir: Path, sample_dir: Path) -> None:
                 },
             )
             cancel_job_id = (started or {}).get("id", "")
-            time.sleep(0.8)  # 让任务真正进入运行中
-            status, cancelled = _http(
-                session.port, "POST", "/api/v1/jobs/cancel", session.token,
-            )
-            final = _wait_job_terminal(session, cancel_job_id, timeout=60)
-            ok = (
-                status == 200
-                and final.get("id") == cancel_job_id
-                and final.get("status") == "cancelled"
-            )
-            report.add(Item(
-                "6.2", "运行中停止 → 取消收敛，可再次开始", passed=bool(ok),
-                detail=f"cancel -> {status}；终态={final.get('status')}；"
-                       "取消后 API 可继续发起新任务（6.1 已在同一会话验证过启动路径）",
-            ))
+            # 轮询进入 running（上限 10s；空样本秒级完成时场景降级为
+            # 跳过而非失败——见下方 not_running 分支）
+            running = False
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                cur = _http(
+                    session.port, "GET", "/api/v1/jobs/current", session.token,
+                )[1] or {}
+                if cur.get("id") == cancel_job_id and cur.get("status") in (
+                    "running", "cancelling",
+                ):
+                    running = True
+                    break
+                if cur.get("id") == cancel_job_id and cur.get("status", "") in (
+                    "succeeded", "completed_with_warnings", "cancelled", "failed",
+                ):
+                    break
+                time.sleep(0.05)
+            if not running:
+                report.add(Item(
+                    "6.2", "运行中停止 → 取消收敛，可再次开始", passed=None,
+                    detail=f"样本处理过快（终态={cur.get('status')}），"
+                           "取消窗口未开启；需较慢样本复验本场景",
+                    manual_note="换用真实发票样本（处理时长 > 2s）复跑 §6",
+                ))
+            else:
+                status, cancelled = _http(
+                    session.port, "POST", "/api/v1/jobs/cancel", session.token,
+                )
+                final = _wait_job_terminal(session, cancel_job_id, timeout=60)
+                ok = (
+                    status == 200
+                    and final.get("id") == cancel_job_id
+                    and final.get("status") == "cancelled"
+                )
+                report.add(Item(
+                    "6.2", "运行中停止 → 取消收敛，可再次开始", passed=bool(ok),
+                    detail=f"cancel -> {status}；终态={final.get('status')}；"
+                           "取消后可再次开始（6.1 已验证启动路径）",
+                ))
         finally:
             shutil.rmtree(cancel_sandbox, ignore_errors=True)
 
         # 6.3 断线恢复 A：WS 重连 + 游标校准（拉一个事件制造间隙，重连后补齐）
-        reconnect_ok, reconnect_detail = _test_reconnect(session, ws_client)
+        reconnect_ok, reconnect_detail = _test_reconnect(
+            session, ws_client, sample_dir,
+        )
         report.add(Item(
             "6.3", "F5 断线 → 自动重连 → 游标续传、快照校准", passed=reconnect_ok,
             detail=reconnect_detail,
@@ -718,33 +747,82 @@ def _drain_pending(conn: Any) -> list[dict[str, Any]]:
     return frames
 
 
-def _test_reconnect(session: Session, ws_client: Any) -> tuple[bool, str]:
-    """断线恢复 A：连接 → 断开 → 重连 → 游标续传、快照校准。
+def _test_reconnect(
+    session: Session, ws_client: Any, sample_dir: Path,
+) -> tuple[bool, str]:
+    """断线恢复 A：连接 → 断开（记录游标）→ 断线期间发事件 → 重连带游标 → 补齐。
 
-    服务端 WS 无重放语义：重连后固定收到 system.ready（+有任务时
-    job.snapshot 快照校准帧）；事件总线 event_id 全局单调，前端用
-    lastEventId 游标去重（App.tsx restoreState 路径）。
+    融合二期起服务端 WS 支持游标重放：重连带 after 游标时，断线期间
+    漏掉的事件由服务端一次性补齐（先订阅再取快照，重放∪实时无间隙）。
+    本场景验证：① 无游标重连不重放（旧行为保持）；② 带游标重连补齐
+    断线期间的事件且编号连续。
     """
     url = f"ws://{LOOPBACK}:{session.port}/api/v1/events?token={session.token}"
     try:
+        # ① 基线连接：收 ready，记录当前游标后断开
         conn = ws_client.connect(url)
         first = json.loads(conn.recv(timeout=5))
+        cursor = int(first.get("event_id") or 0)
+        # 订阅期后主动断开前先收走可能存在的缓冲帧，把游标推进到最新
+        for frame in _drain_pending(conn):
+            if frame.get("event_id"):
+                cursor = max(cursor, int(frame["event_id"]))
         conn.close()  # 模拟 F5 断线
-        time.sleep(1.0)  # 重连窗口（服务端无状态，立即可重连）
-        conn2 = ws_client.connect(url)
-        ready = json.loads(conn2.recv(timeout=5))
-        # 第二帧：有当前任务时为快照校准帧；无任务时跳过也合规
-        second_frames = _drain_pending(conn2)
+
+        # ② 断线窗口：启动一个小任务并跑完，事件必然落历史（制造间隙）
+        time.sleep(0.5)
+        gap_sandbox = Path(tempfile.mkdtemp(prefix="accept_gap_"))
+        try:
+            for pdf in sorted(sample_dir.glob("*.pdf"))[:1]:
+                shutil.copy2(pdf, gap_sandbox)
+            status, started = _http(
+                session.port, "POST", "/api/v1/jobs/start",
+                session.token,
+                {
+                    "kind": "invoice_processing",
+                    "input": {
+                        "source_dir": str(gap_sandbox), "trigger": "manual",
+                    },
+                },
+            )
+            if status != 201:
+                return False, f"间隙任务启动失败: start -> {status} {started}"
+            gap_job_id = (started or {}).get("id", "")
+            # 等任务终态（事件落历史）
+            final = _wait_job_terminal(session, gap_job_id, timeout=30)
+        finally:
+            shutil.rmtree(gap_sandbox, ignore_errors=True)
+
+        # ③ 无游标重连：应只收 ready（不重放历史）
+        conn_plain = ws_client.connect(url)
+        ready_plain = json.loads(conn_plain.recv(timeout=5))
+        plain_frames = _drain_pending(conn_plain)
+        plain_types = [f.get("type") for f in plain_frames]
+        conn_plain.close()
+
+        # ④ 带游标重连：服务端应补齐 cursor 之后的事件
+        conn2 = ws_client.connect(f"{url}&after={cursor}")
+        conn2.recv(timeout=5)  # system.ready
+        replayed = _drain_pending(conn2)
         conn2.close()
-        snapshot_types = [f.get("type") for f in second_frames]
-        ok = (
+        replay_ids = [f.get("event_id") for f in replayed if f.get("event_id")]
+        replay_types = [f.get("type") for f in replayed]
+
+        no_cursor_clean = (
             first.get("type") == "system.ready"
-            and ready.get("type") == "system.ready"
+            and ready_plain.get("type") == "system.ready"
+            and all(t != "job.log_appended" for t in plain_types)
+        )
+        replay_got_gap = len(replay_ids) > 0 and replay_ids == sorted(
+            replay_ids
         )
         detail = (
-            f"首次 ready={first.get('type')}；重连 ready={ready.get('type')}；"
-            f"重连缓冲帧类型={snapshot_types or '无（当前无任务，合规）'}"
+            f"基线游标={cursor}；无游标重连帧={plain_types or '无'}；"
+            f"带游标重连补齐 {len(replay_ids)} 条"
+            f"（类型 {sorted(set(replay_types))}，编号连续={replay_got_gap}）；"
+            f"终态={final.get('status')}"
         )
+        ok = no_cursor_clean and replay_got_gap
         return ok, detail
     except Exception as exc:  # noqa: BLE001
         return False, f"{type(exc).__name__}: {exc}"

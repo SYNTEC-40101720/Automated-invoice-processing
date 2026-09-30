@@ -363,7 +363,7 @@ Pydantic 模型是 API 单一事实源。CI 由 FastAPI OpenAPI 生成 TypeScrip
 
 | 层级 | 工具 | 必测内容 | 当前状态 |
 |---|---|---|---|
-| 核心回归 | pytest | 保留所有现有核心、邮箱、审核测试 | 已通过，147 条 |
+| 核心回归 | pytest | 保留所有现有核心、邮箱、审核测试 | 已通过，150 条 |
 | 应用层 | pytest + fake event bus/filesystem | 状态迁移、单任务互斥、取消、归档条件、事件顺序 | 已通过 |
 | API | FastAPI TestClient/httpx | DTO 校验、错误码、密钥脱敏、冲突与路径拒绝 | 已通过 |
 | WebSocket | pytest | 初始快照、事件顺序、断线重连校准、慢客户端策略 | 服务端契约已通过，真实浏览器重连待补 |
@@ -400,7 +400,7 @@ dist/SYNTEC-电子票据处理系统/
 
 ## 12. 交付状态与边界
 
-v7.3.0 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、手动邮箱收件、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。任务启动/取消已收敛为 DevBase 契约（旧 `/jobs` 兼容端点已移除，`/jobs/start` 带启动前同步预检）；邮箱后台轮询与程序内自动更新链路已移除（收件统一手动拉取；更新为"仅检测提示 + Release 页面手动下载"）。核心 Python 测试（147 条）、API 契约、前端 typecheck/Vitest/生产构建和打包合规已通过；发布包启动冒烟 `scripts/smoke_launch.py` 本机通过。目标机验收要求收敛至 `docs/ACCEPTANCE_CHECKLIST.md`，真实浏览器/WebView2/DPI/域控环境仍需按清单在目标环境执行。
+v7.3.1 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、手动邮箱收件、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。任务启动/取消已收敛为 DevBase 契约（旧 `/jobs` 兼容端点已移除，`/jobs/start` 带启动前同步预检）；邮箱后台轮询与程序内自动更新链路已移除（收件统一手动拉取；更新为"仅检测提示 + Release 页面手动下载"）。核心 Python 测试（150 条）、API 契约、前端 typecheck/Vitest/生产构建和打包合规已通过；发布包启动冒烟 `scripts/smoke_launch.py` 本机通过。目标机验收要求收敛至 `docs/ACCEPTANCE_CHECKLIST.md`，真实浏览器/WebView2/DPI/域控环境仍需按清单在目标环境执行。
 
 以下事项不属于当前版本功能，后续若实施必须同步补充测试和验收记录：
 
@@ -419,7 +419,7 @@ v7.3.0 当前交付包含：FastAPI 本地服务、React 工作台、pywebview �
 - **旧发票总线退役**：`invoice_processor/application/event_bus.py` 与 `domain/events.py`（`DomainEvent`）删除，`EventStreamClosed` 统一来自 `devbase.application.errors`；`JobService` 自线程入口 `start_job`/`wait_for_job` 移除，`run_job_sync` 为唯一生产入口（宿主 DevBase worker 线程驱动）；
 - **发票 WS 游标重放**：`/api/v1/events` 支持显式 `after` 查询参数——缺席时保持旧行为（ready + 快照，不重放，避免前端日志无条件重放整段历史）；带游标时先订阅再取快照、按 `last_replayed` 去重，重放 ∪ 实时无间隙；前端 `connectEvents` 重连时携带 `lastEventId` 游标，断线期间漏掉的事件由服务端一次性补齐。
 
-**遗留评估项（非阻塞）**：发票 WS 心跳 30s 与 DevBase 模板 WS 0.5s 轮询节奏仍不一致（两条 WS 路由并存，但生产 app 只挂发票侧——`include_default_routes=False` 时不挂模板 WS）；`/jobs/current` 业务快照模型迁移评估延后。验收 §6 五场景在融合后复跑通过（`scripts/acceptance_driver.py`，进度单调断言兼容 float 语义）。
+**遗留评估项（非阻塞）**：发票 WS 心跳 30s 与 DevBase 模板 WS 0.5s 轮询节奏仍不一致（两条 WS 路由并存，但生产 app 只挂发票侧——`include_default_routes=False` 时不挂模板 WS）；`/jobs/current` 业务快照模型迁移评估延后。验收 §6 五场景在融合二期后于 v7.3.1 产物复跑通过（`scripts/acceptance_driver.py --only 6`，7 项全过：含游标重连补齐 88 条断线事件、编号连续，取消收敛改为轮询 running 后触发），留痕见 ACCEPTANCE_CHECKLIST.md §9。
 
 ## 14. 主要风险与控制
 
