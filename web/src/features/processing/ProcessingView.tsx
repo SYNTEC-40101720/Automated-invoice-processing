@@ -1,5 +1,8 @@
-import { CheckCircle2, FolderOpen, LoaderCircle, Play, Square, TriangleAlert } from 'lucide-react'
-import type { Job } from '../../api/types'
+import { useEffect, useRef } from 'react'
+import { CheckCircle2, FolderOpen, History, LoaderCircle, Play, Square, TriangleAlert } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { api } from '../../api/client'
+import type { Job, JobHistoryEntry, JobStatus } from '../../api/types'
 
 interface ProcessingViewProps {
   job: Job | null
@@ -12,6 +15,16 @@ interface ProcessingViewProps {
 const phaseLabels: Record<string, string> = {
   scan: '扫描目录', process: '处理 PDF', post_process: '后处理',
   local_audit: '本地审核', ai_audit: 'AI 审核', archive: '归档', done: '已完成',
+}
+
+const historyStatusLabels: Record<JobStatus, string> = {
+  queued: '排队中',
+  running: '处理中',
+  cancelling: '停止中',
+  succeeded: '成功',
+  completed_with_warnings: '有警告',
+  cancelled: '已取消',
+  failed: '失败',
 }
 
 export function ProcessingView({ job, onChooseDirectory, onStart, onCancel, onOpenOutput }: ProcessingViewProps) {
@@ -32,6 +45,7 @@ export function ProcessingView({ job, onChooseDirectory, onStart, onCancel, onOp
             ? '已取消'
             : '已就绪'
   const statusTone = active ? 'working' : finished ? 'success' : job?.status === 'failed' ? 'error' : ''
+  useInvalidateHistoryOnTerminal(job)
   return (
     <div className="editor-view processing-view">
       <div className="view-scroll">
@@ -95,9 +109,102 @@ export function ProcessingView({ job, onChooseDirectory, onStart, onCancel, onOp
             <button className="secondary-button" onClick={() => job.output_dir && onOpenOutput(job.output_dir)} disabled={!job.output_dir}>打开输出目录</button>
           </section>
         )}
+
+        <RecentHistory currentJobId={job?.id ?? null} onOpenOutput={onOpenOutput} />
       </div>
     </div>
   )
+}
+
+function useInvalidateHistoryOnTerminal(job: Job | null) {
+  const queryClient = useQueryClient()
+  const status = job?.status ?? null
+  const prevStatus = useRef<JobStatus | null>(null)
+  useEffect(() => {
+    const wasActive = prevStatus.current === 'running'
+      || prevStatus.current === 'queued'
+      || prevStatus.current === 'cancelling'
+    prevStatus.current = status
+    const terminal = status === 'succeeded' || status === 'completed_with_warnings'
+      || status === 'failed' || status === 'cancelled'
+    if (terminal && wasActive) {
+      void queryClient.invalidateQueries({ queryKey: ['job-history'] })
+    }
+  }, [queryClient, status])
+}
+
+function RecentHistory({ currentJobId, onOpenOutput }: {
+  currentJobId: string | null
+  onOpenOutput: (path: string) => void
+}) {
+  const historyQuery = useQuery({
+    queryKey: ['job-history'],
+    queryFn: () => api.jobHistory(10),
+    retry: false,
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  })
+  const items = (historyQuery.data?.items ?? []).filter(
+    (entry) => entry.job_id !== currentJobId,
+  )
+  return (
+    <section className="feature-section history-section" aria-label="最近处理历史">
+      <div className="audit-summary-heading">
+        <div><span className="field-label">最近处理历史</span><strong>跨启动记录</strong></div>
+        <span className="feature-section-meta">最近 {items.length} 条</span>
+      </div>
+      {items.length === 0 ? (
+        <div className="history-empty"><History size={18} /><span>暂无处理历史，完成任务后会在这里显示</span></div>
+      ) : (
+        <div className="history-list">
+          {items.map((entry) => <HistoryRow key={entry.job_id} entry={entry} onOpenOutput={onOpenOutput} />)}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function HistoryRow({ entry, onOpenOutput }: {
+  entry: JobHistoryEntry
+  onOpenOutput: (path: string) => void
+}) {
+  const tone = entry.status === 'succeeded' ? 'ok'
+    : entry.status === 'failed' ? 'bad'
+    : entry.status === 'cancelled' ? 'muted'
+    : 'warn'
+  const stats = entry.stats
+  return (
+    <article className="history-row">
+      <div className="history-row-main">
+        <span className={`history-status-dot tone-${tone}`} title={entry.error_message ?? undefined} />
+        <div className="history-row-copy">
+          <strong title={entry.source_dir}>{entry.source_dir}</strong>
+          <span className="history-row-meta">
+            {historyStatusLabels[entry.status]} · 成功 {stats.success ?? 0}/{stats.total ?? 0}
+            {stats.failure ? ` · 失败 ${stats.failure}` : ''}
+            {entry.finished_at ? ` · ${formatTime(entry.finished_at)}` : ''}
+          </span>
+          {entry.status === 'failed' && entry.error_message && (
+            <span className="history-row-error" title={entry.error_message}>{entry.error_message}</span>
+          )}
+        </div>
+      </div>
+      <div className="history-row-actions">
+        {entry.output_dir && (
+          <button className="secondary-button" onClick={() => onOpenOutput(entry.output_dir as string)} title={entry.output_dir}>
+            <FolderOpen size={15} /> 打开输出
+          </button>
+        )}
+      </div>
+    </article>
+  )
+}
+
+function formatTime(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
 function Metric({ label, value, tone }: { label: string; value: number; tone: string }) {

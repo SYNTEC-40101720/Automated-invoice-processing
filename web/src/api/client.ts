@@ -5,6 +5,7 @@ import type {
   EmailSettings,
   HealthResponse,
   Job,
+  JobHistoryResponse,
   LogEntry,
   SettingsResponse,
   UpdateResponse,
@@ -77,6 +78,9 @@ export const api = {
   cancelRuntimeJob: () => request<RuntimeJobResponse>('/jobs/cancel', {
     method: 'POST',
   }),
+  jobHistory: (limit = 10) => request<JobHistoryResponse>(
+    `/jobs/history?limit=${limit}`,
+  ),
   logs: (jobId: string, afterEventId = 0) => request<{
     items: LogEntry[]
     next_event_id: number | null

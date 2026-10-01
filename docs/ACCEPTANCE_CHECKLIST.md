@@ -12,7 +12,7 @@
 | # | 项目 | 命令 / 判定 | 结果 |
 |---|---|---|---|
 | 1.1 | 五版本源一致 | `python scripts/build_syntec.py`（内含版本一致性校验） | ☐ |
-| 1.2 | Python 测试 | `python -m pytest tests/ -q` 全绿（当前基线 150 条，以实测为准） | ☐ |
+| 1.2 | Python 测试 | `python -m pytest tests/ -q` 全绿（当前基线 165 条，以实测为准） | ☐ |
 | 1.3 | Python 静态检查 | `python -m ruff check backend tests scripts` 零告警 | ☐ |
 | 1.4 | 前端类型检查 | `npm --prefix web run typecheck` 零错误 | ☐ |
 | 1.5 | 前端单测 | `npm --prefix web run test` 全绿（当前基线 8 条） | ☐ |

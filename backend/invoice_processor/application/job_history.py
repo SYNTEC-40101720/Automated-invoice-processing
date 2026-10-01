@@ -15,9 +15,11 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# 历史落盘挑选的字段（从 job.to_dict() 挑拣，不存 result 全量）
+# 历史落盘挑选的字段（从 job.to_dict() 挑拣，不存 result 全量）。
+# to_dict 的任务号键是 ``id``，历史条目对外统一为 ``job_id``
+# （与 API JobHistoryEntry.job_id 对齐），在 _entry_from_snapshot 映射。
 _SNAPSHOT_FIELDS = (
-    'job_id',
+    'id',
     'source_dir',
     'output_dir',
     'trigger',
@@ -48,7 +50,9 @@ def default_history_path() -> Path:
 
 
 def _entry_from_snapshot(snapshot: dict) -> dict:
-    return {key: snapshot.get(key) for key in _SNAPSHOT_FIELDS}
+    entry = {key: snapshot.get(key) for key in _SNAPSHOT_FIELDS if key != 'id'}
+    entry['job_id'] = snapshot.get('id') or snapshot.get('job_id')
+    return entry
 
 
 class JobHistoryStore:

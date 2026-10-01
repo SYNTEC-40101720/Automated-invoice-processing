@@ -36,7 +36,11 @@ def acquire_single_instance_lock() -> int | None:
     try:
         import ctypes
 
-        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        # use_last_error=True：ctypes.get_last_error() 只有在该标志下才
+        # 可靠——windll（use_last_error=False）下恒为 0，ALREADY_EXISTS
+        # 永远检测不到，双开检测会整体失效（实测 GetLastError=183 但
+        # ctypes.get_last_error()=0）。
+        kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
         handle = kernel32.CreateMutexW(None, False, _MUTEX_NAME)
         if not handle:
             logger.warning('单实例互斥体创建失败，本次放行启动')

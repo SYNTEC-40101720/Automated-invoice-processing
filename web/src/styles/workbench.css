@@ -1408,6 +1408,106 @@ body {
   font: 10px "Cascadia Code", monospace;
 }
 
+.history-section {
+  margin-top: 18px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.history-section .audit-summary-heading {
+  border-bottom: 1px solid var(--line);
+}
+
+.history-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 88px;
+  color: var(--text-subtle);
+  font-size: 12px;
+}
+
+.history-list {
+  display: grid;
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.history-row:last-child {
+  border-bottom: 0;
+}
+
+.history-row-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+}
+
+.history-status-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.history-status-dot.tone-ok {
+  background: var(--green);
+}
+
+.history-status-dot.tone-bad {
+  background: var(--rose);
+}
+
+.history-status-dot.tone-warn {
+  background: var(--amber);
+}
+
+.history-status-dot.tone-muted {
+  background: var(--faint);
+}
+
+.history-row-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.history-row-copy strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-row-meta {
+  color: var(--text-subtle);
+  font-size: 11px;
+}
+
+.history-row-error {
+  overflow: hidden;
+  color: var(--rose);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-row-actions {
+  flex: none;
+}
+
 .audit-summary-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1451,6 +1551,14 @@ body {
   .inbox-header,
   .audit-header {
     align-items: flex-start;
+  }
+
+  .history-row {
+    flex-wrap: wrap;
+  }
+
+  .history-row-actions {
+    margin-left: 18px;
   }
 
   .inbox-automation-block {

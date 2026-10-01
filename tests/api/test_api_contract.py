@@ -546,3 +546,55 @@ def test_settings_patch_writes_all_sections_once(monkeypatch, tmp_path):
         'email': {'imap_host': 'imap.example.com'},
         'ai': {'enabled': False},
     }
+
+
+def test_job_history_endpoint_returns_disk_entries_newest_first(tmp_path):
+    # /jobs/history 契约：跨启动磁盘历史 → 新→旧；limit 钳制 1..50。
+    # store 语义（落盘/去重/裁剪）在 tests/application/test_job_history.py。
+    from invoice_processor.application.job_history import JobHistoryStore
+    from invoice_processor.application.job_service import JobService
+
+    store = JobHistoryStore(tmp_path / 'job_history.jsonl')
+    for index in range(3):
+        store.append({
+            'id': f'job-{index}',
+            'source_dir': str(tmp_path),
+            'output_dir': str(tmp_path / f'out-{index}'),
+            'trigger': 'manual',
+            'status': 'succeeded',
+            'stats': {'total': 1, 'success': 1, 'failure': 0, 'tax_issues': 0},
+        })
+    service = JobService(event_bus=EventBus(), job_history_store=store)
+    app = create_app(service, local_token='test-token')
+    client = TestClient(app)
+
+    response = client.get(
+        '/api/v1/jobs/history',
+        headers={'X-Local-Token': 'test-token'},
+    )
+    assert response.status_code == 200
+    items = response.json()['items']
+    assert [item['job_id'] for item in items] == ['job-2', 'job-1', 'job-0']
+    assert items[0]['output_dir'] == str(tmp_path / 'out-2')
+
+    limited = client.get(
+        '/api/v1/jobs/history?limit=2',
+        headers={'X-Local-Token': 'test-token'},
+    )
+    assert [item['job_id'] for item in limited.json()['items']] == ['job-2', 'job-1']
+
+    clamped = client.get(
+        '/api/v1/jobs/history?limit=999',
+        headers={'X-Local-Token': 'test-token'},
+    )
+    assert len(clamped.json()['items']) == 3
+
+
+def test_job_history_endpoint_empty_when_store_disabled(tmp_path):
+    client = TestClient(make_app(tmp_path))
+    response = client.get(
+        '/api/v1/jobs/history',
+        headers={'X-Local-Token': 'test-token'},
+    )
+    assert response.status_code == 200
+    assert response.json() == {'items': []}

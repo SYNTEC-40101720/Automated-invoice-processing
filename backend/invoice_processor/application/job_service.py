@@ -180,6 +180,12 @@ class JobService:
                 raise JobNotFound(job_id)
             return handle.job.to_dict()
 
+    def job_history_entries(self) -> list[dict]:
+        """跨启动终态历史（旧→新）；历史功能停用（store 为 None）时为空。"""
+        if self._job_history_store is None:
+            return []
+        return self._job_history_store.list()
+
     def is_known_output_directory(self, path: str) -> bool:
         normalized = os.path.realpath(os.path.abspath(os.path.expanduser(path)))
         with self._lock:

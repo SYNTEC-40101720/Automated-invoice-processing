@@ -228,6 +228,7 @@ API 前缀固定为 `/api/v1`。错误统一返回：
 |---|---|---|
 | `GET /system/health` | 启动就绪探测 | 版本、DevBase 基础版本、运行模式 |
 | `GET /jobs/current` | 当前任务快照 | Job DTO 或 `null` |
+| `GET /jobs/history` | 跨启动处理历史（新→旧，`limit` 1..50，缺省 20） | 终态历史条目列表 |
 | `POST /jobs/scan` | 选择目录后预扫描顶层 PDF | 规范化目录与 PDF 数量 |
 | `POST /jobs/start` | 按 `kind` 启动 DevBase 任务，发票工具为 `invoice_processing` | `201` + 运行时快照 |
 | `POST /jobs/cancel` | 取消当前 DevBase 任务 | 运行时快照 |
@@ -420,6 +421,8 @@ v7.3.1 当前交付包含：FastAPI 本地服务、React 工作台、pywebview �
 - **发票 WS 游标重放**：`/api/v1/events` 支持显式 `after` 查询参数——缺席时保持旧行为（ready + 快照，不重放，避免前端日志无条件重放整段历史）；带游标时先订阅再取快照、按 `last_replayed` 去重，重放 ∪ 实时无间隙；前端 `connectEvents` 重连时携带 `lastEventId` 游标，断线期间漏掉的事件由服务端一次性补齐。
 
 **遗留评估项（非阻塞）**：发票 WS 心跳 30s 与 DevBase 模板 WS 0.5s 轮询节奏仍不一致（两条 WS 路由并存，但生产 app 只挂发票侧——`include_default_routes=False` 时不挂模板 WS）；`/jobs/current` 业务快照模型迁移评估延后。验收 §6 五场景在融合二期后于 v7.3.1 产物复跑通过（`scripts/acceptance_driver.py --only 6`，7 项全过：含游标重连补齐 88 条断线事件、编号连续，取消收敛改为轮询 running 后触发），留痕见 ACCEPTANCE_CHECKLIST.md §9。
+
+**任务历史与单实例（801fe51 + 后续修复）**：任务终态旁路落盘 `logs/job_history.jsonl`（JSON Lines，上限 50 条，读旧+追加+原子替换；IO 失败降级不阻断任务流），`GET /jobs/history` 跨启动查询（新→旧）；历史中的输出目录计入 `is_known_directory` 放行面（重启后「打开输出目录」仍可按历史回溯）。桌面壳经 Windows 命名互斥体实现单实例（`ctypes.WinDLL(use_last_error=True)` 绑定——`ctypes.windll` 下 `get_last_error()` 恒 0，双开检测会整体失效；验收脚本经 `PLATFORM_ALLOW_SECOND_INSTANCE=1` 旁路）。
 
 ## 14. 主要风险与控制
 

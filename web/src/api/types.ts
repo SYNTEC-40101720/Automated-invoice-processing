@@ -158,3 +158,20 @@ export interface RuntimeJobResponse {
   created_at: string
   updated_at: string
 }
+
+export interface JobHistoryEntry {
+  job_id: string
+  source_dir: string
+  output_dir: string | null
+  trigger: JobTrigger
+  status: JobStatus
+  stats: JobStats
+  started_at: string | null
+  finished_at: string | null
+  error_code: string | null
+  error_message: string | null
+}
+
+export interface JobHistoryResponse {
+  items: JobHistoryEntry[]
+}
