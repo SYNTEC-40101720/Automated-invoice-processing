@@ -157,3 +157,25 @@ SHA-256：
 未覆盖的环境：
 已知限制：
 ```
+
+## 9. 发布记录
+
+### v7.3.1（2026-10-02 发布）
+
+```text
+应用：SYNTEC-电子票据处理系统
+仓库：SYNTEC-40101720/Automated-invoice-processing
+当前版本：7.3.0
+目标版本：7.3.1
+Release URL：https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.3.1
+资产名：SYNTEC-Invoice-Processor-v7.3.1.zip
+资产大小：61.69 MB（64,686,019 字节）
+SHA-256：3bf2315ed2772b21c709973001faaf0e3150765b91cee1d0fba7fb84fc4ef300（GitHub digest 一致）
+主程序版本资源：CompanyName=SYNTEC，FileVersion/ProductVersion=7.3.1.0
+旧版检测结果：v7.2.1 视角 available=true latest=7.3.1（§7.1a）
+当前版检测结果：v7.3.1 available=false 不误报（§7.1b）
+未覆盖的环境：WebView2/DPI 差异仍需目标环境验收（v7.3.0 已通过，本轮无渲染层变更）
+已知限制：GUI「检查更新」横幅行为为人工观察项（§9 留痕表）
+```
+
+内容：事件总线融合二期 + 任务历史记录（含落地缺陷修复）+ DevBase 模板残留清理；测试基线 150→165。

@@ -7,8 +7,8 @@
 其余项目全部自动判定并输出逐项结果表。
 
 前置：
-    - dist/SYNTEC-电子票据处理系统/ 为 v7.3.0 打包产物（含 _internal/）
-    - dist/SYNTEC-Invoice-Processor-v7.3.0.zip 为对应 Release 资产
+    - dist/SYNTEC-电子票据处理系统/ 为 v7.3.1 打包产物（含 _internal/）
+    - dist/SYNTEC-Invoice-Processor-v7.3.1.zip 为对应 Release 资产
     - §7 需要网络下载 v7.2.1 Release ZIP（约 61MB）
 
 用法：
@@ -895,7 +895,7 @@ def _test_multi_client(
 
 def run_section7(report: Report, dist_dir: Path) -> None:
     print("\n" + "=" * 56)
-    print("§7 升级验收（软件行为）+ 部署指引演练（v7.2.1 → v7.3.0）")
+    print("§7 升级验收（软件行为）+ 部署指引演练（v7.2.1 → v7.3.1）")
     print("=" * 56)
 
     workdir = Path(tempfile.mkdtemp(prefix="accept_upgrade_"))
@@ -950,7 +950,7 @@ def run_section7(report: Report, dist_dir: Path) -> None:
                    "版本号 7.2.1 由 Release 资产 + update 检测结果佐证",
         ))
 
-        # 7.1 更新检测（升级前）：旧版应发现 v7.3.0。
+        # 7.1 更新检测（升级前）：旧版应发现 v7.3.1。
         # v7.2.1 的 update API 需要随机令牌，外部不可达（windowed stdout
         # 被丢弃）——等价证据 = v7.2.1 同版代码的 check_for_update('7.2.1')
         # 对真实 GitHub Releases API 的结果；GUI 横幅为人工观察项。
@@ -962,17 +962,17 @@ def run_section7(report: Report, dist_dir: Path) -> None:
             result = check_for_update("7.2.1")
             update_ok = (
                 result.available is True
-                and result.latest_version == "7.3.0"
+                and result.latest_version == "7.3.1"
                 and result.checked is True
             )
             report.add(Item(
-                "7.1a", "旧版检测到新版 v7.3.0 并提示前往 Release 页",
+                "7.1a", "旧版检测到新版 v7.3.1 并提示前往 Release 页",
                 passed=update_ok,
                 detail=f"v7.2.1 视角 check_for_update -> available={result.available} "
                        f"latest={result.latest_version} url={result.release_url}",
             ))
         except Exception as exc:  # noqa: BLE001
-            report.add(Item("7.1a", "旧版检测到新版 v7.3.0", False, str(exc)))
+            report.add(Item("7.1a", "旧版检测到新版 v7.3.1", False, str(exc)))
 
         # 模拟使用过的旧安装：写入标记进 config.ini + logs/
         # v7.2.1 首次启动即写 config.ini（config_manager 确保默认值落盘）；
@@ -994,11 +994,11 @@ def run_section7(report: Report, dist_dir: Path) -> None:
         log_marker = logs_dir / "old_install.log"
         log_marker.write_text("旧安装日志留痕\n", encoding="utf-8")
 
-        # 部署指引演练（非清单测试项）：v7.3.0 ZIP 覆盖替换，
+        # 部署指引演练（非清单测试项）：v7.3.1 ZIP 覆盖替换，
         # 保留 config.ini、logs/、发票收件箱/（清单 §7 部署操作指引验证）。
         inbox_dir = install_dir / "发票收件箱"
         inbox_dir.mkdir(exist_ok=True)
-        new_zip = ROOT / "dist" / "SYNTEC-Invoice-Processor-v7.3.0.zip"
+        new_zip = ROOT / "dist" / "SYNTEC-Invoice-Processor-v7.3.1.zip"
         assert new_zip.is_file(), f"缺少 {new_zip}"
         backup = workdir / "backup_preserved"
         backup.mkdir()
@@ -1026,8 +1026,8 @@ def run_section7(report: Report, dist_dir: Path) -> None:
                    f"收件箱保留={(install_dir / '发票收件箱').is_dir()}（部署操作）",
         ))
 
-        # 7.2 版本核对：升级后 health = 7.3.0 + 当前版不误报
-        session = _launch_app(install_dir, expect_version="7.3.0")
+        # 7.2 版本核对：升级后 health = 7.3.1 + 当前版不误报
+        session = _launch_app(install_dir, expect_version="7.3.1")
         try:
             status, settings = _http(
                 session.port, "GET", "/api/v1/settings", session.token,
@@ -1038,8 +1038,8 @@ def run_section7(report: Report, dist_dir: Path) -> None:
             tax_state = "存在" if business.get("target_tax_id") else "丢失"
             report.add(Item(
                 "7.2a", "升级后 health 返回新版本号",
-                passed=True,  # _launch_app 已断言 health 7.3.0，否则抛异常
-                detail="health=7.3.0（启动预检断言）；配置随部署保留："
+                passed=True,  # _launch_app 已断言 health 7.3.1，否则抛异常
+                detail="health=7.3.1（启动预检断言）；配置随部署保留："
                        f"config.ini 标记保留={config_preserved}；"
                        f"target_tax_id={tax_state}；"
                        f"max_workers={business.get('max_workers')}",
@@ -1048,7 +1048,7 @@ def run_section7(report: Report, dist_dir: Path) -> None:
             _, upd2 = _http(session.port, "GET", "/api/v1/system/update", session.token)
             no_false = (upd2 or {}).get("available") is False
             report.add(Item(
-                "7.1b", "当前版（7.3.0）检查更新不误报", passed=no_false,
+                "7.1b", "当前版（7.3.1）检查更新不误报", passed=no_false,
                 detail=f"update={upd2}",
             ))
         finally:
@@ -1088,7 +1088,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--dist-dir", type=Path, default=ROOT / "dist" / APP_NAME,
-        help="v7.3.0 打包产物目录",
+        help="v7.3.1 打包产物目录",
     )
     args = parser.parse_args()
 
