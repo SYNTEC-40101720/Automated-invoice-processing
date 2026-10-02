@@ -260,7 +260,7 @@ API 前缀固定为 `/api/v1`。错误统一返回：
 
 - 地址：`/api/v1/events`；
 - 建立后服务端先发送 `system.ready` 和当前 `job.snapshot`；
-- 服务端空转等待与模板 WS 同节奏（0.5s 周期）：断链由并发监听任务置位，主循环最迟一个空转周期内退出并回收订阅；空闲连接每 30s 收到一帧 `system.heartbeat`（`event_id=0`，不进入游标语义）；
+- 发票 WS 使用 0.5s 订阅等待和独立并发断连监听；行为与 DevBase 通用 `events` 路由对齐，但不复用其监听函数。断链后主循环最迟一个等待周期内退出并回收订阅；空闲连接每 30s 收到一帧 `system.heartbeat`（`event_id=0`，不进入游标语义）；
 - 前端采用 1.5 秒起步、10 秒封顶的指数退避重连，并保留事件游标；
 - 重连可带 `after` 游标查询参数：服务端先订阅再取快照、重放游标之后的漏发事件并按事件号去重（先订阅再快照保证重放 ∪ 实时无间隙）；游标缺席保持旧行为（只发 ready + 快照，不重放）；
 - WebSocket 只传服务端事件，不承载开始、停止、保存设置等命令；
@@ -401,12 +401,11 @@ dist/SYNTEC-电子票据处理系统/
 生产模式不开放 Swagger UI，不输出 Uvicorn access log。开发模式可以独立运行 Vite 和 FastAPI，并通过显式环境变量启用文档与调试日志。
 
 ## 12. 交付状态与边界
-
-v7.3.1 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、手动邮箱收件、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。任务启动/取消已收敛为 DevBase 契约（旧 `/jobs` 兼容端点已移除，`/jobs/start` 带启动前同步预检）；邮箱后台轮询与程序内自动更新链路已移除（收件统一手动拉取；更新为"仅检测提示 + Release 页面手动下载"）。核心 Python 测试（168 条）、API 契约、前端 typecheck/Vitest/生产构建和打包合规已通过；发布包启动冒烟 `scripts/smoke_launch.py` 本机通过。目标机验收要求收敛至 `docs/ACCEPTANCE_CHECKLIST.md`，真实浏览器/WebView2/DPI/域控环境仍需按清单在目标环境执行。
+v7.3.3 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、手动邮箱收件、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。任务启动/取消已收敛为 DevBase 契约（旧 `/jobs` 兼容端点已移除，`/jobs/start` 带启动前同步预检）；邮箱后台轮询与程序内自动更新链路已移除（收件统一手动拉取；更新为"仅检测提示 + Release 页面手动下载"）。核心 Python 测试（168 条）、API 契约、前端 typecheck/Vitest/生产构建和打包合规已通过；发布包启动冒烟 `scripts/smoke_launch.py` 本机通过。目标机验收要求收敛至 `docs/ACCEPTANCE_CHECKLIST.md`，真实浏览器/WebView2/DPI/域控环境仍需按清单在目标环境执行。
 
 以下事项不属于当前版本功能，后续若实施必须同步补充测试和验收记录：
 
-- 单实例锁和目录监听；
+- 目录监听；
 - Playwright 自动化 E2E 套件（手工场景已由 ACCEPTANCE_CHECKLIST.md §6 覆盖）；
 - 跨磁盘安装目录的复制式替换。
 
@@ -423,7 +422,7 @@ v7.3.1 当前交付包含：FastAPI 本地服务、React 工作台、pywebview �
 
 **遗留评估项处理结果（2026-10-02 完成）**：
 
-- 发票 WS 心跳与轮询节奏统一：发票 WS 空转等待改为与模板 WS 相同的 0.5s 周期，并复用模板 WS 的断链监听任务（`_watch_disconnect`）——断链后最迟一个空转周期内退出并回收订阅（旧实现空闲时断链要等 30s 心跳超时才发现）。`system.heartbeat` 帧保留 30s 间隔但与空转周期解耦（`HEARTBEAT_SECONDS`），空闲连接仍每 30s 收到存活帧。
+- 发票 WS 使用 0.5s 订阅等待和自己的并发断连监听；行为与 DevBase 通用 `events` 路由对齐，但不复用其监听函数。断链后最迟一个等待周期内退出并回收订阅（旧实现空闲时断链要等 30s 心跳超时才发现）。`system.heartbeat` 帧保留 30s 间隔但与等待周期解耦（`HEARTBEAT_SECONDS`），空闲连接仍每 30s 收到存活帧。
 - `/jobs/current` 业务快照模型迁移：响应挂 `JobSnapshotResponse`（字段集与 `Job.to_dict()` 一致，`extra='forbid'`），契约在 OpenAPI 中显式可见，前端类型生成恢复单一事实源；无任务时仍为 `null`。
 
 验收 §6 五场景在融合二期后于 v7.3.1 产物复跑通过（`scripts/acceptance_driver.py --only 6`，7 项全过：含游标重连补齐 88 条断线事件、编号连续，取消收敛改为轮询 running 后触发），留痕见 ACCEPTANCE_CHECKLIST.md §9。
@@ -444,8 +443,7 @@ v7.3.1 当前交付包含：FastAPI 本地服务、React 工作台、pywebview �
 | 包体与启动时间增长 | 域控部署困难 | 使用系统 WebView2，不引入 Electron，不加载 CDN |
 
 ## 14. 当前交付定义
-
-当前源码可作为 v7.3.2 的维护和发布基线，理由如下：
+当前源码可作为 v7.3.3 的维护和发布基线，理由如下：
 
 - 旧 UI 不再是交付路径，业务编排集中在应用层；
 - Python 核心、应用层、API、桌面壳和前端边界符合本文件约定；

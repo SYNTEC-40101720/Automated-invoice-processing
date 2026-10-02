@@ -3,11 +3,12 @@
 > **目标**：将发票项目中通用的、已验证的能力提升到 [Zy-DevBase](https://github.com/SYNTEC-40101720/Zy-DevBase) 基础仓库，使其成为后续所有 SYNTEC 桌面工具的基础轮子。
 >
 > **日期**：2026-09-05
-> **状态**：已确认 13 项决策，待分批实施
+> **状态**：历史方案快照（2026-10-02 归档，非当前执行计划）
+> 原决策和清单保留作历史；未勾选项不是当前待办。
 
-## 当前执行进度
+## 历史进度快照（截至 2026-10-02）
 
-当前分支：`refactor/devbase-migration`
+归档时所在分支：`refactor/devbase-migration`
 
 已完成：
 
@@ -22,19 +23,21 @@
 - 前端工作台已同步 DevBase 壳体验：可调宽/折叠侧栏、工具描述导航、system/light/dark 主题
 - 浏览器模式同源 WebSocket Origin 已修复，预览服务健康检查和事件流可用
 - 工作台取消动作已接入 DevBase `/jobs/cancel`，旧发票兼容取消端点已移除
-- Sidebar 已按 GitHub DevBase 模板重排为工作台、注册工具、业务扩展和底部设置，折叠 rail 固定为 56px
+- Sidebar 参考 GitHub DevBase 框架布局重组为工作台、注册工具、业务扩展和底部设置，折叠 rail 固定为 56px
 - 事件模型完成边界评估：DevBase 运行时负责任务生命周期，发票 EventBus 保留日志、统计和业务阶段事件，避免把业务字段硬塞进通用事件值对象
 - 根入口支持桌面/浏览器调试模式
 - NativeBridge 复用 DevBase 通用目录能力，保留发票专属方法
 - `/api/v1/tools` 和前端 Sidebar 已接入工具清单
 - 旧 `/jobs` 业务兼容 API（`POST /jobs`、`GET /jobs/{id}`、`POST /jobs/{id}/cancel`、`GET /jobs/runtime/current`）已移除，启动/取消统一走 DevBase 契约；`/jobs/start` 对发票工具增加启动前同步预检，目录/触发来源错误同步返回 422 稳定错误码
 - 事件总线融合一期已完成（2026-09-30，提交 530bf39）：DevBase 侧重写为订阅式 `EventBus`（`event_id` 游标 + 有界双通道订阅）、`RuntimeEvent` 统一信封、progress 全链路 0..1 float、409/404 统一错误信封；新增 `tests/api/test_devbase_ws_contract.py` 三场景回归
-- 当前 Python 测试：`147 passed`（含融合一期新增 3 条；后续以实测为准）
+- 历史 Python 测试记录：`147 passed`（含融合一期新增 3 条；不代表当前测试基线）
 
-尚未完成（二期边界，见 ARCHITECTURE.md §12.1）：
+二期结项摘要（截至 2026-10-02，详见 ARCHITECTURE.md §12.1）：
 
-- 发票 `JobService` 与 DevBase `JobRuntime` 仍各持一个 `EventBus` 实例、两套编号；发票 WS 只订阅 service 总线，progress 每 tick 双写。二期目标：总线单实例化、progress 单一发布者、统一 WS 通道与节奏
-- 前端业务视图仍使用原有发票任务响应模型（`/jobs/current` 快照由发票侧保留为业务契约，迁移与否随二期一并评估）
+- `EventBus` 已单实例化，发票业务事件与 DevBase 生命周期事件共享统一的 `event_id` 编号空间。
+- runtime 回调路径已实现 progress 单一发布：由 runtime 统一发布，避免双写。
+- 发票 WebSocket 已实现 `after` 游标重放及前端重连游标续传。
+- 发票 `/jobs/current` 仍为业务契约，现已挂 `JobSnapshotResponse` 并纳入 OpenAPI；这是已显式建模的现行契约，不是待迁移事项。
 
 ---
 
@@ -335,7 +338,9 @@
 
 ---
 
-## 实施优先级建议
+## 原实施优先级建议（历史计划，非当前待办）
+
+以下优先级仅保留当时的方案记录，不构成当前执行安排。
 
 | 批次 | 项 | 理由 |
 |---|---|---|
@@ -347,7 +352,9 @@
 
 ---
 
-## 后续：发票项目适配
+## 原后续：发票项目适配（历史计划，非当前待办）
+
+以下适配项仅保留为历史计划，不是当前待办。
 
 DevBase 升级完成后，发票项目需做的适配改动：
 1. 包名从 `src.*` → 适配 DevBase 结构

@@ -674,7 +674,7 @@ h1 {
   }
 }
 
-/* DevBase shell alignment while business feature views remain project-owned. */
+/* Workbench shell alignment while business feature views remain project-owned. */
 .workbench-shell {
   position: relative;
   grid-template-columns: var(--sidebar-width, 236px) minmax(0, 1fr) !important;
@@ -764,7 +764,7 @@ h1 {
   color: currentColor;
 }
 
-/* DevBase navigation hierarchy: workbench, registered tools, business extensions, settings. */
+/* Workbench navigation: tools, business extensions, and settings. */
 .side-bar.sidebar {
   padding: 6px 12px;
   font-size: 14px;
@@ -1027,7 +1027,7 @@ h1 {
   background: var(--surface-fill);
 }
 
-/* Zy-DevBase v0.3.2 Fluent palette overrides for the invoice features. */
+/* Shared workbench palette overrides for invoice features. */
 body {
   background: var(--canvas);
   color: var(--ink);
@@ -1133,7 +1133,7 @@ body {
   background: var(--accent-soft);
 }
 
-/* Keep legacy invoice feature rules readable when the DevBase dark theme is active. */
+/* Keep legacy invoice feature rules readable in dark theme. */
 :root[data-theme="dark"] body {
   background: var(--canvas);
   color: var(--ink);
@@ -1309,7 +1309,7 @@ body {
 }
 
 /* ── Responsive: collapse sidebar at narrow widths ──
-   The DevBase !important rule above locks the grid to var(--sidebar-width);
+  The shell !important rule above locks the grid to var(--sidebar-width);
    override it here so the sidebar visually collapses below 760px. */
 /* Narrow-viewport: let .sidebar-collapsed / .is-collapsed control the UI;
    only override the !important grid lock so collapsed state works below 760px. */

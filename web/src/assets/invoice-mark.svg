@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
+  <title id="title">SYNTEC 电子票据工作台</title>
+  <desc id="description">圆形边框中的票据文档图形标记。</desc>
+  <circle cx="512" cy="512" r="458" fill="#ffffff" stroke="#8a9491" stroke-width="28" />
+  <path d="M 344 256 H 574 L 680 362 V 768 H 344 Z" fill="#ffffff" stroke="#39434b" stroke-width="32" stroke-linejoin="round" />
+  <path d="M 574 256 V 362 H 680" fill="none" stroke="#39434b" stroke-width="32" stroke-linejoin="round" />
+  <path d="M 414 470 H 610 M 414 556 H 610 M 414 642 H 610" fill="none" stroke="#0878c9" stroke-width="28" stroke-linecap="round" />
+</svg>

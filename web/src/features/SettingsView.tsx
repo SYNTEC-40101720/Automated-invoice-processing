@@ -8,7 +8,6 @@ import { useWorkbench } from '../stores/workbench'
 
 interface SettingsViewProps {
   version: string | null
-  devbaseVersion: string | null
   update: UpdateResponse | null
   onCheckUpdate: () => Promise<UpdateResponse | null>
   theme: ThemeMode
@@ -20,10 +19,10 @@ export type ThemeMode = 'system' | 'light' | 'dark'
 const DEFAULT_RELEASE_URL = 'https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/latest'
 
 const settingsSectionMeta: Record<SettingsSection, { label: string; eyebrow: string; description: string; icon: React.ReactNode }> = {
-  devbase: {
-    label: 'DevBase 基础',
-    eyebrow: 'DEVBASE / SETTINGS',
-    description: '管理工作台外观、运行版本和基础框架能力。',
+  system: {
+    label: '系统设置',
+    eyebrow: 'SYSTEM / SETTINGS',
+    description: '管理工作台外观、运行版本和系统信息。',
     icon: <LayoutGrid size={17} />,
   },
   business: {
@@ -46,9 +45,9 @@ const settingsSectionMeta: Record<SettingsSection, { label: string; eyebrow: str
   },
 }
 const invoiceSettingsOrder: SettingsSection[] = ['business', 'email', 'ai']
-const settingsSectionOrder: SettingsSection[] = ['devbase', ...invoiceSettingsOrder]
+const settingsSectionOrder: SettingsSection[] = ['system', ...invoiceSettingsOrder]
 
-export function SettingsView({ version, update, onCheckUpdate, theme, onThemeChange, devbaseVersion }: SettingsViewProps) {
+export function SettingsView({ version, update, onCheckUpdate, theme, onThemeChange }: SettingsViewProps) {
   const queryClient = useQueryClient()
   const settingsSection = useWorkbench((state) => state.settingsSection)
   const setSettingsSection = useWorkbench((state) => state.setSettingsSection)
@@ -146,7 +145,7 @@ export function SettingsView({ version, update, onCheckUpdate, theme, onThemeCha
             aria-current={settingsSection === sectionId ? 'page' : undefined}
           >
             {item.icon}
-            <span>{sectionId === 'devbase' ? '基础设置' : item.label}</span>
+            <span>{sectionId === 'system' ? '基础设置' : item.label}</span>
           </button>
         })}
       </nav>
@@ -156,14 +155,14 @@ export function SettingsView({ version, update, onCheckUpdate, theme, onThemeCha
           <h1>{section.label}</h1>
           <p>{section.description}</p>
         </div>
-        {settingsSection !== 'devbase' && (
+        {settingsSection !== 'system' && (
           <button className="primary-button" onClick={() => save.mutate()} disabled={save.isPending}>
             <Save size={15} /> {save.isPending ? '保存中' : '保存配置'}
           </button>
         )}
       </header>
       {message && <div className={`feedback ${message.includes('失败') || message.includes('错误') ? 'error' : 'success'}`}>{message}</div>}
-      {settingsSection === 'devbase' && <div className="settings-panel-stack">
+      {settingsSection === 'system' && <div className="settings-panel-stack">
         <SettingsCard icon={<Sun size={17} />} title="外观">
           <div className="theme-options" role="radiogroup" aria-label="主题模式">
             {([
@@ -185,10 +184,9 @@ export function SettingsView({ version, update, onCheckUpdate, theme, onThemeCha
           </div>
         </SettingsCard>
 
-        <SettingsCard icon={<LayoutGrid size={17} />} title="关于 DevBase">
+        <SettingsCard icon={<LayoutGrid size={17} />} title="关于本系统">
           <div className="settings-about-grid">
             <div><span className="field-label">名称</span><strong>SYNTEC-电子票据处理系统</strong></div>
-            <div><span className="field-label">基础版本</span><strong>DevBase {devbaseVersion ?? '--'}</strong></div>
             <div><span className="field-label">技术栈</span><strong>Python · FastAPI · React · Vite</strong></div>
           </div>
         </SettingsCard>

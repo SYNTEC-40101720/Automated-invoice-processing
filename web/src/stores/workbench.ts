@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { DomainEvent, Job, LogEntry } from '../api/types'
 
-export type SettingsSection = 'devbase' | 'business' | 'email' | 'ai'
+export type SettingsSection = 'system' | 'business' | 'email' | 'ai'
 export type WorkbenchView = 'processing' | 'inbox' | 'audit' | 'settings'
 
 interface WorkbenchState {
@@ -32,7 +32,7 @@ export const useWorkbench = create<WorkbenchState>((set) => ({
   bottomPanelOpen: false,
   activeView: 'inbox',
   selectedTool: null,
-  settingsSection: 'devbase',
+  settingsSection: 'system',
   setConnected: (connected) => set({ connected }),
   setJob: (currentJob) => set({ currentJob }),
   setView: (activeView) => set({ activeView }),

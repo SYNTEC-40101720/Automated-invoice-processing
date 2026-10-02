@@ -8,7 +8,7 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 
-  /* Zy-DevBase v0.3.2 Fluent light palette. */
+  /* Fluent-inspired light palette for the invoice workbench. */
   --canvas: #f3f3f3;
   --surface: #ffffff;
   --surface-raised: #fbfbfb;
