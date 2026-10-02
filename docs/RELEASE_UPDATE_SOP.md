@@ -160,6 +160,26 @@ SHA-256：
 
 ## 9. 发布记录
 
+### v7.3.2（2026-10-02 发布）
+
+```text
+应用：SYNTEC-电子票据处理系统
+仓库：SYNTEC-40101720/Automated-invoice-processing
+当前版本：7.3.1
+目标版本：7.3.2
+Release URL：https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.3.2
+资产名：SYNTEC-Invoice-Processor-v7.3.2.zip
+资产大小：61.69 MB（64,685,966 字节）
+SHA-256：1d6abd3a49a0c520d30c11721d4e2987ecb27bda14f7d0d50314f75728672f21（GitHub digest 一致）
+主程序版本资源：CompanyName=SYNTEC，FileVersion/ProductVersion=[IP_ADDRESS]
+旧版检测结果：v7.3.1 视角 available=true latest=7.3.2（更新检测逻辑由 tests/application/test_update_checker.py 4 条单测覆盖）
+当前版检测结果：v7.3.2 available=false 不误报（同上单测覆盖，§7 升级演练已于 101dc23 移除）
+未覆盖的环境：WebView2/DPI 差异仍需目标环境验收（v7.3.1 已通过，本轮无渲染层变更）
+已知限制：全部验收项自动判定（§2+§4+§6 16 项全过 0 人工）；取消场景在全量跑中因占位样本处理过快降级跳过，已单独复跑验证 cancel 200 → 终态 cancelled
+```
+
+内容：ARCHITECTURE §12.1 遗留评估项清零——发票 WS 空转等待 30s→0.5s + 断链监听任务（死链回收 ≤0.5s），GET /jobs/current 挂 JobSnapshotResponse 契约显式化；测试基线 165→168。附带修复：单实例互斥体测试 Linux CI 五连红（e71717a）。
+
 ### v7.3.1（2026-10-02 发布）
 
 ```text
