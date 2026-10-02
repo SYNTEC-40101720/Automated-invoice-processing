@@ -160,6 +160,25 @@ SHA-256：
 
 ## 9. 发布记录
 
+### v7.3.3（2026-10-02 发布）
+
+```text
+应用：SYNTEC-电子票据处理系统
+仓库：SYNTEC-40101720/Automated-invoice-processing
+当前版本：7.3.2
+目标版本：7.3.3
+Release URL：https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.3.3
+资产名：SYNTEC-Invoice-Processor-v7.3.3.zip
+资产大小：61.63 MB（64,625,902 字节）
+SHA-256：8f85c9b3e99b69d85727151badc7f2271d42dee073ae6b3a91b3ea1814be0091
+主程序版本资源：CompanyName=SYNTEC，FileVersion/ProductVersion=7.3.3.0，LegalCopyright=Copyright © SYNTEC 2026
+质量基线：168 条 Python 测试、Ruff、TypeScript、Vitest 8 条、Vite 构建通过；PyInstaller 域控合规通过
+启动冒烟：health=7.3.3，日志无 CRITICAL，进程干净退出且端口释放
+桌面验收：§4 启动、输出目录打开和退出回收通过；12 份占位 PDF 无有效发票内容，completed_with_warnings（成功 0、失败 12），不作为业务识别验收
+```
+
+内容：设置页统一使用系统设置与本系统名称；替换侧栏、favicon 和桌面图标中的旧品牌图形；移除用户界面中的内部底座版本展示，并修正相关历史文档与发布说明。API 兼容字段保留。
+
 ### v7.3.2（2026-10-02 发布）
 
 ```text

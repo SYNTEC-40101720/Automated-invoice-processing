@@ -125,6 +125,9 @@ v7.3.0 起程序内无自动更新链路（`405d8fd` 移除）——升级 = 检
 | §7 升级验收（v7.3.1 复跑） | 40101720 | 2026-10-02 | ☑通过 | 自动 5 项全过：旧版 v7.2.1 探活（health 401 拒绝码）、旧版检测发现 7.3.1（available=true latest=7.3.1）、覆盖替换演练（config.ini/logs/收件箱保留）、升级后 health=7.3.1 + 配置保留（target_tax_id 存在、max_workers=8）、当前版不误报（available=false）；`--only 7` 驱动，升级基线 v7.2.1 不变 |
 | §2+§4+§6 全量（v7.3.2 发布） | 40101720 | 2026-10-02 | ☑通过 | `acceptance_driver.py` 全量 16 项全过 0 失败：§2 五项前置通过；§4 窗口句柄/12 份占位样本（completed_with_warnings）/Explorer 打开/干净退出端口释放；§6 实时事件 48 条（progress=5/log=20）、进度单调 1.0、断线重连游标补齐 171 条编号连续、双客户端隔离、设置 8→4 保存还原、日志分页不重不漏。取消场景复跑单独验证：cancel 200 → 终态 cancelled（全量跑样本处理过快时降级跳过，属占位样本特性非缺陷）。测试基线 168 全绿 + ruff 零告警 + tsc/Vitest 8/build + CI 绿（e71717a 修复 Linux CI 五连红后） |
 
+| §1 自动化与发布构建（v7.3.3） | 40101720 | 2026-10-02 | ☑通过 | Ruff、168 条 Python 测试、TypeScript、Vitest 8 条、Vite 构建、PyInstaller 域控合规均通过；EXE 冒烟 health=7.3.3、日志无 CRITICAL、干净退出并释放端口 |
+| §4 桌面功能（v7.3.3 发布包） | 40101720 | 2026-10-02 | ☑通过 | `acceptance_driver.py --only 4`：启动/health、Explorer 打开输出目录、干净退出与端口回收通过；12 份生成占位 PDF 为 `completed_with_warnings`（成功 0、失败 12），仅验证处理流程，不作为业务识别通过基线 |
+
 ### 人工观察项留痕
 
 | 项目 | 执行人 | 日期 | 结果 | 备注 |
