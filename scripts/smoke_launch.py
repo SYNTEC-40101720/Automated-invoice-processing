@@ -7,11 +7,13 @@
 仅适用于交互式 Windows 桌面会话（pywebview 需要真实窗口站），
 CI / 无桌面环境请勿执行；非 Windows 平台直接拒绝。
 
+env 注入单实例旁路（PLATFORM_ALLOW_SECOND_INSTANCE=1，single_instance
+BYPASS_ENV 约定）：与用户已开的应用实例互不干扰。
+
 用法（详细参数见 --help）：
 
     python scripts/smoke_launch.py                    # auto：优先 dist EXE
     python scripts/smoke_launch.py --target source   # 源码模式
-    python scripts/smoke_launch.py --legacy-alive-only  # 旧产物降级探活
 """
 
 from __future__ import annotations
@@ -118,25 +120,13 @@ def _wait_until_ready(
     port: int,
     token: str,
     expect_version: str,
-    legacy_alive_only: bool,
 ) -> dict[str, Any]:
-    """轮询 health 直到就绪；校验状态与版本。
-
-    legacy_alive_only：不注入令牌启动的旧产物收到 401 即视为存活。
-    """
+    """轮询 health 直到就绪；校验状态与版本。"""
     deadline = time.monotonic() + READY_TIMEOUT
     last_error: Exception | None = None
     while time.monotonic() < deadline:
         try:
             status, payload = _fetch_health(port, token)
-            if legacy_alive_only:
-                if status == 401:
-                    print("✅ 旧产物探活成功（未注入令牌，health 返回 401 即存活）")
-                    return {}
-                if status == 200:
-                    print("✅ health 200（旧产物未启用令牌校验）")
-                    return payload or {}
-                raise RuntimeError(f"health 返回意外状态码 {status}")
             if status == 200 and payload is not None:
                 if payload.get("status") != "ok":
                     sys.exit(f"❌ health status 异常: {payload}")
@@ -218,29 +208,12 @@ def main() -> None:
         default=None,
         help="期望版本号（默认读取 backend/invoice_processor/version.py）",
     )
-    parser.add_argument(
-        "--legacy-alive-only",
-        action="store_true",
-        help="降级探活模式：不注入令牌，收到 401 即判定存活（用于旧产物）",
-    )
-    parser.add_argument(
-        "--hold",
-        type=float,
-        default=None,
-        help="就绪后保持窗口存活指定秒数再退出（人工检查渲染/DPI/交互用）",
-    )
-    parser.add_argument(
-        "--token-file",
-        type=Path,
-        default=None,
-        help="把本次注入令牌写入该文件（供 --hold 期间的外部驱动/人工接管 API）",
-    )
     args = parser.parse_args()
 
     _require_windows_desktop()
     expect_version = args.expect_version or _expected_version()
     port = args.port or _find_free_port()
-    token = "" if args.legacy_alive_only else secrets.token_urlsafe(32)
+    token = secrets.token_urlsafe(32)
 
     cmd, log_base = _resolve_target(args)
     if args.exe:
@@ -254,53 +227,26 @@ def main() -> None:
         **os.environ,
         "PLATFORM_HOST": "127.0.0.1",
         "PLATFORM_PORT": str(port),
+        "PLATFORM_LOCAL_TOKEN": token,
+        # 单实例旁路：与用户已开的应用实例互不干扰（BYPASS_ENV 约定）
+        "PLATFORM_ALLOW_SECOND_INSTANCE": "1",
     }
-    if token:
-        env["PLATFORM_LOCAL_TOKEN"] = token
-    if args.token_file:
-        args.token_file.parent.mkdir(parents=True, exist_ok=True)
-        args.token_file.write_text(
-            json.dumps(
-                {"port": port, "token": token or "", "pid": None},
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
-        print(f"📝 令牌信息已写入: {args.token_file}")
-
     print("=" * 56)
     print(f"🚀 启动冒烟: {' '.join(cmd)}")
-    print(f"   端口: {port} | 期望版本: {expect_version} | 模式: "
-          f"{'降级探活' if args.legacy_alive_only else '完整校验'}")
+    print(f"   端口: {port} | 期望版本: {expect_version}")
     print("=" * 56)
 
     proc = subprocess.Popen(cmd, cwd=str(ROOT), env=env)
     exit_code: int | None = None
     try:
-        _wait_until_ready(port, token, expect_version, args.legacy_alive_only)
+        _wait_until_ready(port, token, expect_version)
         print(f"⏳ 就绪后观察 {args.soak:.0f}s ...")
         time.sleep(args.soak)
-        if not args.legacy_alive_only:
-            log_path = _check_log_file(log_base)
-            print(f"   日志路径: {log_path}")
+        log_path = _check_log_file(log_base)
+        print(f"   日志路径: {log_path}")
         exited = proc.poll()
         if exited is not None:
             sys.exit(f"❌ 观察期内进程意外退出（exit={exited}）")
-        if args.hold is not None:
-            # 人工检查模式：窗口保持存活，供人工确认渲染/DPI/交互后正常关窗
-            print(f"⏸️ 窗口保持存活 {args.hold:.0f}s，供人工检查（渲染/DPI/交互）...")
-            time.sleep(args.hold)
-            exited = proc.poll()
-            if exited is not None:
-                sys.exit(f"❌ 保持期内进程意外退出（exit={exited}）")
-        if args.legacy_alive_only:
-            # 旧产物降级模式：确认存活即结束，强制终止
-            subprocess.run(
-                ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
-                capture_output=True, check=False,
-            )
-            print("✅ 降级探活完成（taskkill 结束旧产物）")
-            return
         if not _close_window_gracefully(proc):
             subprocess.run(
                 ["taskkill", "/PID", str(proc.pid), "/T", "/F"],

@@ -118,10 +118,10 @@ gh release view vX.Y.Z --repo SYNTEC-40101720/Automated-invoice-processing --jso
 | 下载地址非固定仓库 HTTPS | 忽略资产 |
 | 网络超时或 JSON 无效 | 检查未完成，不误报最新，应用正常启动 |
 
-至少执行两类测试：
+测试覆盖（全部自动化，不再做旧版升级演练）：
 
-1. 更新检查单元测试：版本比较、资产选择、错误处理（`tests/application/test_update_checker.py`、`tests/api/test_update_endpoint.py`）。
-2. 真实 GitHub API 检查：旧版能发现当前 Release，当前版不误报。
+1. 更新检查单元测试：版本比较、资产选择、错误处理（`tests/application/test_update_checker.py`、`tests/api/test_update_endpoint.py`），随 §1.2 pytest 全绿判定。
+2. 真实 GitHub API 联通性：发布后可在本机执行 `python -c "from invoice_processor.application.update_checker import check_for_update; print(check_for_update())"` 快速核对（当前版应 `available=false`）。
 
 ## 7. 故障处理
 

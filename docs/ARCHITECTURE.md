@@ -370,7 +370,7 @@ Pydantic 模型是 API 单一事实源。CI 由 FastAPI OpenAPI 生成 TypeScrip
 | WebSocket | pytest | 初始快照、事件顺序、断线重连校准、慢客户端策略 | 服务端契约已通过，真实浏览器重连待补 |
 | 前端单测 | Vitest + Testing Library | store 层（8 条） | 已纳入，8 条通过 |
 | E2E | Playwright | 手动选择到完成、停止、断线恢复、设置、日志过滤 | 未纳入自动化；手工场景见 docs/ACCEPTANCE_CHECKLIST.md §6 |
-| 打包冒烟 | Windows 干净机/域控机 | 启动、WebView2、DPI、中文 PDF、输出打开、退出回收 | 本机 smoke_launch.py 通过（源码模式 + 旧产物降级探活）；目标机按 ACCEPTANCE_CHECKLIST.md §4 |
+| 打包冒烟 | Windows 干净机/域控机 | 启动、WebView2、DPI、中文 PDF、输出打开、退出回收 | 本机 smoke_launch.py 通过；目标机按 ACCEPTANCE_CHECKLIST.md §4 |
 
 每个阶段最低质量门槛：Python 测试全绿、前端类型检查全绿、无新增 Pylance/ESLint 错误。最终必须使用合成 PDF 和一份脱敏业务样本完成端到端验收。
 

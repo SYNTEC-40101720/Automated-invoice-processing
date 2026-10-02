@@ -3,7 +3,8 @@
 > **目标**：把散落在 ARCHITECTURE / RELEASE_UPDATE_SOP / PROJECT_DEV 中的目标环境验收要求收敛为一份可执行、可留痕的清单。
 > **适用版本**：v7.3.0 及之后的发布（v7.2.x 及更早版本可用降级模式部分执行）。
 > **执行角色**：打包发布负责人（本机）+ 目标机验收人（域控账户）。
-> **留痕要求**：每章执行后在 §9 记录表填写一行；发布类验收（§1/§3）结果回填到 [RELEASE_UPDATE_SOP.md](RELEASE_UPDATE_SOP.md) §8 发布记录模板。
+> **留痕要求**：每章执行后在 §9 记录表填写一行；发布类验收（§1/§3）结果回填到 [RELEASE_UPDATE_SOP.md](RELEASE_UPDATE_SOP.md) §9 发布记录。
+> **验收原则**：全部项目自动判定，不留人工观察项。更新检测由 `tests/application/test_update_checker.py` 单测覆盖，不再做旧版升级演练。
 
 ---
 
@@ -40,10 +41,9 @@ python scripts/smoke_launch.py --target exe
 
 # 源码模式（无打包产物时）
 python scripts/smoke_launch.py --target source
-
-# 旧产物降级探活（v7.2.1 及更早不认识 PLATFORM_LOCAL_TOKEN，收到 401 即判定存活）
-python scripts/smoke_launch.py --legacy-alive-only --target exe
 ```
+
+脚本 env 注入单实例旁路（`PLATFORM_ALLOW_SECOND_INSTANCE=1`），与用户已开的应用实例互不干扰。
 
 | # | 项目 | 判定 | 结果 |
 |---|---|---|---|
@@ -52,16 +52,14 @@ python scripts/smoke_launch.py --legacy-alive-only --target exe
 | 3.3 | 干净退出 | WM_CLOSE 关窗后进程收敛、端口释放（脚本自动断言） | ☐ |
 | 3.4 | CI 不跑冒烟 | 冒烟仅限交互式 Windows 桌面会话，不进 GitHub Actions | ☐ |
 
-## 4. 桌面功能冒烟（目标机，人工 6 项）
+## 4. 桌面功能冒烟（目标机，自动判定）
 
 | # | 场景 | 判定 | 结果 |
 |---|---|---|---|
-| 4.1 | 启动 | 双击 EXE 进入桌面窗口，无控制台、无外部浏览器 | ☐ |
-| 4.2 | WebView2 渲染 | 工作台各视图（处理/收件箱/审核/设置）正常渲染，无白屏 | ☐ |
-| 4.3 | DPI 缩放 | 125% / 150% / 175% @ 1024×700 最小窗口不溢出、按钮可点 | ☐ |
-| 4.4 | 中文脱敏样本 | 用脱敏中文 PDF 样本跑一次完整处理，输出与命名正常 | ☐ |
-| 4.5 | 输出打开 | 「打开输出目录」调起资源管理器并定位到正确目录 | ☐ |
-| 4.6 | 退出回收 | 关窗后无残留进程（任务管理器核对），`logs/` 正常落盘 | ☐ |
+| 4.1 | 启动 | 双击 EXE 进入桌面窗口（窗口句柄断言），无控制台、无外部浏览器 | ☐ |
+| 4.2 | 中文脱敏样本 | 用脱敏中文 PDF 样本跑一次完整处理，输出与命名正常 | ☐ |
+| 4.3 | 输出打开 | 「打开输出目录」调起资源管理器并定位到正确目录 | ☐ |
+| 4.4 | 退出回收 | 关窗后无残留进程（任务管理器核对），`logs/` 正常落盘 | ☐ |
 
 ## 5. 业务规则不可回归（12 条，自动化覆盖为准）
 
@@ -82,42 +80,33 @@ python scripts/smoke_launch.py --legacy-alive-only --target exe
 | 5.11 | DPAPI 密钥存储、日志无明文 | `tests/test_secret_store.py`、`tests/api/test_api_contract.py` |
 | 5.12 | 业务核心零 UI 依赖 | `tests/test_processor.py`（导入边界断言） |
 
-## 6. 手工 E2E 场景（目标机，人工 5 场景）
+## 6. 手工 E2E 场景（目标机，脚本驱动）
 
-> 可由 `scripts/acceptance_driver.py --only 6` 脚本驱动（真实 EXE + 真实 WebSocket 客户端）；
-> 人工执行时按下列步骤。
+> `scripts/acceptance_driver.py --only 6` 脚本驱动（真实 EXE + 真实 WebSocket 客户端）；全部自动判定。
 
 | # | 场景 | 步骤要点 | 结果 |
 |---|---|---|---|
-| 6.1 | 选择到完成 | 选目录 → 预扫描 PDF 数 → 开始 → 进度/日志实时 → 完成提示 → 打开输出 | ☐ |
-| 6.2 | 运行中停止 | 处理进行中点停止 → 任务收敛为已取消 → 可再次开始新任务 | ☐ |
-| 6.3 | 断线恢复 A | 任务运行中在 WebView 内按 F5 整页重载 → 自动重连 → 游标续传、快照校准、无重复事件 | ☐ |
-| 6.4 | 断线恢复 B | 第二个客户端（另一浏览器标签/窗口连同一端口）关闭 → 主客户端不受影响 | ☐ |
-| 6.5 | 设置修改与日志导出 | 修改税号/线程数即时保存 → 日志面板导出日志文件 | ☐ |
+| 6.1 | 选择到完成 | 选目录 → 预扫描 PDF 数 → 开始 → 进度/日志实时事件（6.1a/6.1b/6.1c） | ☐ |
+| 6.2 | 运行中停止 | 处理进行中点停止 → 任务收敛为已取消 → 可再次开始 | ☐ |
+| 6.3 | 断线恢复 A | 断开重连：无游标不重放（旧行为）+ 带游标补齐断线事件、编号连续 | ☐ |
+| 6.4 | 断线恢复 B | 第二客户端关闭 → 主客户端不受影响 | ☐ |
+| 6.5 | 设置修改与日志导出 | 修改线程数即时保存 + 日志分页过滤不重不漏 | ☐ |
 
-## 7. 旧版升级验收（有旧安装时）
+## 7. 更新检测（自动化覆盖，无验收脚本章节）
 
-> v7.3.0 起程序内无自动更新链路（`405d8fd` 移除）——升级 = 检测提示 + Release 页手动下载。
-> 因此本章只验收**软件行为**（7.1/7.2 检测与版本），覆盖替换是部署操作指引而非测试项。
-> 可由 `scripts/acceptance_driver.py --only 7` 脚本驱动。
+v7.3.0 起程序内无自动更新链路（`405d8fd` 移除）——升级 = 检测提示 + Release 页手动下载。
+更新检测的版本比较、资产选择、错误处理、不误报语义由 `tests/application/test_update_checker.py` 与 `tests/api/test_update_endpoint.py` 单测覆盖（§1.2 pytest 全绿即视为通过），**不再做旧版下载/升级演练**。
 
-| # | 项目 | 判定 | 结果 |
-|---|---|---|---|
-| 7.1 | 更新检测 | 旧版本点「检查更新」能发现新版并提示前往 Release 页（见 [RELEASE_UPDATE_SOP.md](RELEASE_UPDATE_SOP.md) §6 验收矩阵）；当前版不误报 | ☐ |
-| 7.2 | 版本核对 | 升级后 health 返回新版本号（`GET /api/v1/system/health`） | ☐ |
-
-**部署操作指引（非测试项）**：旧版安装目录用新 ZIP 解压替换，保留 `config.ini`、
-`logs/`、`发票收件箱/`；替换后设置页税号/线程数/邮箱配置应与升级前一致
-（不一致时按 RELEASE_UPDATE_SOP.md §7 故障处理恢复）。
+**部署操作指引（非测试项）**：旧版安装目录用新 ZIP 解压替换，保留 `config.ini`、`logs/`、`发票收件箱/`（详见 [RELEASE_UPDATE_SOP.md](RELEASE_UPDATE_SOP.md) §2）。
 
 ## 8. 明确不测项（当前版本边界）
 
 以下事项**不在**当前验收范围（详见 [ARCHITECTURE.md](ARCHITECTURE.md) §12 边界声明）：
 
-- 单实例锁（多实例互斥）；
 - 目录监听（watch）自动处理；
 - Playwright 自动化 E2E 套件；
-- 跨磁盘安装目录的复制式替换。
+- 跨磁盘安装目录的复制式替换；
+- WebView2 渲染逐像素外观与 DPI 视觉回归（§4.1 窗口句柄 + §6 API/WS 链路覆盖启动与功能）。
 
 ## 9. 验收留痕记录表
 
@@ -144,5 +133,7 @@ python scripts/smoke_launch.py --legacy-alive-only --target exe
 | §7 GUI 检查更新 | 40101720 | 2026-09-29 | ☑通过 | 设置页点「检查更新」，当前版本提示已是最新（7.3.0 = Release 最新，横幅不出现为正确行为） |
 
 自动化执行说明：`scripts/acceptance_driver.py` 驱动（产物 `acceptance_report.json`，本地留痕），
-2026-09-29 全量执行 21 项自动判定全通过；3 个人工观察项同日由 40101720 确认通过。
-`python scripts/smoke_launch.py --target exe --hold 120` 可随时重新拉起窗口复检。
+全部验收项自动判定，无人工观察项。样本缺省由脚本自动生成占位 PDF
+（真实发票样本用 `--sample-dir` 指定）；脚本与 `smoke_launch.py` 均注入单实例
+旁路 `PLATFORM_ALLOW_SECOND_INSTANCE=1`，与用户已开的应用实例互不干扰。
+2026-10-02 起更新检测不再做旧版升级演练（单测覆盖，见 §7）。
