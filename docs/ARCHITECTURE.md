@@ -1,7 +1,7 @@
 # SYNTEC 电子票据处理系统 Web 桌面化重构架构设计
 
-> 文档状态：v7.3.0 当前实现基线与交付边界
-> 当前版本：v7.3.0
+> 文档状态：v7.3.2 当前实现基线与交付边界
+> 当前版本：v7.3.2
 > 适用平台：Windows 10/11、SYNTEC 域控环境
 > 本文记录 Web 桌面化重构的架构决策、实施边界与验收标准，具体实现以当前源码为准。
 
@@ -227,7 +227,7 @@ API 前缀固定为 `/api/v1`。错误统一返回：
 | 方法与路径 | 用途 | 主要响应 |
 |---|---|---|
 | `GET /system/health` | 启动就绪探测 | 版本、DevBase 基础版本、运行模式 |
-| `GET /jobs/current` | 当前任务快照 | Job DTO 或 `null` |
+| `GET /jobs/current` | 当前任务快照 | `JobSnapshotResponse`（显式响应模型，字段集与 `Job.to_dict()` 一致）或 `null` |
 | `GET /jobs/history` | 跨启动处理历史（新→旧，`limit` 1..50，缺省 20） | 终态历史条目列表 |
 | `POST /jobs/scan` | 选择目录后预扫描顶层 PDF | 规范化目录与 PDF 数量 |
 | `POST /jobs/start` | 按 `kind` 启动 DevBase 任务，发票工具为 `invoice_processing` | `201` + 运行时快照 |
@@ -260,6 +260,7 @@ API 前缀固定为 `/api/v1`。错误统一返回：
 
 - 地址：`/api/v1/events`；
 - 建立后服务端先发送 `system.ready` 和当前 `job.snapshot`；
+- 服务端空转等待与模板 WS 同节奏（0.5s 周期）：断链由并发监听任务置位，主循环最迟一个空转周期内退出并回收订阅；空闲连接每 30s 收到一帧 `system.heartbeat`（`event_id=0`，不进入游标语义）；
 - 前端采用 1.5 秒起步、10 秒封顶的指数退避重连，并保留事件游标；
 - 重连可带 `after` 游标查询参数：服务端先订阅再取快照、重放游标之后的漏发事件并按事件号去重（先订阅再快照保证重放 ∪ 实时无间隙）；游标缺席保持旧行为（只发 ready + 快照，不重放）；
 - WebSocket 只传服务端事件，不承载开始、停止、保存设置等命令；
@@ -364,7 +365,7 @@ Pydantic 模型是 API 单一事实源。CI 由 FastAPI OpenAPI 生成 TypeScrip
 
 | 层级 | 工具 | 必测内容 | 当前状态 |
 |---|---|---|---|
-| 核心回归 | pytest | 保留所有现有核心、邮箱、审核测试 | 已通过，150 条 |
+| 核心回归 | pytest | 保留所有现有核心、邮箱、审核测试 | 已通过，168 条 |
 | 应用层 | pytest + fake event bus/filesystem | 状态迁移、单任务互斥、取消、归档条件、事件顺序 | 已通过 |
 | API | FastAPI TestClient/httpx | DTO 校验、错误码、密钥脱敏、冲突与路径拒绝 | 已通过 |
 | WebSocket | pytest | 初始快照、事件顺序、断线重连校准、慢客户端策略 | 服务端契约已通过，真实浏览器重连待补 |
@@ -401,7 +402,7 @@ dist/SYNTEC-电子票据处理系统/
 
 ## 12. 交付状态与边界
 
-v7.3.1 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、手动邮箱收件、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。任务启动/取消已收敛为 DevBase 契约（旧 `/jobs` 兼容端点已移除，`/jobs/start` 带启动前同步预检）；邮箱后台轮询与程序内自动更新链路已移除（收件统一手动拉取；更新为"仅检测提示 + Release 页面手动下载"）。核心 Python 测试（150 条）、API 契约、前端 typecheck/Vitest/生产构建和打包合规已通过；发布包启动冒烟 `scripts/smoke_launch.py` 本机通过。目标机验收要求收敛至 `docs/ACCEPTANCE_CHECKLIST.md`，真实浏览器/WebView2/DPI/域控环境仍需按清单在目标环境执行。
+v7.3.1 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、手动邮箱收件、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。任务启动/取消已收敛为 DevBase 契约（旧 `/jobs` 兼容端点已移除，`/jobs/start` 带启动前同步预检）；邮箱后台轮询与程序内自动更新链路已移除（收件统一手动拉取；更新为"仅检测提示 + Release 页面手动下载"）。核心 Python 测试（168 条）、API 契约、前端 typecheck/Vitest/生产构建和打包合规已通过；发布包启动冒烟 `scripts/smoke_launch.py` 本机通过。目标机验收要求收敛至 `docs/ACCEPTANCE_CHECKLIST.md`，真实浏览器/WebView2/DPI/域控环境仍需按清单在目标环境执行。
 
 以下事项不属于当前版本功能，后续若实施必须同步补充测试和验收记录：
 
@@ -420,11 +421,16 @@ v7.3.1 当前交付包含：FastAPI 本地服务、React 工作台、pywebview �
 - **旧发票总线退役**：`invoice_processor/application/event_bus.py` 与 `domain/events.py`（`DomainEvent`）删除，`EventStreamClosed` 统一来自 `devbase.application.errors`；`JobService` 自线程入口 `start_job`/`wait_for_job` 移除，`run_job_sync` 为唯一生产入口（宿主 DevBase worker 线程驱动）；
 - **发票 WS 游标重放**：`/api/v1/events` 支持显式 `after` 查询参数——缺席时保持旧行为（ready + 快照，不重放，避免前端日志无条件重放整段历史）；带游标时先订阅再取快照、按 `last_replayed` 去重，重放 ∪ 实时无间隙；前端 `connectEvents` 重连时携带 `lastEventId` 游标，断线期间漏掉的事件由服务端一次性补齐。
 
-**遗留评估项（非阻塞）**：发票 WS 心跳 30s 与 DevBase 模板 WS 0.5s 轮询节奏仍不一致（两条 WS 路由并存，但生产 app 只挂发票侧——`include_default_routes=False` 时不挂模板 WS）；`/jobs/current` 业务快照模型迁移评估延后。验收 §6 五场景在融合二期后于 v7.3.1 产物复跑通过（`scripts/acceptance_driver.py --only 6`，7 项全过：含游标重连补齐 88 条断线事件、编号连续，取消收敛改为轮询 running 后触发），留痕见 ACCEPTANCE_CHECKLIST.md §9。
+**遗留评估项处理结果（2026-10-02 完成）**：
+
+- 发票 WS 心跳与轮询节奏统一：发票 WS 空转等待改为与模板 WS 相同的 0.5s 周期，并复用模板 WS 的断链监听任务（`_watch_disconnect`）——断链后最迟一个空转周期内退出并回收订阅（旧实现空闲时断链要等 30s 心跳超时才发现）。`system.heartbeat` 帧保留 30s 间隔但与空转周期解耦（`HEARTBEAT_SECONDS`），空闲连接仍每 30s 收到存活帧。
+- `/jobs/current` 业务快照模型迁移：响应挂 `JobSnapshotResponse`（字段集与 `Job.to_dict()` 一致，`extra='forbid'`），契约在 OpenAPI 中显式可见，前端类型生成恢复单一事实源；无任务时仍为 `null`。
+
+验收 §6 五场景在融合二期后于 v7.3.1 产物复跑通过（`scripts/acceptance_driver.py --only 6`，7 项全过：含游标重连补齐 88 条断线事件、编号连续，取消收敛改为轮询 running 后触发），留痕见 ACCEPTANCE_CHECKLIST.md §9。
 
 **任务历史与单实例（801fe51 + 后续修复）**：任务终态旁路落盘 `logs/job_history.jsonl`（JSON Lines，上限 50 条，读旧+追加+原子替换；IO 失败降级不阻断任务流），`GET /jobs/history` 跨启动查询（新→旧）；历史中的输出目录计入 `is_known_directory` 放行面（重启后「打开输出目录」仍可按历史回溯）。桌面壳经 Windows 命名互斥体实现单实例（`ctypes.WinDLL(use_last_error=True)` 绑定——`ctypes.windll` 下 `get_last_error()` 恒 0，双开检测会整体失效；验收脚本经 `PLATFORM_ALLOW_SECOND_INSTANCE=1` 旁路）。
 
-## 14. 主要风险与控制
+## 13. 主要风险与控制
 
 | 风险 | 影响 | 控制措施 |
 |---|---|---|
@@ -437,9 +443,9 @@ v7.3.1 当前交付包含：FastAPI 本地服务、React 工作台、pywebview �
 | 双 UI 长期共存 | 维护成本翻倍 | 当前仅保留 Web 工作台，旧 UI 不作为交付路径 |
 | 包体与启动时间增长 | 域控部署困难 | 使用系统 WebView2，不引入 Electron，不加载 CDN |
 
-## 15. 当前交付定义
+## 14. 当前交付定义
 
-当前源码可作为 v7.3.0 的维护和发布基线，理由如下：
+当前源码可作为 v7.3.2 的维护和发布基线，理由如下：
 
 - 旧 UI 不再是交付路径，业务编排集中在应用层；
 - Python 核心、应用层、API、桌面壳和前端边界符合本文件约定；

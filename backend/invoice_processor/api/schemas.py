@@ -33,6 +33,35 @@ class RuntimeJobResponse(BaseModel):
     updated_at: str
 
 
+class JobStatsDTO(BaseModel):
+    total: int = 0
+    success: int = 0
+    failure: int = 0
+    tax_issues: int = 0
+
+
+class JobSnapshotResponse(BaseModel):
+    """`GET /jobs/current` 业务快照（Job 聚合 DTO）；无任务时为 null。"""
+
+    model_config = ConfigDict(extra='forbid')
+
+    id: str
+    source_dir: str
+    output_dir: str | None = None
+    trigger: str
+    status: str
+    phase: str
+    progress: float
+    message: str
+    stats: JobStatsDTO = Field(default_factory=JobStatsDTO)
+    started_at: str | None = None
+    finished_at: str | None = None
+    cancel_requested: bool = False
+    error_code: str | None = None
+    error_message: str | None = None
+    result: dict[str, Any] | None = None
+
+
 class DirectoryScanResponse(BaseModel):
     source_dir: str
     pdf_count: int

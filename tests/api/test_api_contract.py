@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -141,6 +142,50 @@ def test_runtime_cancel_endpoint_returns_runtime_snapshot(tmp_path):
     assert response.status_code == 200
     assert response.json()['id'] == 'runtime-job'
     assert response.json()['status'] == 'cancelling'
+
+
+def test_current_job_endpoint_serializes_via_response_model(tmp_path):
+    # /jobs/current 契约显式化：响应经 JobSnapshotResponse 序列化，
+    # 字段集与 Job.to_dict() 一致；无任务时为 null。
+    client = TestClient(make_app(tmp_path))
+    empty = client.get(
+        '/api/v1/jobs/current',
+        headers={'X-Local-Token': 'test-token'},
+    )
+    assert empty.status_code == 200
+    assert empty.json() is None
+
+    service = JobService(event_bus=EventBus())
+    app = create_app(service, local_token='test-token')
+    client = TestClient(app)
+    from invoice_processor.application.job_service import _JobHandle
+    from invoice_processor.domain.job import Job
+
+    service._handles['job-1'] = _JobHandle(
+        job=Job(source_dir=str(tmp_path), id='job-1'),
+        cancel_event=threading.Event(),
+    )
+    service._current_job_id = 'job-1'
+
+    response = client.get(
+        '/api/v1/jobs/current',
+        headers={'X-Local-Token': 'test-token'},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['id'] == 'job-1'
+    assert payload['status'] == 'queued'
+    assert payload['stats'] == {
+        'total': 0, 'success': 0, 'failure': 0, 'tax_issues': 0,
+    }
+    # OpenAPI 契约可见（前端类型生成单一事实源）。
+    schema = client.get('/api/v1/openapi.json').json()
+    current_schema = schema['components']['schemas']['JobSnapshotResponse']
+    assert set(current_schema['properties']) == {
+        'id', 'source_dir', 'output_dir', 'trigger', 'status', 'phase',
+        'progress', 'message', 'stats', 'started_at', 'finished_at',
+        'cancel_requested', 'error_code', 'error_message', 'result',
+    }
 
 
 def test_api_rejects_untrusted_origin_and_sets_security_headers(tmp_path):
@@ -293,6 +338,43 @@ def test_fused_bus_shares_numbering_between_runtime_and_service(tmp_path):
     assert lifecycle.event_id == business.event_id + 1
     ids = [event.event_id for event in service.events.history()]
     assert ids == list(range(1, len(ids) + 1))
+
+
+def test_websocket_heartbeat_served_during_idle(tmp_path, monkeypatch):
+    # 空转轮询与心跳解耦：空闲时最迟一个心跳周期内发 system.heartbeat，
+    # 客户端存活依赖该帧保持连接（event_id=0 不进入游标语义）。
+    import invoice_processor.api.routes.events as events_route
+
+    monkeypatch.setattr(events_route, 'HEARTBEAT_SECONDS', 0.1)
+    client = TestClient(make_app(tmp_path))
+    with client.websocket_connect('/api/v1/events?token=test-token') as websocket:
+        ready = websocket.receive_json()
+        assert ready['type'] == 'system.ready'
+        heartbeat = websocket.receive_json()
+        assert heartbeat['type'] == 'system.heartbeat'
+        assert heartbeat['event_id'] == 0
+        assert heartbeat['payload'] == {}
+
+
+def test_websocket_subscription_reclaimed_on_disconnect(tmp_path):
+    # 断链回收：客户端断开后监听任务置位 disconnected，主循环一个空转
+    # 周期内退出并 close 订阅——慢客户端不会在总线上留下泄漏的订阅。
+    service = JobService(event_bus=EventBus())
+    app = create_app(service, local_token='test-token')
+    client = TestClient(app)
+
+    before = len(service.events._subscriptions)
+    with client.websocket_connect('/api/v1/events?token=test-token') as websocket:
+        ready = websocket.receive_json()
+        assert ready['type'] == 'system.ready'
+        assert len(service.events._subscriptions) == before + 1
+
+    deadline = time.monotonic() + 2.0
+    while time.monotonic() < deadline:
+        if len(service.events._subscriptions) == before:
+            break
+        time.sleep(0.05)
+    assert len(service.events._subscriptions) == before
 
 
 def test_job_logs_endpoint_returns_only_job_logs(tmp_path):

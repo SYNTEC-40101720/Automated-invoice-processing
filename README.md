@@ -1,4 +1,4 @@
-# SYNTEC 电子票据处理系统 v7.3.0
+# SYNTEC 电子票据处理系统 v7.3.2
 
 基于 Python 3.12+、FastAPI 的业务底层、React/Vite Web 工作台和 pywebview/WebView2 桌面壳，用于批量识别、重命名、校验与合并 PDF 电子发票。
 
@@ -143,16 +143,16 @@ npm --prefix web run test
 python scripts/smoke_launch.py --target source
 ```
 
-当前 v7.3.1 发布基线已验证 Python 测试通过（150 条，含事件总线融合一期 3 条、二期 WS 契约 3 条）、Ruff 静态检查通过，前端类型检查、Vitest 单测（8 条）和生产构建通过；DevBase 工具清单已提供 `invoice_processing` 任务入口。发布包启动冒烟使用 `python scripts/smoke_launch.py`；目标机验收按 `docs/ACCEPTANCE_CHECKLIST.md` 执行。
+当前 v7.3.2 发布基线已验证 Python 测试通过（168 条，含事件总线融合一期 3 条、二期 WS 契约 3 条、WS 心跳/断链回收 2 条、`/jobs/current` 响应模型 1 条）、Ruff 静态检查通过，前端类型检查、Vitest 单测（8 条）和生产构建通过；DevBase 工具清单已提供 `invoice_processing` 任务入口。发布包启动冒烟使用 `python scripts/smoke_launch.py`；目标机验收按 `docs/ACCEPTANCE_CHECKLIST.md` 执行。
 
 ## 版本发布
 
 版本源为 `backend/invoice_processor/version.py`，递增命令会同步 `pyproject.toml`、Web 包元数据和 PyInstaller 资源：
 
 ```bash
-python scripts/bump_version.py patch   # 7.3.0 → 7.3.1
-python scripts/bump_version.py minor   # 7.3.0 → 7.4.0
-python scripts/bump_version.py major   # 7.3.0 → 8.0.0
+python scripts/bump_version.py patch   # 7.3.1 → 7.3.2
+python scripts/bump_version.py minor   # 7.3.1 → 7.4.0
+python scripts/bump_version.py major   # 7.3.1 → 8.0.0
 ```
 
 普通测试不会自动修改版本；打包脚本 `build_syntec.py` 同样**不修改任何版本文件**——它只校验五个版本源一致，并拒绝打包远端已有 `vX.Y.Z` tag 的版本号。
@@ -181,6 +181,7 @@ python scripts/bump_version.py major   # 7.3.0 → 8.0.0
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v7.3.2 | 2026-10-02 | 遗留评估项清零：发票 WS 空转等待与模板 WS 同节奏（0.5s）+ 断链监听任务（空闲断链回收从 30s 降至 ≤0.5s，心跳帧 30s 保留且与轮询解耦）；`GET /jobs/current` 挂 `JobSnapshotResponse` 响应模型（OpenAPI 契约显式化）；文档基线同步（测试数 168）；ARCHITECTURE 章节号断档（§12→§14）修复 |
 | v7.3.1 | 2026-09-30 | 事件总线融合二期收尾：总线单实例化（业务/生命周期事件共享编号空间）、progress 单一发布者（runtime 回调优先，不再双写）、旧发票总线与 `start_job`/`wait_for_job` 自线程入口退役、发票 WS `after` 游标重放 + 前端重连游标续传；验收 §6 七项复跑通过（含游标重连补齐断线事件、编号连续断言）；测试基线 150 |
 | v7.3.0 | 2026-09-29 | 旧 jobs HTTP 兼容层收敛为 DevBase 契约（4 个死端点移除、`/jobs/start` 启动前同步预检 422 稳定错误码、trigger 集中映射）；新增发布包启动冒烟脚本 `smoke_launch.py`（含旧产物降级探活）；目标机验收清单 `docs/ACCEPTANCE_CHECKLIST.md`；全部文档基线同步（测试数 144、Vitest 8 条、事件总线融合列为显式后续项） |
 | v7.2.1 | 2026-09-28 | 移除程序内自动更新链路（检测提示 + Release 页面手动下载）与邮箱后台自动轮询（收件统一手动拉取）；修复更新器锁阻塞、重启竞态、设置覆盖、IMAP locale 四个中等问题；CI 升级 actions v7；前端 store 层 Vitest 单测；打包自动落盘 Release ZIP SHA-256 摘要；显式 SemVer 版本管理 |

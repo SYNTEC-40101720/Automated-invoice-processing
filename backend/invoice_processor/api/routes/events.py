@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import time
+from contextlib import suppress
 
 from devbase.application.errors import EventStreamClosed
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -10,6 +12,9 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from ..dependencies import validate_websocket_token
 
 router = APIRouter(tags=['events'])
+
+# 空闲心跳帧间隔（秒）：仅用于让客户端确认连接存活，与空转轮询周期解耦。
+HEARTBEAT_SECONDS = 30.0
 
 
 def _read_cursor(websocket: WebSocket) -> int | None:
@@ -37,6 +42,10 @@ async def events(websocket: WebSocket) -> None:
     service = websocket.app.state.job_service
     # 先订阅再取快照：重放 ∪ 实时并集无间隙，实时侧按 last_replayed 去重。
     subscription = service.events.subscribe(maxsize=256)
+    disconnected = asyncio.Event()
+    disconnect_task = asyncio.create_task(
+        _watch_disconnect(websocket, disconnected)
+    )
     try:
         await websocket.send_json({
             'event_id': 0,
@@ -61,23 +70,50 @@ async def events(websocket: WebSocket) -> None:
                 'job_id': snapshot['id'],
                 'payload': snapshot,
             })
+        last_send = time.monotonic()
         while True:
+            if disconnected.is_set():
+                return
             try:
-                event = await asyncio.to_thread(subscription.get, 30.0)
+                event = await asyncio.to_thread(subscription.get, 0.5)
             except TimeoutError:
-                await websocket.send_json({
-                    'event_id': 0,
-                    'type': 'system.heartbeat',
-                    'occurred_at': '',
-                    'job_id': None,
-                    'payload': {},
-                })
+                # 空转轮询与模板 WS 同节奏（0.5s）：断链由监听任务置位
+                # disconnected，本循环最迟一个空转周期内退出并回收订阅。
+                if time.monotonic() - last_send >= HEARTBEAT_SECONDS:
+                    await websocket.send_json({
+                        'event_id': 0,
+                        'type': 'system.heartbeat',
+                        'occurred_at': '',
+                        'job_id': None,
+                        'payload': {},
+                    })
+                    last_send = time.monotonic()
                 continue
+            except EventStreamClosed:
+                return
+            if disconnected.is_set():
+                return
             if event.event_id <= last_replayed:
                 # 订阅建立早于快照，重放并集里已推过的事件丢弃。
                 continue
             await websocket.send_json(event.to_dict())
+            last_send = time.monotonic()
     except (WebSocketDisconnect, RuntimeError, EventStreamClosed):
         pass
     finally:
+        disconnect_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await disconnect_task
         subscription.close()
+
+
+async def _watch_disconnect(websocket: WebSocket, disconnected: asyncio.Event) -> None:
+    """并发读客户端入站帧，只关心 disconnect——尽早发现死链回收订阅。"""
+    try:
+        while True:
+            message = await websocket.receive()
+            if message['type'] == 'websocket.disconnect':
+                disconnected.set()
+                return
+    except (WebSocketDisconnect, RuntimeError):
+        disconnected.set()

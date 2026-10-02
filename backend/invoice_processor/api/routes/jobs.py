@@ -12,6 +12,7 @@ from ..schemas import (
     DirectoryScanResponse,
     JobHistoryEntry,
     JobHistoryResponse,
+    JobSnapshotResponse,
     LogEntry,
     LogListResponse,
     RuntimeJobResponse,
@@ -26,8 +27,10 @@ router = APIRouter(
 )
 
 
-@router.get('/current', response_model=dict | None)
+@router.get('/current', response_model=JobSnapshotResponse | None)
 def current_job(service: JobService = Depends(get_job_service)) -> dict | None:
+    # 响应经 JobSnapshotResponse 序列化：契约显式化（OpenAPI 可见），
+    # dict 聚合字段缺漏会在序列化时报错而不是静默传给前端。
     return service.current_job()
 
 

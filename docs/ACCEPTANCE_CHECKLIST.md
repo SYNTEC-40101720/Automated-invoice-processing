@@ -1,7 +1,7 @@
 # 发布验收清单（ACCEPTANCE_CHECKLIST）
 
 > **目标**：把散落在 ARCHITECTURE / RELEASE_UPDATE_SOP / PROJECT_DEV 中的目标环境验收要求收敛为一份可执行、可留痕的清单。
-> **适用版本**：v7.3.0 及之后的发布（v7.2.x 及更早版本可用降级模式部分执行）。
+> **适用版本**：v7.3.2 及之后的发布（v7.2.x 及更早版本可用降级模式部分执行）。
 > **执行角色**：打包发布负责人（本机）+ 目标机验收人（域控账户）。
 > **留痕要求**：每章执行后在 §9 记录表填写一行；发布类验收（§1/§3）结果回填到 [RELEASE_UPDATE_SOP.md](RELEASE_UPDATE_SOP.md) §9 发布记录。
 > **验收原则**：全部项目自动判定，不留人工观察项。更新检测由 `tests/application/test_update_checker.py` 单测覆盖，不再做旧版升级演练。
@@ -13,7 +13,7 @@
 | # | 项目 | 命令 / 判定 | 结果 |
 |---|---|---|---|
 | 1.1 | 五版本源一致 | `python scripts/build_syntec.py`（内含版本一致性校验） | ☐ |
-| 1.2 | Python 测试 | `python -m pytest tests/ -q` 全绿（当前基线 165 条，以实测为准） | ☐ |
+| 1.2 | Python 测试 | `python -m pytest tests/ -q` 全绿（当前基线 168 条，以实测为准） | ☐ |
 | 1.3 | Python 静态检查 | `python -m ruff check backend tests scripts` 零告警 | ☐ |
 | 1.4 | 前端类型检查 | `npm --prefix web run typecheck` 零错误 | ☐ |
 | 1.5 | 前端单测 | `npm --prefix web run test` 全绿（当前基线 8 条） | ☐ |
