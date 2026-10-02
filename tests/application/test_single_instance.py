@@ -8,7 +8,9 @@ Windows 命名互斥体语义（实测踩坑后固化）：``ctypes.get_last_err
 from __future__ import annotations
 
 import ctypes
+import sys
 
+import pytest
 from invoice_processor.desktop.single_instance import (
     BYPASS_ENV,
     acquire_single_instance_lock,
@@ -19,13 +21,16 @@ def _release_mutex(handle: int) -> None:
     ctypes.WinDLL("kernel32", use_last_error=True).CloseHandle(handle)
 
 
+@pytest.mark.skipif(
+    sys.platform != 'win32', reason='命名互斥体双开语义仅 Windows'
+)
 def test_first_acquire_succeeds_and_second_is_rejected(monkeypatch):
+    # 非 Windows 走 os.name 直通返回哨兵 -1（非 None），无法在此断言
+    # 互斥体语义——Linux CI 上按 skip 处理，本测试仅 Windows 生效。
     monkeypatch.delenv(BYPASS_ENV, raising=False)
     first = acquire_single_instance_lock()
-    if first is None:  # 非 Windows：无锁直通，无法继续断言
-        return
+    assert first not in (0, -1), '首个获取应返回真实互斥体句柄'
     try:
-        assert first != 0
         second = acquire_single_instance_lock()
         assert second is None, "已有实例时二次获取必须返回 None"
     finally:
