@@ -10,7 +10,7 @@
 | # | 项目 | 命令 / 判定 | 结果 |
 |---|---|---|---|
 | 1.1 | 五版本源一致 | `python scripts/build_syntec.py`（内含版本一致性校验） | ☐ |
-| 1.2 | Python 测试 | `python -m pytest tests/ -q` 全绿（当前基线 217 条，以实测为准） | ☐ |
+| 1.2 | Python 测试 | `python -m pytest tests/ -q` 全绿（当前基线 228 条，以实测为准） | ☐ |
 | 1.3 | Python 静态检查 | `python -m ruff check backend tests scripts` 零告警 | ☐ |
 | 1.4 | 前端类型检查 | `npm --prefix web run typecheck` 零错误 | ☐ |
 | 1.5 | 前端单测 | `npm --prefix web run test` 全绿（当前基线 17 条） | ☐ |
@@ -126,6 +126,9 @@ v7.3.0 起程序内无自动更新链路（`405d8fd` 移除）——升级 = 检
 | §1 静态与自动化（v7.3.4） | 40101720 | 2026-10-03 | ☑通过 | pytest 217 / ruff 零告警 / tsc / Vitest 17 / build / CI 绿（6479413）；ZIP SHA-256 5c0fa974... 与 .sha256 一致，GitHub digest 一致 |
 | §3 启动冒烟（v7.3.4） | 40101720 | 2026-10-03 | ☑通过 | EXE 完整模式：health=7.3.4、日志无 CRITICAL、干净退出、端口释放；更新检测核对 available=false（7.3.4 = Release 最新） |
 | §2+§4+§6 全量（v7.3.4 发布） | 40101720 | 2026-10-03 | ☑通过 | `acceptance_driver.py` 全量 16 项全过 0 失败；§2 五项前置通过；§4 窗口句柄/12 份占位样本（completed_with_warnings，成功 0、失败 12，仅验证处理流程）/Explorer 打开/干净退出端口释放（exit=0）；§6 实时事件 48 条（progress=5/log=20）、进度单调 1.0、断线重连游标补齐 171 条编号连续、双客户端隔离、设置 8→4 保存还原、日志分页不重不漏。取消场景复跑 `--only 6` 仍因占位样本处理过快降级跳过（与 v7.3.2 相同，属占位样本特性非缺陷；取消链路单测覆盖见 tests/application/test_job_service.py） |
+| §1 静态与自动化（v7.3.5） | 40101720 | 2026-10-03 | ☑通过 | pytest 228 / ruff 零告警 / tsc / Vitest 17 / build / CI 绿（370fcec+d78a212）；ZIP SHA-256 473ea3b4... 与 .sha256 一致，GitHub digest 一致 |
+| §3 启动冒烟（v7.3.5） | 40101720 | 2026-10-03 | ☑通过 | EXE 完整模式：health=7.3.5、日志无 CRITICAL、干净退出、端口释放；更新检测核对 available=false（7.3.5 = Release 最新） |
+| §2+§4+§6 全量（v7.3.5 发布） | 40101720 | 2026-10-03 | ☑通过 | `acceptance_driver.py` 全量 16 项全过 0 失败；§2 五项前置通过；§4 窗口句柄/12 份占位样本（completed_with_warnings，仅验证处理流程）/Explorer 打开/干净退出端口释放；§6 实时事件 48 条（progress=5/log=20）、进度单调 1.0、断线重连游标补齐 171 条编号连续、双客户端隔离、设置 8→4 保存还原、日志分页不重不漏。取消场景占位样本处理过快降级跳过（历轮相同特性非缺陷，取消链路单测覆盖） |
 
 ### 人工观察项留痕
 
@@ -302,6 +305,27 @@ SHA-256：
 ```
 
 ## 11. 发布记录
+
+### v7.3.5（2026-10-03 发布）
+
+```text
+应用：SYNTEC-电子票据处理系统
+仓库：SYNTEC-40101720/Automated-invoice-processing
+当前版本：7.3.4
+目标版本：7.3.5
+Release URL：https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.3.5
+资产名：SYNTEC-Invoice-Processor-v7.3.5.zip
+资产大小：61.64 MB（64,633,408 字节）
+SHA-256：473ea3b424213c4beac49e68b3bed87f425e889fcaf3a54917a3d49b34f48d75（GitHub digest 一致）
+主程序版本资源：CompanyName=SYNTEC，FileVersion/ProductVersion=7.3.5.0，LegalCopyright=Copyright © SYNTEC 2026
+质量基线：228 条 Python 测试、Ruff、TypeScript、Vitest 17 条、Vite 构建通过；PyInstaller 域控合规通过
+启动冒烟：health=7.3.5，日志无 CRITICAL，进程干净退出且端口释放
+当前版检测结果：available=false 不误报（7.3.5 = Release 最新，实测核对）
+桌面验收：§2+§4+§6 全量 16 项全过 0 失败；取消场景占位样本处理过快降级跳过（历轮相同特性，取消链路由单测覆盖）
+已知限制：AI 提示注入与真实税控 PDF 语料版式验证不在范围（PROJECT_DEV 遗留项）；拉取后自动处理的真机 E2E（需邮箱配置）未执行，以 API 契约测试覆盖
+```
+
+内容：结账单文件名排除（`core/exclusions.py` 统一口径，拉取/预检/处理清单三处消费，源文件保留原位）+ 收件页「拉取后自动处理」开关（默认关闭，开启后拉取到新附件自动以 trigger=email 处理本次批次目录并归档至批次内已处理/，启动失败经 pull.job_error 反馈不失败拉取响应）；测试基线 217 → 228，契约测试轮询补 JobNotFound 容忍。
 
 ### v7.3.4（2026-10-03 发布）
 

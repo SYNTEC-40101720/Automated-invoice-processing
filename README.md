@@ -1,6 +1,6 @@
 # SYNTEC 电子票据处理系统
 
-基于 Python 3.12+、FastAPI 的业务底层、React/Vite Web 工作台和 pywebview/WebView2 桌面壳，用于批量识别、重命名、校验与合并 PDF 电子发票。当前版本 v7.3.4。
+基于 Python 3.12+、FastAPI 的业务底层、React/Vite Web 工作台和 pywebview/WebView2 桌面壳，用于批量识别、重命名、校验与合并 PDF 电子发票。当前版本 v7.3.5。
 
 ## 功能特点
 
@@ -143,7 +143,7 @@ npm --prefix web run test
 python scripts/smoke_launch.py --target source
 ```
 
-当前 v7.3.4 发布基线已验证 Python 测试通过（217 条）、Ruff 静态检查通过，前端类型检查、Vitest 单测（17 条）和生产构建通过；DevBase 工具清单已提供 `invoice_processing` 任务入口。发布包启动冒烟使用 `python scripts/smoke_launch.py`；目标机验收按 `docs/RELEASE_SOP.md` 执行。
+当前 v7.3.5 发布基线已验证 Python 测试通过（228 条）、Ruff 静态检查通过，前端类型检查、Vitest 单测（17 条）和生产构建通过；DevBase 工具清单已提供 `invoice_processing` 任务入口。发布包启动冒烟使用 `python scripts/smoke_launch.py`；目标机验收按 `docs/RELEASE_SOP.md` 执行。
 
 ## 版本发布
 
