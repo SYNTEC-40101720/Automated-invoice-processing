@@ -115,5 +115,27 @@ def run_desktop(
         logger.info('WebView 窗口已关闭')
     finally:
         job_service.shutdown()
+        _wait_job_terminal(job_service, timeout=30.0)
         server.should_exit = True
         server_thread.join(timeout=5)
+
+
+_TERMINAL_STATUSES = frozenset({
+    'succeeded', 'completed_with_warnings', 'failed', 'cancelled',
+})
+
+
+def _wait_job_terminal(job_service: JobService, timeout: float) -> None:
+    """等待当前任务到达终态（上限 timeout 秒）。
+
+    shutdown() 只协作式请求取消；任务由 daemon 线程驱动，进程直接
+    退出会把 post_process（Excel 写入）硬杀在中途，留截断文件且
+    历史不落盘。正常取消路径秒级收敛；若卡在不可中断段（如 AI 审核
+    HTTP 请求内），超时后照旧退出，不因等待引入关不掉的新问题。
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        current = job_service.current_job()
+        if not current or current['status'] in _TERMINAL_STATUSES:
+            return
+        time.sleep(0.2)

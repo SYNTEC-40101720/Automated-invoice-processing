@@ -144,6 +144,18 @@ def test_connection(api_key: str, api_base: str = DEFAULT_API_BASE,
         raise RuntimeError('AI 响应格式异常')
 
 
+def _sanitize_cell(value) -> str:
+    """防 Excel 公式注入：以 = + - @ 或 TAB/CR 开头的值加 ' 前缀。
+
+    AI findings 的 issue 可能引用 PDF 原文（如文件名 =HYPERLINK(...)），
+    openpyxl 会原样存储、Excel 打开时按公式执行；加前缀使其成为文本。
+    """
+    value = str(value or '')
+    if value[:1] in ('=', '+', '-', '@', '\t', '\r'):
+        return f"'{value}"
+    return value
+
+
 def write_audit_report(output_dir: str, findings: list[dict]) -> str | None:
     """把审核结果回填到 费用汇总.xlsx 的「审核报告」工作表
 
@@ -163,11 +175,11 @@ def write_audit_report(output_dir: str, findings: list[dict]) -> str | None:
         ws.append(['来源', '文件', '类型', '问题', '建议'])
         for item in findings:
             ws.append([
-                item.get('source', ''),
-                item.get('file', ''),
-                item.get('type', ''),
-                item.get('issue', ''),
-                item.get('suggestion', ''),
+                _sanitize_cell(item.get('source', '')),
+                _sanitize_cell(item.get('file', '')),
+                _sanitize_cell(item.get('type', '')),
+                _sanitize_cell(item.get('issue', '')),
+                _sanitize_cell(item.get('suggestion', '')),
             ])
         if not findings:
             ws.append(['', '', '', '无异常', ''])

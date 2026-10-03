@@ -119,7 +119,7 @@ web/
 - 业务层（`backend/invoice_processor/core/`）禁止 import 任何 Qt、FastAPI 或 React 模块
 - 后台任务通过应用层事件总线发布事件，API 不直接操作 worker
 - WebSocket 连接必须校验本地 token，HTTP API 使用 `X-Local-Token`
-- 桌面服务只监听 `127.0.0.1`，退出时必须调用 `JobService.shutdown()`
+- 桌面服务只监听 `127.0.0.1`，退出时必须调用 `JobService.shutdown()`，并等待当前任务到达终态（上限 30s，`launcher._wait_job_terminal`），防止 post_process 的 Excel 写入被硬杀留截断文件
 - 业务配置（税号、线程数）通过 `config_manager` 读写 INI，运行时用 `_cfg.TARGET_TAX_ID` 动态访问
 
 ## 6. 历史踩坑点 ⚠️
@@ -199,7 +199,7 @@ python scripts/smoke_launch.py --target exe
 
 ```
 
-截至 v7.3.1，本机 Windows 环境已验证：168 条 Python 测试通过（含任务历史 10 条、单实例 3 条、历史路由契约 2 条、WS 心跳/断链回收 2 条、`/jobs/current` 响应模型 1 条），Ruff、前端 typecheck/build、Vitest（8 条）和 SYNTEC PyInstaller 域控合规检查通过；发布包启动冒烟（`scripts/smoke_launch.py`）通过，更新检测由 `test_update_checker.py` 单测覆盖。目标机验收（真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户）按 `docs/ACCEPTANCE_CHECKLIST.md` 在目标环境执行（全自动判定，无人工观察项）。
+截至 v7.3.3，本机 Windows 环境已验证：217 条 Python 测试通过（含任务历史 10 条、单实例 3 条、历史路由契约 2 条、WS 心跳/断链回收 2 条、`/jobs/current` 响应模型 1 条、邮件拉取批次隔离与 ZIP 容错、配置健壮性 9 条、提取正则 17 条、审核报告防注入 6 条、关窗等待 3 条），Ruff、前端 typecheck/build、Vitest（8 条）和 SYNTEC PyInstaller 域控合规检查通过；发布包启动冒烟（`scripts/smoke_launch.py`）通过，更新检测由 `test_update_checker.py` 单测覆盖。目标机验收（真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户）按 `docs/ACCEPTANCE_CHECKLIST.md` 在目标环境执行（全自动判定，无人工观察项）。
 
 测试文件：
 - `tests/test_processor.py`：核心逻辑单元测试
@@ -214,8 +214,9 @@ python scripts/smoke_launch.py --target exe
 
 ### 功能
 - 从邮箱（默认 QQ 邮箱 `imap.qq.com:993`）拉取发票附件到本地「发票收件箱」目录
+- **批次隔离**：每次拉取自动创建独立批次子目录 `拉取_YYYYMMDD_HHMMSS`，本次附件全部保存在该目录，多次拉取互不混放；无新附件时不留空目录。`session_dir` 随拉取结果返回，收件页展示本次批次目录
 - 过滤：发件方白名单（12306/滴滴/网约车/华住/通行费）或主题含「发票/行程单/报销」
-- 附件：下载 PDF/ZIP，ZIP 自动解压只留 PDF；按 `message_id` 去重（`processed_messages.json`）
+- 附件：下载 PDF/ZIP，ZIP 自动解压只留 PDF（成员名清洗 Windows 非法字符；加密/损坏成员跳过并在结果 errors 上报，邮件不写入去重记录、下次拉取重试）；按 `message_id` 去重（`processed_messages.json` 在收件根目录，跨批次生效）
 - Web 工作台：收件箱页面可独立指定并显示收件目录，提供手动拉取邮箱附件；当前不启动后台自动轮询，也不会在拉取后自动创建处理任务
 - 通过 `inbox`/`email` trigger 启动的处理任务完成后归档源 PDF；当前手动拉取邮箱只保存附件，不会自动启动任务
 
@@ -239,7 +240,7 @@ days_back = 30                 # 只拉最近 N 天
 ### 注意
 - 拉取默认不修改邮件状态（`BODY.PEEK` 读取），如需标记已读用 `mark_seen`
 - 授权码属敏感信息，写在 config.ini（已被 .gitignore 排除），勿提交仓库
-- 发票收件箱目录内不要手动放非发票 PDF（会一并处理）
+- 发票收件箱目录内不要手动放非发票 PDF（会一并处理）；处理某次拉取的发票时，在处理页选择对应 `拉取_*` 批次目录作为源目录
 
 ---
 
@@ -247,9 +248,9 @@ days_back = 30                 # 只拉最近 N 天
 
 ### 功能
 处理完成后（post_process 之后）执行**双层审核**，结果只写日志提示（warning），**不阻断处理流程**。**审核重点是金额错误，行程只做简易核对（避免填错），不做复杂的时间/城市推理**：
-- **第一层 · 本地规则预检**（总是执行，确定性、零成本）：同号发票金额不一致 / 疑似重复文件（文件名规则）、行程单合计 ≠ 发票价税合计、住宿税率合理性（3%/6%/9% 等）、单日交通费超 500 元差标
+- **第一层 · 本地规则预检**（总是执行，确定性、零成本）：同号发票金额不一致 / 疑似重复文件（文件名规则）、行程单合计 ≠ 发票价税合计、住宿税率合理性（3%/6%/9% 等）、打车单程超 100 元差标（仅滴滴行程单逐笔行程，不做单日累计）、高铁一等座/商务座超差标
 - **第二层 · AI 语义审核**（`[ai] enabled` 开关控制，DeepSeek）：重点查金额/票据异常（发票号、价税合计、税额、税率、行程合计一致性、金额异常高），行程仅做简单核对（日期矛盾、同日同路线重复、行程单与发票不配套）
-- **审核报告回填**：本地 + AI 问题合并写入 `费用汇总.xlsx` 的「审核报告」工作表（来源/文件/类型/问题/建议）
+- **审核报告回填**：本地 + AI 问题合并写入 `费用汇总.xlsx` 的「审核报告」工作表（来源/文件/类型/问题/建议）；写入前对单元格值做公式注入防护（`= + - @` 开头加 `'` 前缀转文本）
 
 ### 配置（config.ini `[ai]` 段，也可在 Web「设置」视图填写）
 ```ini
@@ -271,5 +272,6 @@ timeout = 60
 - API Key / 邮箱授权码属敏感信息，写入 config.ini（不入库），UI 用密码框显示
 - 审核数据来自 `excel_summary._parse_invoice`，含每文件行明细（日期/时间/城市/路线/类别/金额/税额）
 - 网络调用在 worker 线程执行，失败仅告警不影响处理结果
+- **遗留（有意不修）**：AI 审核系统提示词可能被 PDF 文本操纵（提示注入）——影响仅限产生提示性 findings，不阻断流程、不外传数据；彻底修复需重构提示词结构。真实税控 PDF 语料（千分位等版式）的提取正则未验证，目前只用合成文本测过。
 
 

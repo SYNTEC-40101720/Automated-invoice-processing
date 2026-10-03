@@ -4,7 +4,7 @@
 - 同号发票金额不一致 / 疑似重复文件（仅凭文件名）
 - 行程单合计 vs 发票价税合计
 - 住宿税率合理性（3%/6%/9% 等）
-- 单日交通费超差标预警
+- 打车单程超差标 / 高铁一等座（商务座）超差标
 
 返回与 AI 审核一致的 findings 结构：
 [{'file': str, 'type': 'extract|duplicate|other', 'issue': str, 'suggestion': str}]
@@ -18,7 +18,9 @@ from .excel_summary import _parse_invoice
 
 logger = logging.getLogger(__name__)
 
-TRAFFIC_THRESHOLD = 500.0
+# 打车（滴滴行程单逐笔行程）单程差标；高铁座位差标只允许二等座
+TAXI_TRIP_THRESHOLD = 100.0
+RAIL_FLAGGED_SEATS = ('一等座', '商务座')
 VALID_TAX_RATES = (0.01, 0.02, 0.03, 0.05, 0.06, 0.09, 0.10, 0.13)
 
 
@@ -64,13 +66,14 @@ def check_filenames(files: list[str]) -> list[dict]:
 
 
 def check_rows(rows_by_file: dict[str, list[dict]]) -> list[dict]:
-    """规则：行程单合计 vs 发票金额 / 住宿税率 / 单日交通费阈值"""
+    """规则：行程单合计 vs 发票金额 / 住宿税率 / 打车单程阈值 / 高铁座位等级"""
     findings: list[dict] = []
-    daily_traffic: dict[str, float] = defaultdict(float)
 
     for f, rows in rows_by_file.items():
+        is_trip = '行程单' in f
+        is_rail_ticket = '高铁票' in f
         # 行程单合计校验（文件名金额 = 发票价税合计）
-        if '行程单' in f:
+        if is_trip:
             m = re.match(r'^[^-]+-(\d+\.\d{2})', f)
             expected = float(m.group(1)) if m else None
             total = round(sum(r.get('transport_amount') or 0 for r in rows), 2)
@@ -93,17 +96,34 @@ def check_rows(rows_by_file: dict[str, list[dict]]) -> list[dict]:
                         'issue': f'住宿税率异常 {rate:.2%}（不含税 {amt}，税额 {tax}）',
                         'suggestion': '核对发票税率是否合理',
                     })
-            if r.get('transport_amount'):
-                daily_traffic[r['date']] += r['transport_amount']
-
-    for date, amt in sorted(daily_traffic.items()):
-        if amt > TRAFFIC_THRESHOLD:
-            findings.append({
-                'file': date,
-                'type': 'other',
-                'issue': f'{date} 交通费 {amt:.2f} 超过 {TRAFFIC_THRESHOLD:.0f} 元差标',
-                'suggestion': '确认是否需附超标说明',
-            })
+            # 打车单程超差标（仅滴滴行程单解析出的逐笔行程；
+            # 通行费汇总行程单无逐笔明细，总额不适用单程规则）
+            if is_trip and r.get('category') == 'transport' and (
+                'route' in r or 'time' in r
+            ):
+                amt = r.get('transport_amount')
+                if amt and amt > TAXI_TRIP_THRESHOLD:
+                    route = r.get('route') or ''
+                    suffix = f'（{route}）' if route else ''
+                    findings.append({
+                        'file': f,
+                        'type': 'other',
+                        'issue': (
+                            f'打车单程 {amt:.2f} 元超过 '
+                            f'{TAXI_TRIP_THRESHOLD:.0f} 元差标{suffix}'
+                        ),
+                        'suggestion': '确认是否需附超标说明',
+                    })
+            # 高铁座位等级超差标
+            if is_rail_ticket or r.get('category') == 'transport':
+                seat = r.get('seat_class')
+                if seat in RAIL_FLAGGED_SEATS:
+                    findings.append({
+                        'file': f,
+                        'type': 'other',
+                        'issue': f'高铁票座位等级为{seat}，差标仅限二等座',
+                        'suggestion': '确认是否需附超标说明或说明一等座事由',
+                    })
     return findings
 
 

@@ -69,7 +69,7 @@ export function InboxView({ emailSettings }: InboxViewProps) {
             <div className="source-copy">
               <span className="field-label">统一收件目录</span>
               <strong title={emailSettings?.inbox_dir}>{emailSettings?.inbox_dir ?? '正在读取收件目录'}</strong>
-              <span className="inbox-control-hint">邮箱附件和其他来源文件都放在这里</span>
+              <span className="inbox-control-hint">邮箱附件按拉取批次分目录保存，其他来源文件可手动放入</span>
             </div>
             <div className="inbox-directory-actions">
               <button className="secondary-button" onClick={() => void chooseInboxDirectory()} disabled={updateEmail.isPending}>
@@ -95,7 +95,13 @@ export function InboxView({ emailSettings }: InboxViewProps) {
           <div className="feature-stat"><strong>{result?.downloaded ?? 0}</strong><span>新附件</span></div>
           <div className="feature-stat"><strong>{result?.total_scanned ?? 0}</strong><span>扫描邮件</span></div>
           <div className="feature-stat"><strong>{result?.errors.length ?? 0}</strong><span>异常</span></div>
-          <div className="feature-message">{result ? result.new_files.length > 0 ? '已拉取新附件，请到发票处理页面手动开始处理' : '没有发现新的 PDF 附件' : '尚未执行拉取'}</div>
+          <div className="feature-message">
+            {result
+              ? result.new_files.length > 0
+                ? <>已拉取新附件，保存在本次批次目录：<strong title={result.session_dir ?? undefined}>{result.session_dir ?? '（未知）'}</strong>，请到发票处理页面选择该目录开始处理</>
+                : '没有发现新的 PDF 附件'
+              : '尚未执行拉取'}
+          </div>
         </section>
         {result?.errors.length ? <section className="feature-section error-list">{result.errors.map((error) => <p key={error}>{error}</p>)}</section> : null}
       </div>

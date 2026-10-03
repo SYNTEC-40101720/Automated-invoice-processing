@@ -55,19 +55,71 @@ class TestCheckRows:
         out = check_rows(rows)
         assert not any('住宿税率异常' in f['issue'] for f in out)
 
-    def test_traffic_threshold(self):
+    def test_taxi_single_trip_over_threshold(self):
+        """打车单程超 100 元差标"""
         rows = {
-            'A-600.00.pdf': [
-                {'date': '2026-07-27', 'transport_amount': 600.0},
+            'A-150.00行程单.pdf': [
+                {'date': '2026-07-27', 'transport_amount': 150.0,
+                 'category': 'transport', 'route': '杭州东站 某某公寓'},
             ],
         }
         out = check_rows(rows)
-        assert any('超过 500 元差标' in f['issue'] for f in out)
+        assert any('打车单程 150.00 元超过 100 元差标' in f['issue'] for f in out)
 
-    def test_below_threshold_ok(self):
+    def test_taxi_multiple_trips_same_day_not_accumulated(self):
+        """同日多笔打车各不超标 → 不累计、不报（无单日 500 元限制）"""
         rows = {
-            'A-300.00.pdf': [
-                {'date': '2026-07-27', 'transport_amount': 300.0},
+            'A-320.00行程单.pdf': [
+                {'date': '2026-07-27', 'transport_amount': 80.0,
+                 'category': 'transport', 'route': '起点 终点'},
+                {'date': '2026-07-27', 'transport_amount': 80.0,
+                 'category': 'transport', 'route': '起点 终点'},
+                {'date': '2026-07-27', 'transport_amount': 80.0,
+                 'category': 'transport', 'route': '起点 终点'},
+                {'date': '2026-07-27', 'transport_amount': 80.0,
+                 'category': 'transport', 'route': '起点 终点'},
+            ],
+        }
+        assert check_rows(rows) == []
+
+    def test_taxi_at_threshold_ok(self):
+        """单程恰好 100 元不报"""
+        rows = {
+            'A-100.00行程单.pdf': [
+                {'date': '2026-07-27', 'transport_amount': 100.0,
+                 'category': 'transport', 'route': '起点 终点'},
+            ],
+        }
+        assert check_rows(rows) == []
+
+    def test_rail_first_class_flagged(self):
+        """高铁一等座超差标"""
+        rows = {
+            'H12345678901234567890-500.00高铁票.pdf': [
+                {'date': '2026-07-27', 'transport_amount': 500.0,
+                 'category': 'transport', 'seat_class': '一等座'},
+            ],
+        }
+        out = check_rows(rows)
+        assert any('一等座' in f['issue'] and '二等座' in f['issue'] for f in out)
+
+    def test_rail_business_class_flagged(self):
+        """高铁商务座超差标"""
+        rows = {
+            'H12345678901234567890-1500.00高铁票.pdf': [
+                {'date': '2026-07-27', 'transport_amount': 1500.0,
+                 'category': 'transport', 'seat_class': '商务座'},
+            ],
+        }
+        out = check_rows(rows)
+        assert any('商务座' in f['issue'] for f in out)
+
+    def test_rail_second_class_ok(self):
+        """高铁二等座不报（金额高也不受交通费阈值限制）"""
+        rows = {
+            'H12345678901234567890-600.00高铁票.pdf': [
+                {'date': '2026-07-27', 'transport_amount': 600.0,
+                 'category': 'transport', 'seat_class': '二等座'},
             ],
         }
         assert check_rows(rows) == []

@@ -152,7 +152,8 @@ class ConfigManager:
     def _load_from_disk(self) -> configparser.ConfigParser:
         parser = self._new_parser()
         if self.path.is_file():
-            parser.read(self.path, encoding="utf-8")
+            # utf-8-sig 容忍用户编辑器写入的 BOM；写出始终为无 BOM 的 UTF-8
+            parser.read(self.path, encoding="utf-8-sig")
         return parser
 
     def _write_parser(self, parser: configparser.ConfigParser) -> None:

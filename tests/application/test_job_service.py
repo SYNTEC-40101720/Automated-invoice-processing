@@ -106,6 +106,24 @@ def test_known_directory_includes_configured_inbox(tmp_path, monkeypatch):
     assert service.is_known_directory(str(tmp_path / 'other')) is False
 
 
+def test_known_directory_includes_inbox_pull_batches(tmp_path, monkeypatch):
+    """收件根目录下的拉取批次子目录同样放行（打开目录校验）"""
+    inbox = tmp_path / 'inbox'
+    batch = inbox / '拉取_20261002_120000'
+    batch.mkdir(parents=True)
+    monkeypatch.setattr(
+        'invoice_processor.application.job_service.get_inbox_dir',
+        lambda: str(inbox),
+    )
+    service, _ = make_service(tmp_path)
+
+    assert service.is_known_directory(str(batch)) is True
+    # 深于一层（批次的子目录）不放行
+    nested = batch / 'sub'
+    nested.mkdir()
+    assert service.is_known_directory(str(nested)) is False
+
+
 def test_job_service_runs_pipeline_and_publishes_terminal_snapshot(tmp_path):
     event_bus = EventBus()
     service, processor = make_service(tmp_path, event_bus)

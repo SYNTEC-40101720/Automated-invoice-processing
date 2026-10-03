@@ -528,6 +528,7 @@ def test_email_pull_only_downloads_files(monkeypatch, tmp_path):
     monkeypatch.setattr(email_route, 'get_email_days_back', lambda: 30)
     monkeypatch.setattr(email_route, 'pull_invoices', lambda **kwargs: {
         'downloaded': 1, 'new_files': [str(tmp_path / 'invoice.pdf')],
+        'session_dir': str(tmp_path / '拉取_20261002_120000'),
         'errors': [], 'total_scanned': 1,
     })
 

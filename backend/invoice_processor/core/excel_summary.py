@@ -16,9 +16,10 @@ logger = logging.getLogger(__name__)
 # ── 费用类别关键字 ──────────────────────────────────────
 _HOTEL_KEYWORDS = ['住宿', '酒店', '宾馆', '客房', '入住', '房费', '住宿费']
 _TRANSPORT_KEYWORDS = [
-    '高铁', '乘车', '滴滴', '通行费', '出行', '交通',
-    '火车', '高铁票', '行程单',
+    '高铁', '乘车', '滴滴', '通行费', '火车', '高铁票', '行程单',
 ]
+# 弱交通关键字：可能出现在住宿场景（如「商务出行」），排在住宿之后
+_TRANSPORT_KEYWORDS_WEAK = ['出行']
 
 # ── 日期提取模式 ────────────────────────────────────────
 # 优先匹配带特定前缀的日期字段，fallback 到通用日期
@@ -48,17 +49,22 @@ def _determine_category(text: str) -> str:
 
     返回: 'transport' | 'hotel' | 'unknown'
 
-    注意：交通关键字优先于住宿关键字，因为滴滴行程单的目的地可能包含"酒店"，
-    但行程单本身是交通费用，不应被误判为住宿。
+    三层判定：
+    1. 强交通特征（高铁/乘车/滴滴/行程单等）优先——滴滴行程单的
+       目的地可能含「酒店」，本质仍是交通费；
+    2. 再查住宿关键字——住宿发票的收款银行常为「交通银行」，
+       不能让裸「交通」这类过宽关键字先吞掉住宿发票；
+    3. 最后查弱交通关键字（如「出行」，酒店场景也可能出现）。
     """
-    # 优先检查交通关键字（滴滴行程单可能含"酒店"目的地，但本质是交通费）
     for kw in _TRANSPORT_KEYWORDS:
         if kw in text:
             return 'transport'
-    # 再检查住宿关键字
     for kw in _HOTEL_KEYWORDS:
         if kw in text:
             return 'hotel'
+    for kw in _TRANSPORT_KEYWORDS_WEAK:
+        if kw in text:
+            return 'transport'
     return 'unknown'
 
 
@@ -89,11 +95,13 @@ def _extract_date(text: str, category: str = 'unknown') -> str | None:
         return f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
 
     if category == 'transport':
-        # ① 优先匹配行程日期（乘车、行程），不匹配开票/发票日期
+        # ① 优先匹配行程日期（乘车、行程），不匹配开票/发票日期。
+        # 整段必须留在同一个 f-string 里：跨 raw 字符串拼接时 {{1,2}}
+        # 不经 f-string 处理，字面量 `{` 会让分支永远匹配不上真实票据。
         for prefix in ('乘车', '行程'):
             m = re.search(
                 rf'{prefix}日期\s*[:：]?\s*(\d{{4}})'
-                r'[年/-](\d{{1,2}})[月/-](\d{{1,2}})[日]?',
+                rf'[年/-](\d{{1,2}})[月/-](\d{{1,2}})[日]?',
                 text,
             )
             if m:
@@ -209,11 +217,20 @@ def _parse_didi_trip_details(raw_text: str) -> list[dict] | None:
     从原始文本（保留空白）中提取每笔行程的日期、时间、城市、路线与金额。
     返回: [{'date', 'time', 'city', 'route', 'mileage', 'amount'}, ...] 或 None
     """
-    # 提取年份（从行程起止日期）
-    ym = re.search(r'行程起止日期.*?(\d{4})-\d{2}-\d{2}', raw_text)
+    # 提取起止日期的年份；跨年行程（如 2025-12-28 至 2026-01-05）
+    # 取两个年份，按行程月份归属：月份小于起始月（12 月起的行程单里
+    # 出现 01-02 月行程）→ 归终止年份，否则归起始年份。
+    ym = re.search(
+        r'行程起止日期.*?(\d{4})-(\d{2})-(\d{2})(?:.*?(\d{4})-\d{2}-\d{2})?',
+        raw_text,
+    )
     if not ym:
         return None
-    year = ym.group(1)
+    start_year, start_month = ym.group(1), int(ym.group(2))
+    end_year = ym.group(4) or start_year
+
+    def _trip_year(mm: str) -> str:
+        return end_year if int(mm) < start_month else start_year
 
     trips = []
     for line in raw_text.split('\n'):
@@ -236,7 +253,7 @@ def _parse_didi_trip_details(raw_text: str) -> list[dict] | None:
             continue
         if amount > 0:
             trips.append({
-                'date': f'{year}-{mm}-{dd}',
+                'date': f'{_trip_year(mm)}-{mm}-{dd}',
                 'time': hhmm,
                 'city': city,
                 'route': route,
@@ -311,6 +328,11 @@ def _parse_invoice(output_dir: str, filename: str, processor) -> list[dict] | No
         m = re.search(r'\d{4}年\d{1,2}月\d{1,2}日\s*(\d{1,2}):(\d{2})\s*开', text)
         if m:
             extra['time'] = f'{int(m.group(1)):02d}:{m.group(2)}'
+        # 高铁票座位等级：二等座 / 一等座 / 商务座。
+        # 卧铺不在差标核查范围（用户口径：仅查高铁座位）。
+        m = re.search(r'(一等座|二等座|商务座)', text)
+        if m:
+            extra['seat_class'] = m.group(1)
 
     if category == 'unknown':
         transport_amount = _extract_amount_from_filename(filename)

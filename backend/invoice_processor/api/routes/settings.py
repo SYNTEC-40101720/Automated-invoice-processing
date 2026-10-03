@@ -50,6 +50,14 @@ router = APIRouter(
 )
 
 
+def _to_int(value, fallback: int) -> int:
+    """手编 config.ini 的非法数值回退默认，不让设置页整体 500"""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
 def _settings() -> SettingsResponse:
     email = get_email_config()
     return SettingsResponse(
@@ -59,7 +67,7 @@ def _settings() -> SettingsResponse:
         ),
         email=EmailSettings(
             imap_host=str(email['imap_host']),
-            imap_port=int(email['imap_port']),
+            imap_port=_to_int(email['imap_port'], 993),
             username=get_email_username(),
             inbox_dir=get_inbox_dir(),
             days_back=get_email_days_back(),
@@ -188,7 +196,7 @@ def test_email(request: EmailSettingsPatch) -> EmailTestResponse:
         )
     mail = None
     try:
-        mail = imaplib.IMAP4_SSL(host, port, timeout=10)
+        mail = imaplib.IMAP4_SSL(host, _to_int(port, 993), timeout=10)
         mail.login(username, auth_code)
     except Exception as exc:
         raise ApplicationError(

@@ -15,7 +15,8 @@ import { BottomPanel } from '../components/BottomPanel'
 import { Sidebar } from '../components/Sidebar'
 import { StatusBar } from '../components/StatusBar'
 import { UpdateBanner } from '../components/UpdateBanner'
-import { api, connectEvents } from '../api/client'
+import { api } from '../api/client'
+import { useWorkbenchEvents } from '../hooks/useWorkbenchEvents'
 import { ProcessingView } from '../features/processing/ProcessingView'
 import { AuditView } from '../features/AuditView'
 import { InboxView } from '../features/InboxView'
@@ -29,9 +30,7 @@ export function App() {
   const bottomPanelOpen = useWorkbench((state) => state.bottomPanelOpen)
   const setView = useWorkbench((state) => state.setView)
   const setSelectedTool = useWorkbench((state) => state.setSelectedTool)
-  const setConnected = useWorkbench((state) => state.setConnected)
   const setJob = useWorkbench((state) => state.setJob)
-  const appendEvent = useWorkbench((state) => state.appendEvent)
   const setLogs = useWorkbench((state) => state.setLogs)
   const setBottomPanelOpen = useWorkbench((state) => state.setBottomPanelOpen)
   const toggleBottomPanel = useWorkbench((state) => state.toggleBottomPanel)
@@ -50,7 +49,6 @@ export function App() {
   const [draggingSidebar, setDraggingSidebar] = useState(false)
   const dragStartX = useRef(0)
   const dragStartWidth = useRef(sidebarWidth)
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const lastEventId = useRef(0)
   const healthQuery = useQuery({ queryKey: ['health'], queryFn: api.health, retry: false })
   const updateQuery = useQuery({
@@ -116,72 +114,19 @@ export function App() {
     }
   }, [currentJobQuery.data, setJob])
 
+  useWorkbenchEvents({ onSnapshotDirectory: setDirectory })
+
   useEffect(() => {
-    let disposed = false
-    let cleanup: (() => void) | undefined
-    let reconnectScheduled = false
-    let reconnectDelay = 1500
-    let restoreInFlight: Promise<void> | undefined
-    const restoreState = () => {
-      if (restoreInFlight) return restoreInFlight
-      const afterEventId = lastEventId.current
-      restoreInFlight = api.currentJob().then((snapshot) => {
-        setJob(snapshot)
-        if (!snapshot?.id) {
-          setLogs([])
-          return
-        }
-        setDirectory(snapshot.source_dir)
-        return api.logs(snapshot.id, afterEventId).then((response) => {
-          mergeLogs(response.items)
-          const latestLogEventId = response.items.at(-1)?.event_id ?? 0
-          lastEventId.current = Math.max(lastEventId.current, latestLogEventId)
-        })
-      }).catch(() => undefined).finally(() => {
-        restoreInFlight = undefined
-      })
-      return restoreInFlight
+    if (!job?.id) {
+      setLogs([])
+      return
     }
-    const connect = () => {
-      if (disposed) return
-      reconnectScheduled = false
-      cleanup = connectEvents((event) => {
-        if (event.event_id > 0) {
-          if (lastEventId.current > 0 && event.event_id > lastEventId.current + 1) {
-            void restoreState()
-          }
-          if (event.event_id <= lastEventId.current) return
-          lastEventId.current = event.event_id
-        }
-        appendEvent(event)
-        if (event.type === 'job.snapshot') {
-          const nextJob = event.payload as never
-          setJob(nextJob)
-          setDirectory((nextJob as { source_dir: string }).source_dir)
-        }
-      }, (isConnected) => {
-        setConnected(isConnected)
-        if (isConnected) {
-          reconnectDelay = 1500
-          void restoreState()
-        } else if (!disposed && !reconnectScheduled) {
-          reconnectScheduled = true
-          const delay = reconnectDelay
-          reconnectDelay = Math.min(reconnectDelay * 2, 10000)
-          reconnectTimer.current = setTimeout(() => {
-            reconnectTimer.current = undefined
-            connect()
-          }, delay)
-        }
-      }, lastEventId.current)
-    }
-    connect()
-    return () => {
-      disposed = true
-      cleanup?.()
-      if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
-    }
-  }, [appendEvent, mergeLogs, setConnected, setJob, setLogs])
+    setLogs([])
+    api.logs(job.id).then((response) => {
+      mergeLogs(response.items)
+      lastEventId.current = Math.max(lastEventId.current, response.next_event_id ?? 0)
+    }).catch(() => undefined)
+  }, [job?.id, mergeLogs, setLogs])
 
   useEffect(() => {
     if (!job?.id) {

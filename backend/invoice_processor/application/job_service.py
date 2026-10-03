@@ -196,12 +196,15 @@ class JobService:
             )
 
     def is_known_directory(self, path: str) -> bool:
-        """判断目录是否为配置的收件目录、任务输出目录或历史输出目录。"""
+        """判断目录是否为配置的收件目录（含拉取批次子目录）、任务输出目录或历史输出目录。"""
         normalized = os.path.realpath(os.path.abspath(os.path.expanduser(path)))
         inbox_dir = os.path.realpath(
             os.path.abspath(os.path.expanduser(get_inbox_dir()))
         )
-        if normalized == inbox_dir:
+        if normalized == inbox_dir or os.path.dirname(normalized) == inbox_dir:
+            # 收件根目录本身，或其下的拉取批次子目录（拉取_时间戳）。
+            # 后者不逐一校验目录名：根目录已知可信，一层子目录均为
+            # 用户可见的拉取批次或手动整理结果，放开即可。
             return True
         if self.is_known_output_directory(normalized):
             return True

@@ -5,7 +5,10 @@
 - 登录：账号 + 授权码（QQ 邮箱 IMAP 授权码，非登录密码）
 - 过滤：发件方白名单 或 主题含关键字（发票/行程单/报销）
 - 附件：下载 PDF / ZIP；ZIP 自动解压并只保留 PDF
+- 批次隔离：每次拉取保存到独立会话子目录（拉取_YYYYMMDD_HHMMSS），
+  多次拉取的附件互不混放；无新附件时不留空目录
 - 去重：本地 processed_messages.json 记录已处理 message_id，避免重复下载
+  （记录文件在收件根目录，跨批次生效）
 - 安全：默认不修改邮件状态（BODY.PEEK 读取）；可选 mark_seen 标记已读
 - 约束：本模块不依赖 Qt，可独立运行/测试
 """
@@ -120,8 +123,33 @@ def _unique_path(directory: str, filename: str) -> str:
     return dest
 
 
-def _save_attachments(msg, inbox_dir: str, new_files: list) -> list:
-    """保存邮件附件（PDF/ZIP），ZIP 解压只留 PDF。返回保存路径列表"""
+def _session_dir_path(inbox_dir: str) -> str:
+    """生成本次拉取的会话子目录路径（拉取_YYYYMMDD_HHMMSS，重名加序号）。
+
+    只计算路径不创建目录：目录在首次保存附件时由 _save_attachments
+    创建，本次拉取没有任何新附件时不会留下空目录。
+    """
+    stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    for counter in range(1000):
+        name = f'拉取_{stamp}' if counter == 0 else f'拉取_{stamp}_{counter}'
+        path = os.path.join(inbox_dir, name)
+        if not os.path.exists(path):
+            return path
+    raise FileExistsError(f'无法生成唯一拉取目录名: {inbox_dir}')
+
+
+def _safe_filename(filename: str) -> str:
+    """清洗 Windows 非法字符（直接附件与 ZIP 成员名统一口径）"""
+    return re.sub(r'[\\/:*?"<>|]', '_', filename)
+
+
+def _save_attachments(msg, target_dir: str, new_files: list,
+                      errors: list | None = None) -> list:
+    """保存邮件附件（PDF/ZIP）到目标目录，ZIP 解压只留 PDF。返回保存路径列表
+
+    目录按需创建：首份文件写入前才 makedirs，整封邮件没有可保存
+    附件时不留空目录。errors 传入时成员级解压失败会计入。
+    """
     saved = []
     for part in msg.walk():
         filename = part.get_filename()
@@ -140,9 +168,10 @@ def _save_attachments(msg, inbox_dir: str, new_files: list) -> list:
         if len(payload) > _MAX_ATTACHMENT_BYTES:
             logger.warning('附件超过大小限制，已跳过: %s', filename)
             continue
-        safe = re.sub(r'[\\/:*?"<>|]', '_', filename)
+        safe = _safe_filename(filename)
         if is_pdf:
-            dest = _unique_path(inbox_dir, safe)
+            os.makedirs(target_dir, exist_ok=True)
+            dest = _unique_path(target_dir, safe)
             with open(dest, 'wb') as f:
                 f.write(payload)
             new_files.append(dest)
@@ -173,25 +202,37 @@ def _save_attachments(msg, inbox_dir: str, new_files: list) -> list:
                             'ZIP 内 PDF 总大小超过限制，已停止解压: %s', filename
                         )
                         break
-                    target = _unique_path(inbox_dir, os.path.basename(info.filename))
+                    target = _unique_path(
+                        target_dir, _safe_filename(os.path.basename(info.filename))
+                    )
                     try:
-                        with zf.open(info) as src, open(target, 'wb') as out:
-                            remaining = info.file_size
-                            while remaining:
-                                chunk = src.read(min(1024 * 1024, remaining))
-                                if not chunk:
-                                    raise OSError('ZIP 条目内容长度不足')
-                                out.write(chunk)
-                                remaining -= len(chunk)
+                        with zf.open(info) as src:
+                            os.makedirs(target_dir, exist_ok=True)
+                            with open(target, 'wb') as out:
+                                remaining = info.file_size
+                                while remaining:
+                                    chunk = src.read(min(1024 * 1024, remaining))
+                                    if not chunk:
+                                        raise OSError('ZIP 条目内容长度不足')
+                                    out.write(chunk)
+                                    remaining -= len(chunk)
                         new_files.append(target)
                         saved.append(target)
                         logger.info('ZIP 内 PDF 已解压: %s', target)
-                    except OSError as exc:
+                    except (OSError, RuntimeError, NotImplementedError,
+                            zipfile.BadZipFile) as exc:
+                        # RuntimeError: 加密成员；NotImplementedError: 不支持的
+                        # 压缩方法；BadZipFile: 成员 CRC 损坏。均需清理 0 字节
+                        # 残留并计入 errors，且不得中止同 zip 后续成员。
                         try:
                             os.remove(target)
                         except OSError:
                             pass
                         logger.warning('ZIP 内 PDF 解压失败 %s: %s', info.filename, exc)
+                        if errors is not None:
+                            errors.append(
+                                f'ZIP 成员 {info.filename} 解压失败: {exc}'
+                            )
         except (zipfile.BadZipFile, OSError) as e:
             logger.warning('ZIP 解压失败 %s: %s', filename, e)
     return saved
@@ -217,7 +258,9 @@ def pull_invoices(host='imap.qq.com', port=993, username='', auth_code='',
         timeout: IMAP 连接及读写超时（秒）
 
     Returns:
-        {'downloaded': int, 'new_files': list, 'errors': list, 'total_scanned': int}
+        {'downloaded': int, 'new_files': list, 'session_dir': str | None,
+         'errors': list, 'total_scanned': int}
+        session_dir 为本次拉取的会话子目录；无新附件时为 None。
 
     Raises:
         ValueError: 账号/授权码/收件箱目录未配置
@@ -230,11 +273,14 @@ def pull_invoices(host='imap.qq.com', port=993, username='', auth_code='',
     os.makedirs(inbox_dir, exist_ok=True)
     senders = DEFAULT_SENDERS if senders is None else senders
     keywords = DEFAULT_KEYWORDS if keywords is None else keywords
+    # 去重记录在收件根目录，跨批次生效
     record_path = record_path or os.path.join(inbox_dir, _RECORD_FILENAME)
     processed = _load_processed(record_path)
     new_files: list = []
     errors: list = []
     total_scanned = 0
+    # 本次拉取的会话子目录：首份附件保存前不创建，无新附件不落空目录
+    session_dir: str | None = None
 
     since = _imap_since_date(days_back)
 
@@ -249,8 +295,8 @@ def pull_invoices(host='imap.qq.com', port=993, username='', auth_code='',
         typ, data = mail.search(None, f'(SINCE "{since}")')
         if typ != 'OK' or not data or not data[0]:
             logger.info('未搜索到邮件（最近 %d 天）', days_back)
-            return {'downloaded': 0, 'new_files': [], 'errors': errors,
-                    'total_scanned': 0}
+            return {'downloaded': 0, 'new_files': [], 'session_dir': None,
+                    'errors': errors, 'total_scanned': 0}
 
         msg_nums = data[0].split()
         total_scanned = len(msg_nums)
@@ -276,10 +322,17 @@ def pull_invoices(host='imap.qq.com', port=993, username='', auth_code='',
                 if msg_id in processed:
                     continue
 
-                saved = _save_attachments(full_msg, inbox_dir, new_files)
+                # 首份附件保存时确定本次会话子目录
+                if session_dir is None:
+                    session_dir = _session_dir_path(inbox_dir)
+                errors_before = len(errors)
+                saved = _save_attachments(full_msg, session_dir, new_files, errors)
                 if saved:
-                    processed.add(msg_id)
-                    _save_processed(record_path, processed)
+                    # 有成员级解压失败时不标记 processed：让下次拉取重试，
+                    # 避免「部分 PDF 丢失却永久去重」。
+                    if len(errors) == errors_before:
+                        processed.add(msg_id)
+                        _save_processed(record_path, processed)
                     logger.info('已处理: %s（%s）', subject, from_addr)
                 if mark_seen:
                     mail.store(num, '+FLAGS', '\\Seen')
@@ -295,6 +348,7 @@ def pull_invoices(host='imap.qq.com', port=993, username='', auth_code='',
     return {
         'downloaded': len(new_files),
         'new_files': new_files,
+        'session_dir': session_dir,
         'errors': errors,
         'total_scanned': total_scanned,
     }

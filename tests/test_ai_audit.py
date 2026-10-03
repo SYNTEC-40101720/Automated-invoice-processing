@@ -1,12 +1,19 @@
-"""单元测试：AI 审核模块（提示词构造 + 响应解析，不联网）
+"""单元测试：AI 审核模块（提示词构造 + 响应解析 + 报告写入防注入，不联网）
 
 运行方式: pytest tests/test_ai_audit.py -v
 """
 import json
+import os
 import urllib.request
 
-from invoice_processor.core.ai_audit import build_prompt, parse_findings
+from invoice_processor.core.ai_audit import (
+    _sanitize_cell,
+    build_prompt,
+    parse_findings,
+    write_audit_report,
+)
 from invoice_processor.core.ai_audit import test_connection as check_ai_connection
+from openpyxl import Workbook, load_workbook
 
 
 class FakeResponse:
@@ -110,3 +117,73 @@ def test_connection_posts_minimal_chat_request(monkeypatch):
         'max_tokens': 1,
         'stream': False,
     }
+
+
+class TestSanitizeCell:
+    def test_formula_prefix_escaped(self):
+        for prefix in ('=', '+', '-', '@', '\t', '\r'):
+            assert _sanitize_cell(f'{prefix}HYPERLINK("x")') == (
+                f"'{prefix}HYPERLINK(\"x\")"
+            )
+
+    def test_plain_values_untouched(self):
+        assert _sanitize_cell('打车单程 150.00 元超标') == '打车单程 150.00 元超标'
+        assert _sanitize_cell('AI 审核') == 'AI 审核'
+        assert _sanitize_cell(None) == ''
+        assert _sanitize_cell(123) == '123'
+
+
+class TestWriteAuditReport:
+    def _xlsx_with_summary(self, tmp_path):
+        """费用汇总.xlsx 存在是 write_audit_report 的前置条件"""
+        wb = Workbook()
+        ws = wb.active
+        ws.title = '费用汇总'
+        path = os.path.join(str(tmp_path), '费用汇总.xlsx')
+        wb.save(path)
+        return path
+
+    def test_formula_finding_neutralized(self, tmp_path):
+        """AI findings 引用 PDF 文本（=HYPERLINK 开头）→ 写入时加 ' 前缀"""
+        xlsx = self._xlsx_with_summary(tmp_path)
+        findings = [{
+            'source': 'AI 审核',
+            'file': '=HYPERLINK("http://evil", "点此")',
+            'type': 'other',
+            'issue': '=cmd|\' /C calc\'!A0',
+            'suggestion': '建议',
+        }]
+        result = write_audit_report(str(tmp_path), findings)
+
+        assert result == xlsx
+        wb = load_workbook(xlsx)
+        ws = wb['审核报告']
+        row = [ws.cell(row=2, column=c).value for c in range(1, 6)]
+        assert row[1] == "'=HYPERLINK(\"http://evil\", \"点此\")"
+        assert row[3] == "'=cmd|' /C calc'!A0"
+        # openpyxl data_type 不是 f（formula）
+        assert ws.cell(row=2, column=4).data_type != 'f'
+
+    def test_normal_finding_written_as_is(self, tmp_path):
+        xlsx = self._xlsx_with_summary(tmp_path)
+        findings = [{
+            'source': '本地规则',
+            'file': 'a.pdf',
+            'type': 'other',
+            'issue': '打车单程 150.00 元超标',
+            'suggestion': '附超标说明',
+        }]
+        write_audit_report(str(tmp_path), findings)
+        wb = load_workbook(xlsx)
+        ws = wb['审核报告']
+        assert ws.cell(row=2, column=4).value == '打车单程 150.00 元超标'
+
+    def test_no_summary_returns_none(self, tmp_path):
+        assert write_audit_report(str(tmp_path), []) is None
+
+    def test_empty_findings_writes_ok_row(self, tmp_path):
+        xlsx = self._xlsx_with_summary(tmp_path)
+        write_audit_report(str(tmp_path), [])
+        wb = load_workbook(xlsx)
+        ws = wb['审核报告']
+        assert ws.cell(row=2, column=4).value == '无异常'

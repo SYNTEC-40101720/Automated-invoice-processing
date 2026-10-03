@@ -128,6 +128,7 @@ export interface EmailPullResponse {
   pull: {
     downloaded: number
     new_files: string[]
+    session_dir: string | null
     errors: string[]
     total_scanned: number
   }

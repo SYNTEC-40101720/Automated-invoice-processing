@@ -82,15 +82,20 @@ def load_config() -> configparser.ConfigParser:
     """加载配置（若文件不存在则先创建模板）
 
     返回 ConfigParser 实例，业务配置位于 [business] 段。
+    interpolation=None：配置值允许含 %（与 devbase 读写口径一致）；
+    utf-8-sig：容忍用户用记事本等编辑器留下的 BOM，防止首段被
+    丢弃后整套配置被默认值覆写。
     """
     with _CONFIG_LOCK:
         _ensure_config_exists()
-        cfg = configparser.ConfigParser()
+        cfg = configparser.ConfigParser(interpolation=None)
         # 先加载默认值，再读取文件覆盖
         cfg.read_dict(_DEFAULTS)
         try:
-            cfg.read(get_config_path(), encoding='utf-8')
-        except (OSError, configparser.Error) as e:
+            cfg.read(get_config_path(), encoding='utf-8-sig')
+        except (OSError, UnicodeDecodeError, configparser.Error) as e:
+            # UnicodeDecodeError 属 ValueError：GBK/ANSI 编码的文件在此
+            # 兜底，避免应用在 import 阶段（setup_logging 之前）崩溃。
             logger.warning(f"读取配置失败: {e}，将使用默认配置")
         return cfg
 
@@ -181,12 +186,21 @@ def set_business_config(target_tax_id: str, max_workers: int) -> None:
     })
 
 
+def _safe_get(cfg: configparser.ConfigParser, section: str, key: str,
+              fallback: str) -> str:
+    """单键容错读取：单键损坏不拖垮整个配置段"""
+    try:
+        return cfg.get(section, key, fallback=fallback)
+    except (configparser.Error, ValueError):
+        return fallback
+
+
 # ── 邮箱配置（自动拉取发票）──────────────────────────────
 
 def get_email_config() -> dict:
     """读取邮箱拉取配置（缺失字段用默认值）"""
     cfg = load_config()
-    return {k: cfg.get('email', k, fallback=v) for k, v in _DEFAULTS['email'].items()}
+    return {k: _safe_get(cfg, 'email', k, v) for k, v in _DEFAULTS['email'].items()}
 
 
 def get_email_senders() -> list[str]:
@@ -216,6 +230,21 @@ def get_email_username() -> str:
     return get_email_config()['username'].strip()
 
 
+def _decrypt_or_empty(raw: str) -> str:
+    """解密 dpapi: 密文；损坏或跨机器迁移导致解密失败时按未配置处理。
+
+    设置页依赖本函数的返回值渲染 auth_code_configured / api_key_configured，
+    抛异常会让 GET/PATCH /settings 整体 500，用户反而无法重填授权码。
+    """
+    if not raw:
+        return ''
+    try:
+        return decrypt(raw)
+    except Exception as exc:
+        logger.warning('密文解密失败，按未配置处理: %s', exc)
+        return ''
+
+
 def get_email_auth_code() -> str:
     """IMAP 授权码（dpapi: 密文自动解密；历史明文自动迁移为加密存储）"""
     raw = get_email_config()['auth_code'].strip()
@@ -226,12 +255,15 @@ def get_email_auth_code() -> str:
             logger.info('邮箱授权码已迁移为加密存储')
         except (OSError, ValueError):
             logger.warning('邮箱授权码迁移加密失败，仍按明文使用')
-    return decrypt(raw)
+    return _decrypt_or_empty(raw)
 
 
 def get_inbox_dir() -> str:
     """本地发票收件箱目录（相对路径基于程序目录解析为绝对路径）"""
-    raw = get_email_config()['inbox_dir'].strip() or '发票收件箱'
+    # expanduser 与 job_service.is_known_directory 的归一化口径一致
+    raw = os.path.expanduser(
+        get_email_config()['inbox_dir'].strip() or '发票收件箱'
+    )
     if os.path.isabs(raw):
         return raw
     return os.path.join(_get_program_dir(), raw)
@@ -258,7 +290,7 @@ def set_email_config(**kwargs) -> None:
 def get_ai_config() -> dict:
     """读取 AI 审核配置（缺失字段用默认值）"""
     cfg = load_config()
-    return {k: cfg.get('ai', k, fallback=v) for k, v in _DEFAULTS['ai'].items()}
+    return {k: _safe_get(cfg, 'ai', k, v) for k, v in _DEFAULTS['ai'].items()}
 
 
 def get_ai_enabled() -> bool:
@@ -276,7 +308,7 @@ def get_ai_api_key() -> str:
             logger.info('AI API Key 已迁移为加密存储')
         except (OSError, ValueError):
             logger.warning('AI API Key 迁移加密失败，仍按明文使用')
-    return decrypt(raw)
+    return _decrypt_or_empty(raw)
 
 
 def get_ai_api_base() -> str:
