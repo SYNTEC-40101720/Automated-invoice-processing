@@ -286,3 +286,22 @@ def test_cancel_during_post_process_skips_audit_and_archive(tmp_path):
     assert final['status'] == JobStatus.CANCELLED.value
     assert audit_calls == []
     assert (source / 'invoice-0.pdf').is_file()
+
+
+def test_job_service_excludes_settlement_statements_from_scan_and_archive(tmp_path):
+    """结账单 PDF 不计入扫描/处理，inbox 归档也不移动它"""
+    service, processor = make_service(tmp_path)
+    source = make_source(tmp_path, count=1)
+    (source / '华住结账单.pdf').write_bytes(b'%PDF')
+
+    scanned = service.scan_directory(str(source))
+    assert scanned['pdf_count'] == 1
+
+    final = service.run_job_sync(str(source), JobTrigger.INBOX)
+
+    assert final['status'] == JobStatus.SUCCEEDED.value
+    assert final['stats']['total'] == 1
+    assert processor.files == ['invoice-0.pdf']
+    # 归档只移动处理清单内的文件；结账单留在源目录原位
+    assert (source / '华住结账单.pdf').is_file()
+    assert not (source / '已处理' / '华住结账单.pdf').exists()

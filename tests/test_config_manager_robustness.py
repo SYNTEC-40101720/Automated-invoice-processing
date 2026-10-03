@@ -166,6 +166,23 @@ class TestSingleKeyRobustness:
         assert response.email.imap_port == 993
 
 
+class TestAutoProcessParsing:
+    def test_auto_process_default_false(self, isolated_config):
+        """未配置 auto_process 时默认关闭"""
+        assert config_manager.get_email_auto_process() is False
+
+    def test_auto_process_true_values(self, isolated_config):
+        """'true'/'1'/'yes'/'on'（大小写不敏感）解析为开启"""
+        for raw in ('true', 'True', '1', 'yes', 'ON'):
+            set_all_config(email={'auto_process': raw})
+            assert config_manager.get_email_auto_process() is True, raw
+
+    def test_auto_process_invalid_falls_back_false(self, isolated_config):
+        """手编非法值回退关闭，不抛异常"""
+        set_all_config(email={'auto_process': '随便写的'})
+        assert config_manager.get_email_auto_process() is False
+
+
 class TestInboxDirExpansion:
     def test_inbox_dir_expands_user_home(self, isolated_config, monkeypatch):
         """~ 开头的收件目录与 job_service 的 expanduser 口径一致"""

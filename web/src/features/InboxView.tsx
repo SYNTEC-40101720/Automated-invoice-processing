@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ClipboardPaste, FolderOpen, LoaderCircle, RefreshCw } from 'lucide-react'
 import { api } from '../api/client'
 import type { EmailSettings, SettingsResponse } from '../api/types'
+import { useWorkbench } from '../stores/workbench'
 
 interface InboxViewProps {
   emailSettings: EmailSettings | null
@@ -10,8 +11,22 @@ interface InboxViewProps {
 
 export function InboxView({ emailSettings }: InboxViewProps) {
   const queryClient = useQueryClient()
+  const setJob = useWorkbench((state) => state.setJob)
+  const setView = useWorkbench((state) => state.setView)
   const [message, setMessage] = useState('')
-  const pull = useMutation({ mutationFn: api.pullEmail })
+  const pull = useMutation({
+    mutationFn: api.pullEmail,
+    onSuccess: async (response) => {
+      // 自动处理已启动任务：拉取当前任务快照接管界面，后续 WS 事件流接管更新
+      if (response.job) {
+        try {
+          setJob(await api.currentJob())
+        } catch {
+          // 快照拉取失败不阻塞结果展示，WS 仍会推送状态
+        }
+      }
+    },
+  })
   const updateEmail = useMutation({
     mutationFn: (values: Record<string, unknown>) => api.updateEmail(values),
     onSuccess: (nextEmail) => {
@@ -50,6 +65,12 @@ export function InboxView({ emailSettings }: InboxViewProps) {
   }
 
   const result = pull.data?.pull
+
+  const toggleAutoProcess = (autoProcess: boolean) => {
+    updateEmail.mutate({ auto_process: autoProcess })
+  }
+
+  const goProcessing = () => setView('processing')
 
   return (
     <div className="editor-view feature-view">
@@ -90,6 +111,22 @@ export function InboxView({ emailSettings }: InboxViewProps) {
               {pull.isPending ? <LoaderCircle size={15} className="spin" /> : <RefreshCw size={15} />} {pull.isPending ? '正在拉取' : '手动拉取'}
             </button>
           </div>
+          <div className="inbox-processing-block">
+            <div className="inbox-processing-copy">
+              <span className="field-label">拉取后处理</span>
+              <strong>{emailSettings?.auto_process ? '拉取后自动处理已开启' : '仅拉取，不处理'}</strong>
+              <span className="inbox-control-hint">开启后，拉取到新附件会自动开始处理本批附件</span>
+            </div>
+            <label className="switch-control">
+              <input
+                type="checkbox"
+                checked={Boolean(emailSettings?.auto_process)}
+                onChange={(event) => toggleAutoProcess(event.target.checked)}
+                disabled={!emailSettings || updateEmail.isPending}
+              />
+              <span className="switch-track" aria-hidden="true"><span /></span>
+            </label>
+          </div>
         </section>
         <section className="feature-section inbox-result">
           <div className="feature-stat"><strong>{result?.downloaded ?? 0}</strong><span>新附件</span></div>
@@ -97,10 +134,17 @@ export function InboxView({ emailSettings }: InboxViewProps) {
           <div className="feature-stat"><strong>{result?.errors.length ?? 0}</strong><span>异常</span></div>
           <div className="feature-message">
             {result
-              ? result.new_files.length > 0
-                ? <>已拉取新附件，保存在本次批次目录：<strong title={result.session_dir ?? undefined}>{result.session_dir ?? '（未知）'}</strong>，请到发票处理页面选择该目录开始处理</>
-                : '没有发现新的 PDF 附件'
+              ? result.new_files.length === 0
+                ? '没有发现新的 PDF 附件'
+                : result.job_error
+                  ? <>已拉取 {result.new_files.length} 份附件，但自动处理未启动：{result.job_error.message}。附件保留在批次目录 <strong title={result.session_dir ?? undefined}>{result.session_dir ?? '（未知）'}</strong>，可稍后在处理页手动开始</>
+                  : pull.data?.job
+                    ? <>已拉取 {result.new_files.length} 份附件并自动开始处理，批次目录：<strong title={result.session_dir ?? undefined}>{result.session_dir ?? '（未知）'}</strong></>
+                    : <>已拉取新附件，保存在本次批次目录：<strong title={result.session_dir ?? undefined}>{result.session_dir ?? '（未知）'}</strong>，请到发票处理页面选择该目录开始处理</>
               : '尚未执行拉取'}
+            {pull.data?.job && result && result.new_files.length > 0 && !result.job_error && (
+              <button className="text-button" onClick={goProcessing}>前往查看</button>
+            )}
           </div>
         </section>
         {result?.errors.length ? <section className="feature-section error-list">{result.errors.map((error) => <p key={error}>{error}</p>)}</section> : null}

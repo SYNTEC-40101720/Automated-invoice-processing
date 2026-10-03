@@ -105,6 +105,7 @@ export interface EmailSettings {
   username: string
   inbox_dir: string
   days_back: number
+  auto_process: boolean
   senders: string[]
   keywords: string[]
   auth_code_configured: boolean
@@ -131,8 +132,9 @@ export interface EmailPullResponse {
     session_dir: string | null
     errors: string[]
     total_scanned: number
+    job_error?: { code: string; message: string } | null
   }
-  job: Job | null
+  job: RuntimeJobResponse | null
 }
 
 export interface ToolDescriptor {

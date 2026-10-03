@@ -149,6 +149,7 @@ class EmailSettings(BaseModel):
     username: str
     inbox_dir: str
     days_back: int
+    auto_process: bool
     senders: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
     auth_code_configured: bool
@@ -184,6 +185,7 @@ class EmailSettingsPatch(BaseModel):
     auth_code: str | None = None
     inbox_dir: str | None = Field(default=None, min_length=1)
     days_back: int | None = Field(default=None, ge=1, le=365)
+    auto_process: bool | None = None
     senders: list[str] | None = None
     keywords: list[str] | None = None
 

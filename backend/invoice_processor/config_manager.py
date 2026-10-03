@@ -31,6 +31,7 @@ _DEFAULTS = {
         'auth_code': '',
         'inbox_dir': '发票收件箱',
         'days_back': '30',
+        'auto_process': 'false',
         'senders': (
             '12306@rails.com.cn,didifapiao@mailgate.xiaojukeji.com,'
             'fapiao@mailgate.hongyibo.com.cn,invoice@invoice01.huazhuhotels.com,'
@@ -267,6 +268,11 @@ def get_inbox_dir() -> str:
     if os.path.isabs(raw):
         return raw
     return os.path.join(_get_program_dir(), raw)
+
+
+def get_email_auto_process() -> bool:
+    """拉取到新附件后是否自动启动发票处理任务"""
+    return get_email_config()['auto_process'].lower() in ('1', 'true', 'yes', 'on')
 
 
 def get_email_days_back() -> int:

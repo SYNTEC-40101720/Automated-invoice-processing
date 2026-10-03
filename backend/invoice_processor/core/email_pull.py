@@ -24,6 +24,8 @@ from email import message_from_bytes
 from email.header import decode_header
 from email.utils import parseaddr
 
+from .exclusions import is_excluded_filename
+
 logger = logging.getLogger(__name__)
 
 # IMAP SEARCH 的 SINCE 日期必须用英文月份缩写（RFC 3501），
@@ -143,12 +145,18 @@ def _safe_filename(filename: str) -> str:
     return re.sub(r'[\\/:*?"<>|]', '_', filename)
 
 
+def _is_excluded_filename(filename: str) -> bool:
+    """附件名命中排除关键词（如结账单）时不拉取，返回 True。"""
+    return is_excluded_filename(filename)
+
+
 def _save_attachments(msg, target_dir: str, new_files: list,
                       errors: list | None = None) -> list:
     """保存邮件附件（PDF/ZIP）到目标目录，ZIP 解压只留 PDF。返回保存路径列表
 
     目录按需创建：首份文件写入前才 makedirs，整封邮件没有可保存
     附件时不留空目录。errors 传入时成员级解压失败会计入。
+    结账单等排除关键词命中的附件（含 ZIP 成员）直接跳过。
     """
     saved = []
     for part in msg.walk():
@@ -161,6 +169,9 @@ def _save_attachments(msg, target_dir: str, new_files: list,
         is_zip = content_type in ('application/zip', 'application/x-zip-compressed') \
             or filename.lower().endswith('.zip')
         if not (is_pdf or is_zip):
+            continue
+        if _is_excluded_filename(filename):
+            logger.info('附件名命中排除关键词，已跳过: %s', filename)
             continue
         payload = part.get_payload(decode=True)
         if not payload:
@@ -188,6 +199,7 @@ def _save_attachments(msg, target_dir: str, new_files: list,
                 pdf_infos = [
                     info for info in infos
                     if not info.is_dir() and info.filename.lower().endswith('.pdf')
+                    and not _is_excluded_filename(info.filename)
                 ]
                 total_size = 0
                 for info in pdf_infos:

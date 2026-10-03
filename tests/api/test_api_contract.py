@@ -7,6 +7,7 @@ import time
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
+from devbase.application.errors import JobAlreadyRunningError
 from devbase.application.event_bus import EventBus
 from devbase.domain.job import JobStatus
 from fastapi.testclient import TestClient
@@ -16,6 +17,7 @@ from invoice_processor.api.routes import settings as settings_route
 from invoice_processor.api.routes import system as system_route
 from invoice_processor.api.schemas import SettingsResponse
 from invoice_processor.application.job_service import JobService
+from invoice_processor.domain.errors import JobNotFound
 from invoice_processor.version import __version__
 
 
@@ -220,6 +222,7 @@ def test_scan_directory_returns_top_level_pdf_count(tmp_path):
     (tmp_path / 'invoice-a.pdf').write_bytes(b'%PDF')
     (tmp_path / 'invoice-b.PDF').write_bytes(b'%PDF')
     (tmp_path / 'notes.txt').write_text('not an invoice', encoding='utf-8')
+    (tmp_path / '华住结账单.pdf').write_bytes(b'%PDF')
     nested = tmp_path / 'nested'
     nested.mkdir()
     (nested / 'invoice-c.pdf').write_bytes(b'%PDF')
@@ -233,6 +236,7 @@ def test_scan_directory_returns_top_level_pdf_count(tmp_path):
 
     assert response.status_code == 200
     assert response.json()['source_dir'] == str(tmp_path)
+    # 结账单排除在可处理 PDF 之外
     assert response.json()['pdf_count'] == 2
 
 
@@ -447,6 +451,7 @@ def test_settings_response_redacts_secret_values(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(settings_route, 'get_email_auth_code', lambda: 'secret-auth')
     monkeypatch.setattr(settings_route, 'get_email_days_back', lambda: 30)
+    monkeypatch.setattr(settings_route, 'get_email_auto_process', lambda: False)
     monkeypatch.setattr(settings_route, 'get_ai_enabled', lambda: True)
     monkeypatch.setattr(settings_route, 'get_ai_api_base', lambda: 'https://ai.example.com')
     monkeypatch.setattr(settings_route, 'get_ai_model', lambda: 'model')
@@ -459,7 +464,7 @@ def test_settings_response_redacts_secret_values(monkeypatch, tmp_path):
     assert response.status_code == 200
     body = response.json()
     assert body['email']['auth_code_configured'] is True
-    assert 'auto_process' not in body['email']
+    assert body['email']['auto_process'] is False
     assert body['email']['inbox_dir'] == 'C:/invoice-inbox'
     assert body['ai']['api_key_configured'] is True
     assert 'secret-auth' not in response.text
@@ -526,6 +531,7 @@ def test_email_pull_only_downloads_files(monkeypatch, tmp_path):
     monkeypatch.setattr(email_route, 'get_email_auth_code', lambda: 'auth')
     monkeypatch.setattr(email_route, 'get_inbox_dir', lambda: str(tmp_path))
     monkeypatch.setattr(email_route, 'get_email_days_back', lambda: 30)
+    monkeypatch.setattr(email_route, 'get_email_auto_process', lambda: False)
     monkeypatch.setattr(email_route, 'pull_invoices', lambda **kwargs: {
         'downloaded': 1, 'new_files': [str(tmp_path / 'invoice.pdf')],
         'session_dir': str(tmp_path / '拉取_20261002_120000'),
@@ -541,6 +547,136 @@ def test_email_pull_only_downloads_files(monkeypatch, tmp_path):
     assert response.status_code == 200
     assert response.json()['pull']['downloaded'] == 1
     assert response.json()['pull']['new_files'] == [str(tmp_path / 'invoice.pdf')]
+    # 默认关闭自动处理：即使拉到新附件也不联动启动任务
+    assert response.json()['job'] is None
+    assert 'job_error' not in response.json()['pull']
+
+
+def test_email_pull_auto_process_starts_runtime_job(monkeypatch, tmp_path):
+    """开启自动处理且拉到新附件 → 自动启动任务，源 PDF 归档进批次目录"""
+    batch = tmp_path / '拉取_20261003_120000'
+    batch.mkdir()
+    (batch / 'invoice.pdf').write_bytes(b'%PDF')
+
+    monkeypatch.setattr(email_route, 'get_email_config', lambda: {
+        'imap_host': 'imap.example.com', 'imap_port': '993',
+    })
+    monkeypatch.setattr(email_route, 'get_email_username', lambda: '[EMAIL]')
+    monkeypatch.setattr(email_route, 'get_email_auth_code', lambda: 'auth')
+    monkeypatch.setattr(email_route, 'get_inbox_dir', lambda: str(tmp_path))
+    monkeypatch.setattr(email_route, 'get_email_days_back', lambda: 30)
+    monkeypatch.setattr(email_route, 'get_email_auto_process', lambda: True)
+    monkeypatch.setattr(email_route, 'pull_invoices', lambda **kwargs: {
+        'downloaded': 1, 'new_files': [str(batch / 'invoice.pdf')],
+        'session_dir': str(batch),
+        'errors': [], 'total_scanned': 1,
+    })
+
+    app = make_app(tmp_path)
+    client = TestClient(app)
+    response = client.post(
+        '/api/v1/email/pull', headers={'X-Local-Token': 'test-token'}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body['job'] is not None
+    assert body['job']['kind'] == 'invoice_processing'
+    assert 'job_error' not in body['pull']
+
+    service = app.state.job_service
+    deadline = time.monotonic() + 10
+    final = None
+    while time.monotonic() < deadline:
+        try:
+            final = service.get_job(body['job']['id'])
+        except JobNotFound:
+            # runtime.start 返回快照与 worker 线程注册 handle 之间有窗口
+            time.sleep(0.05)
+            continue
+        if final['status'] in (
+            JobStatus.SUCCEEDED.value,
+            JobStatus.FAILED.value,
+            JobStatus.CANCELLED.value,
+        ):
+            break
+        time.sleep(0.05)
+    # 占位 PDF 无法解析文本 → completed_with_warnings 也是正常终态；
+    # 关键契约是 trigger=email 且源 PDF 归档进批次目录内 已处理/
+    assert final is not None and final['status'] in (
+        JobStatus.SUCCEEDED.value,
+        JobStatus.COMPLETED_WITH_WARNINGS.value,
+    )
+    assert final['trigger'] == 'email'
+    assert (batch / '已处理' / 'invoice.pdf').is_file()
+
+
+def test_email_pull_auto_process_reports_job_error(monkeypatch, tmp_path):
+    """自动启动失败（如已有任务运行）不失败拉取响应，经 job_error 反馈"""
+    batch = tmp_path / '拉取_20261003_120001'
+    batch.mkdir()
+    (batch / 'invoice.pdf').write_bytes(b'%PDF')
+    monkeypatch.setattr(email_route, 'get_email_config', lambda: {
+        'imap_host': 'imap.example.com', 'imap_port': '993',
+    })
+    monkeypatch.setattr(email_route, 'get_email_username', lambda: '[EMAIL]')
+    monkeypatch.setattr(email_route, 'get_email_auth_code', lambda: 'auth')
+    monkeypatch.setattr(email_route, 'get_inbox_dir', lambda: str(tmp_path))
+    monkeypatch.setattr(email_route, 'get_email_days_back', lambda: 30)
+    monkeypatch.setattr(email_route, 'get_email_auto_process', lambda: True)
+    monkeypatch.setattr(email_route, 'pull_invoices', lambda **kwargs: {
+        'downloaded': 1, 'new_files': [str(batch / 'invoice.pdf')],
+        'session_dir': str(batch),
+        'errors': [], 'total_scanned': 1,
+    })
+
+    class StubRuntime:
+        def start(self, kind, *, input):
+            raise JobAlreadyRunningError('devbase test stub')
+
+    app = make_app(tmp_path)
+    app.state.devbase_runtime = StubRuntime()
+    client = TestClient(app)
+    response = client.post(
+        '/api/v1/email/pull', headers={'X-Local-Token': 'test-token'}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body['job'] is None
+    assert body['pull']['job_error']['code'] == 'JOB_ALREADY_RUNNING'
+    assert '已有任务正在处理' in body['pull']['job_error']['message']
+
+
+def test_email_patch_persists_auto_process(monkeypatch, tmp_path):
+    captured = {}
+    monkeypatch.setattr(
+        settings_route,
+        'set_email_config',
+        lambda **values: captured.update(values),
+    )
+    monkeypatch.setattr(settings_route, 'get_email_config', lambda: {
+        'imap_host': 'imap.example.com', 'imap_port': '993',
+        'username': '', 'auth_code': '', 'inbox_dir': 'inbox', 'days_back': '30',
+    })
+    monkeypatch.setattr(settings_route, 'get_email_username', lambda: '')
+    monkeypatch.setattr(settings_route, 'get_email_auth_code', lambda: '')
+    monkeypatch.setattr(settings_route, 'get_email_days_back', lambda: 30)
+    monkeypatch.setattr(settings_route, 'get_email_auto_process', lambda: True)
+    monkeypatch.setattr(settings_route, 'get_email_senders', lambda: [])
+    monkeypatch.setattr(settings_route, 'get_email_keywords', lambda: [])
+    monkeypatch.setattr(settings_route, 'get_inbox_dir', lambda: 'C:/inbox')
+
+    client = TestClient(make_app(tmp_path))
+    response = client.patch(
+        '/api/v1/settings/email',
+        headers={'X-Local-Token': 'test-token'},
+        json={'auto_process': True},
+    )
+
+    assert response.status_code == 200
+    assert captured == {'auto_process': True}
+    assert response.json()['auto_process'] is True
 
 
 def test_static_frontend_is_served_after_api_routes(tmp_path):
@@ -601,6 +737,7 @@ def test_settings_patch_writes_all_sections_once(monkeypatch, tmp_path):
             'username': 'user@example.com',
             'inbox_dir': 'inbox',
             'days_back': 30,
+            'auto_process': False,
             'auth_code_configured': False,
         },
         ai={

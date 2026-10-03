@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from devbase.application.event_bus import EventBus
 
 from ..config_manager import get_inbox_dir, get_max_workers
+from ..core.exclusions import is_excluded_filename
 from ..core.processor import InvoiceProcessor
 from ..domain.errors import (
     ApplicationError,
@@ -468,9 +469,11 @@ class JobService:
 
     @staticmethod
     def _list_pdf_files(source_dir: str) -> list[str]:
+        # 结账单等排除关键词命中的 PDF 不进入处理/统计/归档
         return sorted(
             filename for filename in os.listdir(source_dir)
             if filename.lower().endswith('.pdf')
+            and not is_excluded_filename(filename)
             and os.path.isfile(os.path.join(source_dir, filename))
         )
 

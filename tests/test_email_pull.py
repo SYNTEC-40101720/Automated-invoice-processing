@@ -187,6 +187,27 @@ class TestSaveAttachments:
         # 后续成员不受失败影响
         assert [os.path.basename(p) for p in saved] == ['fine.pdf']
 
+    def test_excluded_filename_skipped(self, tmp_path):
+        """结账单等排除关键词命中的 PDF 附件不保存、不留目录"""
+        target = os.path.join(tmp_path, '拉取_20261003_120000')
+        msg = _build_msg([('华住结账单.pdf', b'%PDF-1.4 bill', 'application/pdf')])
+        saved = _save_attachments(msg, target, [])
+        assert saved == []
+        assert not os.path.isdir(target)
+
+    def test_excluded_zip_member_skipped(self, tmp_path):
+        """ZIP 内命中排除关键词的成员不落盘，其余 PDF 正常解压"""
+        buf_path = os.path.join(tmp_path, 'tmp.zip')
+        with zipfile.ZipFile(buf_path, 'w') as zf:
+            zf.writestr('发票.pdf', b'%PDF-1.4 invoice')
+            zf.writestr('结账单.pdf', b'%PDF-1.4 bill')
+        with open(buf_path, 'rb') as f:
+            zip_bytes = f.read()
+        msg = _build_msg([('huazhu.zip', zip_bytes, 'application/zip')])
+        saved = _save_attachments(msg, str(tmp_path), [])
+        assert [os.path.basename(p) for p in saved] == ['发票.pdf']
+        assert not os.path.isfile(os.path.join(tmp_path, '结账单.pdf'))
+
 
 class TestSessionDirPath:
     def test_name_format(self, tmp_path):

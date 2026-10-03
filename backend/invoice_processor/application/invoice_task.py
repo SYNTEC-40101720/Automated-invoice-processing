@@ -8,6 +8,7 @@ from typing import Any
 from devbase.application.manifest import ToolDescriptor, ToolRegistry
 from devbase.application.task import TaskContext
 
+from ..core.exclusions import is_excluded_filename
 from ..domain.errors import (
     InvalidSourceDirectory,
     InvalidTrigger,
@@ -53,6 +54,7 @@ def validate_start_input(input: dict[str, Any]) -> None:
         filename
         for filename in os.listdir(normalized)
         if filename.lower().endswith(".pdf")
+        and not is_excluded_filename(filename)
         and os.path.isfile(os.path.join(normalized, filename))
     ]
     if not pdf_files:

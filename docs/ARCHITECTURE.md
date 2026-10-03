@@ -203,7 +203,6 @@ stateDiagram-v2
 | `job.stats_changed` | `total, success, failure, tax_issues` | 统计视图 |
 | `job.log_appended` | `level, message` | 输出面板 |
 | `job.completed` | `result` | 结果与操作入口 |
-| `email.pull_completed` | `downloaded, scanned, errors` | 收件箱反馈 |
 | `settings.changed` | `sections` | 多视图同步配置 |
 
 事件总线必须线程安全。每个连接使用有界队列；当慢客户端导致队列溢出时，可丢弃中间进度事件，但不能丢弃状态、错误和完成事件。前端检测 `event_id` 跳号后调用快照 API 校准。
@@ -233,7 +232,7 @@ API 前缀固定为 `/api/v1`。错误统一返回：
 | `POST /jobs/start` | 按 `kind` 启动 DevBase 任务，发票工具为 `invoice_processing` | `201` + 运行时快照 |
 | `POST /jobs/cancel` | 取消当前 DevBase 任务 | 运行时快照 |
 | `GET /jobs/{id}/logs` | 获取日志快照/导出基础 | 分页日志 |
-| `POST /email/pull` | 手动拉取邮箱 | `202` + 操作状态 |
+| `POST /email/pull` | 手动拉取邮箱 | `200` + 拉取结果；开启自动处理且拉到新附件时同步返回任务快照（`job`）或启动失败原因（`pull.job_error`），默认关闭时 `job` 为 `null` |
 | `GET /settings` | 获取脱敏配置 | 不返回密钥明文 |
 | `PATCH /settings` | 一次性更新业务、邮箱和 AI 配置 | 原子保存后的脱敏配置 |
 | `PATCH /settings/business` | 更新税号与线程数 | 更新后配置 |
