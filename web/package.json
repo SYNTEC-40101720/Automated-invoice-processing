@@ -1,7 +1,7 @@
 {
   "name": "syntec-invoice-workbench",
   "private": true,
-  "version": "7.3.6",
+  "version": "7.3.7",
   "type": "module",
   "scripts": {
     "dev": "vite",
