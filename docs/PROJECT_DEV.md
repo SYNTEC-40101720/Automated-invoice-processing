@@ -199,7 +199,7 @@ python scripts/smoke_launch.py --target exe
 
 ```
 
-截至 v7.3.4，本机 Windows 环境已验证：217 条 Python 测试通过（含任务历史 10 条、单实例 3 条、历史路由契约 2 条、WS 心跳/断链回收 2 条、`/jobs/current` 响应模型 1 条、邮件拉取批次隔离与 ZIP 容错、配置健壮性 9 条、提取正则 17 条、审核报告防注入 6 条、关窗等待 3 条），Ruff、前端 typecheck/build、Vitest（17 条：store 层 8 + 事件游标 9）和 SYNTEC PyInstaller 域控合规检查通过；发布包启动冒烟（`scripts/smoke_launch.py`）通过，更新检测由 `test_update_checker.py` 单测覆盖。目标机验收（真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户）按 `docs/ACCEPTANCE_CHECKLIST.md` 在目标环境执行（全自动判定，无人工观察项）。
+截至 v7.3.4，本机 Windows 环境已验证：217 条 Python 测试通过（含任务历史 10 条、单实例 3 条、历史路由契约 2 条、WS 心跳/断链回收 2 条、`/jobs/current` 响应模型 1 条、邮件拉取批次隔离与 ZIP 容错、配置健壮性 9 条、提取正则 17 条、审核报告防注入 6 条、关窗等待 3 条），Ruff、前端 typecheck/build、Vitest（17 条：store 层 8 + 事件游标 9）和 SYNTEC PyInstaller 域控合规检查通过；发布包启动冒烟（`scripts/smoke_launch.py`）通过，更新检测由 `test_update_checker.py` 单测覆盖。目标机验收（真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户）按 `docs/RELEASE_SOP.md` 在目标环境执行（全自动判定，无人工观察项）。
 
 测试文件：
 - `tests/test_processor.py`：核心逻辑单元测试

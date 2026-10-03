@@ -1,6 +1,6 @@
-"""目标机验收驱动脚本（ACCEPTANCE_CHECKLIST §2/§4/§6 可自动化部分）。
+"""目标机验收驱动脚本（RELEASE_SOP §2/§4/§6 可自动化部分）。
 
-配合 docs/ACCEPTANCE_CHECKLIST.md 使用。把「目标机人工验收」中可以客观判定的
+配合 docs/RELEASE_SOP.md 使用。把「目标机人工验收」中可以客观判定的
 项目脚本化：目标机前置（§2）、桌面功能冒烟（§4）、手工 E2E（§6）。
 全部项目自动判定并输出逐项结果表——不再含人工观察项，也不含旧版升级演练
 （更新检测由 tests/application/test_update_checker.py 单测覆盖）。

@@ -370,8 +370,8 @@ Pydantic 模型是 API 单一事实源。CI 由 FastAPI OpenAPI 生成 TypeScrip
 | API | FastAPI TestClient/httpx | DTO 校验、错误码、密钥脱敏、冲突与路径拒绝 | 已通过 |
 | WebSocket | pytest | 初始快照、事件顺序、断线重连校准、慢客户端策略 | 服务端契约已通过，真实浏览器重连待补 |
 | 前端单测 | Vitest + Testing Library | store 层 + 事件游标纯函数 | 已纳入，17 条通过 |
-| E2E | Playwright | 手动选择到完成、停止、断线恢复、设置、日志过滤 | 未纳入自动化；手工场景见 docs/ACCEPTANCE_CHECKLIST.md §6 |
-| 打包冒烟 | Windows 干净机/域控机 | 启动、WebView2、DPI、中文 PDF、输出打开、退出回收 | 本机 smoke_launch.py 通过；目标机按 ACCEPTANCE_CHECKLIST.md §4 |
+| E2E | Playwright | 手动选择到完成、停止、断线恢复、设置、日志过滤 | 未纳入自动化；手工场景见 docs/RELEASE_SOP.md §6 |
+| 打包冒烟 | Windows 干净机/域控机 | 启动、WebView2、DPI、中文 PDF、输出打开、退出回收 | 本机 smoke_launch.py 通过；目标机按 RELEASE_SOP.md §4 |
 
 每个阶段最低质量门槛：Python 测试全绿、前端类型检查全绿、无新增 Pylance/ESLint 错误。最终必须使用合成 PDF 和一份脱敏业务样本完成端到端验收。
 
@@ -385,7 +385,7 @@ Pydantic 模型是 API 单一事实源。CI 由 FastAPI OpenAPI 生成 TypeScrip
 4. 执行 Python 测试；
 5. PyInstaller 收集 `web/dist`、图标和 Python 依赖；
 6. 执行现有 CompanyName、LegalCopyright、SYNTEC 命名与 `--noupx` 合规检查；
-7. 归档后可选执行 `python scripts/smoke_launch.py --target exe` 启动冒烟（或 `build_syntec.py --smoke` 一步到位）；真实浏览器/目标机验收按 `docs/ACCEPTANCE_CHECKLIST.md` 执行。
+7. 归档后可选执行 `python scripts/smoke_launch.py --target exe` 启动冒烟（或 `build_syntec.py --smoke` 一步到位）；真实浏览器/目标机验收按 `docs/RELEASE_SOP.md` 执行。
 
 发布仍采用 onedir：
 
@@ -401,12 +401,12 @@ dist/SYNTEC-电子票据处理系统/
 生产模式不开放 Swagger UI，不输出 Uvicorn access log。开发模式可以独立运行 Vite 和 FastAPI，并通过显式环境变量启用文档与调试日志。
 
 ## 12. 交付状态与边界
-v7.3.4 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、手动邮箱收件（拉取批次目录隔离）、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。任务启动/取消已收敛为 DevBase 契约（旧 `/jobs` 兼容端点已移除，`/jobs/start` 带启动前同步预检）；邮箱后台轮询与程序内自动更新链路已移除（收件统一手动拉取；更新为"仅检测提示 + Release 页面手动下载"）。核心 Python 测试（217 条）、API 契约、前端 typecheck/Vitest/生产构建和打包合规已通过；发布包启动冒烟 `scripts/smoke_launch.py` 本机通过。目标机验收要求收敛至 `docs/ACCEPTANCE_CHECKLIST.md`，真实浏览器/WebView2/DPI/域控环境仍需按清单在目标环境执行。
+v7.3.4 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、手动邮箱收件（拉取批次目录隔离）、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。任务启动/取消已收敛为 DevBase 契约（旧 `/jobs` 兼容端点已移除，`/jobs/start` 带启动前同步预检）；邮箱后台轮询与程序内自动更新链路已移除（收件统一手动拉取；更新为"仅检测提示 + Release 页面手动下载"）。核心 Python 测试（217 条）、API 契约、前端 typecheck/Vitest/生产构建和打包合规已通过；发布包启动冒烟 `scripts/smoke_launch.py` 本机通过。目标机验收要求收敛至 `docs/RELEASE_SOP.md`，真实浏览器/WebView2/DPI/域控环境仍需按清单在目标环境执行。
 
 以下事项不属于当前版本功能，后续若实施必须同步补充测试和验收记录：
 
 - 目录监听；
-- Playwright 自动化 E2E 套件（手工场景已由 ACCEPTANCE_CHECKLIST.md §6 覆盖）；
+- Playwright 自动化 E2E 套件（手工场景已由 RELEASE_SOP.md §6 覆盖）；
 - 跨磁盘安装目录的复制式替换。
 
 ### 12.1 事件总线融合（一期+二期均已完成 2026-09-30）
@@ -425,7 +425,7 @@ v7.3.4 当前交付包含：FastAPI 本地服务、React 工作台、pywebview �
 - 发票 WS 使用 0.5s 订阅等待和自己的并发断连监听；行为与 DevBase 通用 `events` 路由对齐，但不复用其监听函数。断链后最迟一个等待周期内退出并回收订阅（旧实现空闲时断链要等 30s 心跳超时才发现）。`system.heartbeat` 帧保留 30s 间隔但与等待周期解耦（`HEARTBEAT_SECONDS`），空闲连接仍每 30s 收到存活帧。
 - `/jobs/current` 业务快照模型迁移：响应挂 `JobSnapshotResponse`（字段集与 `Job.to_dict()` 一致，`extra='forbid'`），契约在 OpenAPI 中显式可见，前端类型生成恢复单一事实源；无任务时仍为 `null`。
 
-验收 §6 五场景在融合二期后于 v7.3.1 产物复跑通过（`scripts/acceptance_driver.py --only 6`，7 项全过：含游标重连补齐 88 条断线事件、编号连续，取消收敛改为轮询 running 后触发），留痕见 ACCEPTANCE_CHECKLIST.md §9。
+验收 §6 五场景在融合二期后于 v7.3.1 产物复跑通过（`scripts/acceptance_driver.py --only 6`，7 项全过：含游标重连补齐 88 条断线事件、编号连续，取消收敛改为轮询 running 后触发），留痕见 RELEASE_SOP.md §9。
 
 **任务历史与单实例（801fe51 + 后续修复）**：任务终态旁路落盘 `logs/job_history.jsonl`（JSON Lines，上限 50 条，读旧+追加+原子替换；IO 失败降级不阻断任务流），`GET /jobs/history` 跨启动查询（新→旧）；历史中的输出目录计入 `is_known_directory` 放行面（重启后「打开输出目录」仍可按历史回溯）。桌面壳经 Windows 命名互斥体实现单实例（`ctypes.WinDLL(use_last_error=True)` 绑定——`ctypes.windll` 下 `get_last_error()` 恒 0，双开检测会整体失效；验收脚本经 `PLATFORM_ALLOW_SECOND_INSTANCE=1` 旁路）。
 
