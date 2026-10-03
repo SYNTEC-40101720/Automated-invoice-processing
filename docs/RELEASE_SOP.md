@@ -132,6 +132,9 @@ v7.3.0 起程序内无自动更新链路（`405d8fd` 移除）——升级 = 检
 | §1 静态与自动化（v7.3.6） | 40101720 | 2026-10-03 | ☑通过 | pytest 228 / ruff 零告警 / tsc / Vitest 17 / build / CI 绿（f474123+f989f55）；ZIP SHA-256 f529733e... 与 .sha256 一致，GitHub digest 一致 |
 | §3 启动冒烟（v7.3.6） | 40101720 | 2026-10-03 | ☑通过 | EXE 完整模式：health=7.3.6、日志无 CRITICAL、干净退出、端口释放；更新检测核对 available=false（7.3.6 = Release 最新） |
 | §2+§4+§6 全量（v7.3.6 发布） | 40101720 | 2026-10-03 | ☑通过 | `acceptance_driver.py` 全量 16 项全过 0 失败；§2 五项前置通过；§4 窗口句柄/12 份占位样本（completed_with_warnings，仅验证处理流程）/Explorer 打开/干净退出端口释放（exit=0）；§6 实时事件 46 条（progress=3/log=20）、进度单调 1.0、断线重连游标补齐 171 条编号连续、双客户端隔离、设置 8→4 保存还原、日志分页不重不漏。取消场景占位样本处理过快降级跳过（历轮相同特性非缺陷，取消链路单测覆盖） |
+| §1 静态与自动化（v7.3.7） | 40101720 | 2026-10-03 | ☑通过 | pytest 228 / ruff 零告警 / tsc / Vitest 17 / build / CI 绿（314071e+faedb60）；ZIP SHA-256 f77035eb... 与 .sha256 一致，GitHub digest 一致 |
+| §3 启动冒烟（v7.3.7） | 40101720 | 2026-10-03 | ☑通过 | EXE 完整模式：health=7.3.7、日志无 CRITICAL、干净退出、端口释放；更新检测核对 available=false（7.3.7 = Release 最新） |
+| §2+§4+§6 全量（v7.3.7 发布） | 40101720 | 2026-10-03 | ☑通过 | `acceptance_driver.py` 全量 16 项全过 0 失败；§2 五项前置通过；§4 窗口句柄/12 份占位样本（completed_with_warnings，仅验证处理流程）/Explorer 打开/干净退出端口释放（exit=0）；§6 实时事件 47 条（progress=4/log=20）、进度单调 1.0、断线重连游标补齐 171 条编号连续、双客户端隔离、设置 8→4 保存还原、日志分页不重不漏。取消场景占位样本处理过快降级跳过（历轮相同特性非缺陷，取消链路单测覆盖）；本版改动仅 vite 开发代理（ws: true），桌面链路无代码变化 |
 
 ### 人工观察项留痕
 
@@ -308,6 +311,27 @@ SHA-256：
 ```
 
 ## 11. 发布记录
+
+### v7.3.7（2026-10-03 发布）
+
+```text
+应用：SYNTEC-电子票据处理系统
+仓库：SYNTEC-40101720/Automated-invoice-processing
+当前版本：7.3.6
+目标版本：7.3.7
+Release URL：https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.3.7
+资产名：SYNTEC-Invoice-Processor-v7.3.7.zip
+资产大小：61.70 MB（64,694,168 字节）
+SHA-256：f77035eb48671ed378d5f292f97092e1951b4c47dae01f0f28f3aaeb6361d41c（GitHub digest 一致）
+主程序版本资源：CompanyName=SYNTEC，FileVersion/ProductVersion=[IP_ADDRESS]，LegalCopyright=Copyright © SYNTEC 2026
+质量基线：228 条 Python 测试、Ruff、TypeScript、Vitest 17 条、Vite 构建通过；PyInstaller 域控合规通过
+启动冒烟：health=7.3.7，日志无 CRITICAL，进程干净退出且端口释放
+当前版检测结果：available=false 不误报（7.3.7 = Release 最新，实测核对）
+桌面验收：§2+§4+§6 全量 16 项全过 0 失败；取消场景占位样本处理过快降级跳过（历轮相同特性，取消链路由单测覆盖）
+已知限制：AI 提示注入与真实税控 PDF 语料版式验证不在范围（PROJECT_DEV 遗留项）；拉取后自动处理的真机 E2E（需邮箱配置）未执行，以 API 契约测试覆盖（与 v7.3.5 起相同）
+```
+
+内容：修复浏览器开发态（vite 5173 + 后端 8000）事件流不可达——`web/vite.config.ts` 的 `/api` 代理原为字符串形式，vite 缺省只转发 HTTP，WebSocket 升级请求（`/api/v1/events`）不经代理握手挂起直至超时，开发态界面停留在"正在连接本地服务"。改为对象形式并显式 `ws: true`，实测经代理握手成功并收到 `system.ready` 首帧。桌面态（pywebview 同源直连）与发布产物均不受影响（本版桌面链路零代码变化）。
 
 ### v7.3.6（2026-10-03 发布）
 
