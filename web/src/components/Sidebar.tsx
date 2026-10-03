@@ -3,7 +3,7 @@ import type { PointerEventHandler, ReactNode } from 'react'
 import type { ToolDescriptor } from '../api/types'
 import type { WorkbenchView } from '../stores/workbench'
 import { useWorkbench } from '../stores/workbench'
-import invoiceMark from '../assets/invoice-mark.svg'
+import appLogo from '../assets/app-logo.svg'
 
 interface SidebarProps {
   activeView: WorkbenchView
@@ -58,13 +58,13 @@ export function Sidebar({
         <div className="sidebar-brand-row">
           {!sidebarCollapsed && (
             <button type="button" className="sidebar-brand" title="SYNTEC" onClick={openInvoiceTool}>
-              <img className="sidebar-brand-mark" src={invoiceMark} alt="SYNTEC" />
+              <img className="sidebar-brand-mark" src={appLogo} alt="SYNTEC" />
               <span className="sidebar-brand-name">SYNTEC</span>
             </button>
           )}
           {sidebarCollapsed && (
             <>
-              <img className="sidebar-brand-mark" src={invoiceMark} alt="SYNTEC" title="SYNTEC" />
+              <img className="sidebar-brand-mark" src={appLogo} alt="SYNTEC" title="SYNTEC" />
               <button
                 type="button"
                 className="sidebar-toggle sidebar-toggle-rail"
