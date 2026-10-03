@@ -1,6 +1,6 @@
-# SYNTEC 电子票据处理系统 v7.3.2
+# SYNTEC 电子票据处理系统
 
-基于 Python 3.12+、FastAPI 的业务底层、React/Vite Web 工作台和 pywebview/WebView2 桌面壳，用于批量识别、重命名、校验与合并 PDF 电子发票。
+基于 Python 3.12+、FastAPI 的业务底层、React/Vite Web 工作台和 pywebview/WebView2 桌面壳，用于批量识别、重命名、校验与合并 PDF 电子发票。当前版本 v7.3.4。
 
 ## 功能特点
 
@@ -147,58 +147,6 @@ python scripts/smoke_launch.py --target source
 
 ## 版本发布
 
-版本源为 `backend/invoice_processor/version.py`，递增命令会同步 `pyproject.toml`、Web 包元数据和 PyInstaller 资源：
+版本源为 `backend/invoice_processor/version.py`，递增命令会同步 `pyproject.toml`、Web 包元数据和 PyInstaller 资源（`python scripts/bump_version.py [patch|minor|major]`）；打包脚本只校验五版本源一致并拒绝已发布版本号，不修改任何版本文件。
 
-```bash
-python scripts/bump_version.py patch   # 7.3.1 → 7.3.2
-python scripts/bump_version.py minor   # 7.3.1 → 7.4.0
-python scripts/bump_version.py major   # 7.3.1 → 8.0.0
-```
-
-普通测试不会自动修改版本；打包脚本 `build_syntec.py` 同样**不修改任何版本文件**——它只校验五个版本源一致，并拒绝打包远端已有 `vX.Y.Z` tag 的版本号。
-
-## 手动邮箱收件
-
-收件箱支持手动拉取邮箱 PDF/ZIP 附件、指定收件目录，并可在设置中维护邮箱连接与白名单。当前版本仅在用户点击「手动拉取」时连接邮箱；后台自动轮询和拉取后自动启动处理任务已停用。
-
-## 自动更新检查
-
-应用每次打开工作台时，会通过本地 API 查询 GitHub 的最新稳定 Release。设置页也提供「检查更新」按钮。查询使用仓库
-[`SYNTEC-40101720/Automated-invoice-processing`](https://github.com/SYNTEC-40101720/Automated-invoice-processing)
-的公开 Releases API；网络不可用或 GitHub 暂时无法访问时，应用仍会正常启动。
-
-发现比当前版本更高的 Release 后，工作台顶部会提示新版本，并提供「前往下载」链接跳转到 Release 页面；设置页同样提供「检查更新」和 Release 链接。应用**不在程序内下载或安装更新**：用户需在 Release 页面手动下载 `SYNTEC-Invoice-Processor-vX.Y.Z.zip`，解压并替换安装目录（`config.ini`、`logs/` 和默认收件箱不打进 ZIP，替换时保留即可）。
-
-发布新版本时保持版本号一致：
-
-1. 执行 `python scripts/bump_version.py patch`（或 `minor`、`major`）递增版本号；若目标版本号已有 tag（已发布或已占用），命令会拒绝递增。
-2. 执行 `python scripts/build_syntec.py`，生成新的 `dist/SYNTEC-电子票据处理系统/` 打包目录（主程序 + `_internal/`）。已发布过的版本号会被拒绝打包。
-3. `build_syntec.py` 会生成 `dist/SYNTEC-Invoice-Processor-vX.Y.Z.zip`，直接使用该 ASCII 文件名作为资产。
-4. 在 GitHub 创建 Release，标签使用 `vX.Y.Z` 格式，上传该 ZIP 并发布。
-5. 发布 Release 后，旧版本在设置页点击「检查更新」即可发现新版本并跳转 Release 页面手动下载。
-
-## 版本历史
-
-| 版本 | 日期 | 说明 |
-|------|------|------|
-| v7.3.4 | 2026-10-03 | 14 条审查缺陷修复批次：邮箱拉取批次目录隔离与 ZIP 容错、配置健壮性（%/BOM/GBK/密文损坏）、提取正则与三层类别判定、差标改打车单程+高铁座位、Excel 公式注入防护、关窗等待任务终态；前端 WS 事件游标重构（跨重启游标回退保护）。测试基线 217 |
-| v7.3.3 | 2026-10-02 | 设置页统一为系统设置，替换旧品牌图形，修正文档与发布说明中的历史品牌残留。 |
-| v7.3.2 | 2026-10-02 | 遗留评估项清零：发票 WS 采用 0.5s 订阅等待及独立并发断连监听（与 DevBase 通用 `events` 路由行为对齐，不复用其监听函数；空闲断链回收从 30s 降至 ≤0.5s，30s 心跳与轮询解耦）；`GET /jobs/current` 挂 `JobSnapshotResponse` 响应模型（OpenAPI 契约显式化）；文档基线同步（测试数 168）；ARCHITECTURE 章节号断档（§12→§14）修复 |
-| v7.3.1 | 2026-10-02 | 事件总线融合二期收尾：总线单实例化（业务/生命周期事件共享编号空间）、progress 单一发布者（runtime 回调优先，不再双写）、旧发票总线与 `start_job`/`wait_for_job` 自线程入口退役、发票 WS `after` 游标重放 + 前端重连游标续传；验收 §6 七项复跑通过（含游标重连补齐断线事件、编号连续断言）；测试基线 150 |
-| v7.3.0 | 2026-09-29 | 旧 jobs HTTP 兼容层收敛为 DevBase 契约（4 个死端点移除、`/jobs/start` 启动前同步预检 422 稳定错误码、trigger 集中映射）；新增发布包启动冒烟脚本 `smoke_launch.py`（含旧产物降级探活）；目标机验收清单 `docs/ACCEPTANCE_CHECKLIST.md`；全部文档基线同步（测试数 144、Vitest 8 条、事件总线融合列为显式后续项） |
-| v7.2.1 | 2026-09-28 | 移除程序内自动更新链路（检测提示 + Release 页面手动下载）与邮箱后台自动轮询（收件统一手动拉取）；修复更新器锁阻塞、重启竞态、设置覆盖、IMAP locale 四个中等问题；CI 升级 actions v7；前端 store 层 Vitest 单测；打包自动落盘 Release ZIP SHA-256 摘要；显式 SemVer 版本管理 |
-| v7.1.3 | 2026-09-05 | 目录规范化（docs/、scripts/、pyproject 统一依赖）、默认打开「发票收取」、修复窄视口侧边栏错位并简化 main.py 入口 |
-| v7.1.1 | 2026-09-05 | DevBase 框架迁移：任务运行时、更新安全、生命周期复用 DevBase；工作台外壳对齐 DevBase 侧边栏与导航；邮箱收件箱简化并新增打开目录 API；清理死代码（171 条测试通过，域控打包合规验证通过） |
-| v7.0.12 | 2026-09-01 | 完善自动更新启动确认、回滚保护、安装包完整性校验和发布前冒烟验证；隔离测试构建产物 |
-| v7.0.11 | 2026-08-31 | 完善 GitHub Release 自动更新的包完整性校验、启动确认、回滚保护和本地成功/失败冒烟验证 |
-| v7.0.5 | 2026-08-29 | 清理发布产物和冗余配置入口，补齐 README/版本信息并完成发布前静态验证与打包路径整理 |
-| v7.0.4 | 2026-08-23 | 收件箱独立指定并显示目录；处理工作区源目录与收件箱分离；非发票凭证跳过税号校验，并补充 API 与处理器测试 |
-| v7.0.3 | 2026-08-23 | 清理未使用占位视图、孤立样式和空目录；更新运行时版本显示并完成发布验证 |
-| v7.0.2 | 2026-08 | 仅支持 Python 3.12，移除 Python 3.10 兼容层和 tomli 依赖 |
-| v7.0.1 | 2026-08 | 统一运行时、前端和 EXE 版本信息，增加发布版本递增与一致性校验 |
-| v7.0.0 | 2026-08 | FastAPI + React 工作台、任务服务、邮箱手动拉取、统一设置、日志恢复、Native Bridge 安全边界和域控打包 |
-| v6.2 | 2026-07 | 停止按钮、日志持久化、PDF 异常分类、配置外部化、拖拽导入、内容去重、类型路由注册表、集成测试 |
-| v6.1 | 2026-07 | 域控规范支持、桌面界面迁移、墨韵主题 |
-| v6.0 | 2026-07 | 初始版本 |
-
-详细变更见 [docs/PROJECT_DEV.md](docs/PROJECT_DEV.md)。
+完整发布流程、验收清单与历史发布记录见 [docs/RELEASE_SOP.md](docs/RELEASE_SOP.md)（§9 验收留痕、§11 发布记录）与 GitHub Releases 页面。
