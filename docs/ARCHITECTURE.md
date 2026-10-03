@@ -1,7 +1,7 @@
 # SYNTEC 电子票据处理系统 Web 桌面化重构架构设计
 
 > 文档状态：当前实现基线与交付边界（随版本更新，见 §12/§14）
-> 当前版本：v7.3.5
+> 当前版本：v7.3.6
 > 适用平台：Windows 10/11、SYNTEC 域控环境
 > 本文记录 Web 桌面化重构的架构决策、实施边界与验收标准，具体实现以当前源码为准。
 
@@ -400,7 +400,7 @@ dist/SYNTEC-电子票据处理系统/
 生产模式不开放 Swagger UI，不输出 Uvicorn access log。开发模式可以独立运行 Vite 和 FastAPI，并通过显式环境变量启用文档与调试日志。
 
 ## 12. 交付状态与边界
-v7.3.5 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、手动邮箱收件（拉取批次目录隔离）、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。任务启动/取消已收敛为 DevBase 契约（旧 `/jobs` 兼容端点已移除，`/jobs/start` 带启动前同步预检）；邮箱后台轮询与程序内自动更新链路已移除（收件统一手动拉取；更新为"仅检测提示 + Release 页面手动下载"）。核心 Python 测试（228 条）、API 契约、前端 typecheck/Vitest/生产构建和打包合规已通过；发布包启动冒烟 `scripts/smoke_launch.py` 本机通过。目标机验收要求收敛至 `docs/RELEASE_SOP.md`，真实浏览器/WebView2/DPI/域控环境仍需按清单在目标环境执行。
+v7.3.6 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、手动邮箱收件（拉取批次目录隔离）、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。任务启动/取消已收敛为 DevBase 契约（旧 `/jobs` 兼容端点已移除，`/jobs/start` 带启动前同步预检）；邮箱后台轮询与程序内自动更新链路已移除（收件统一手动拉取；更新为"仅检测提示 + Release 页面手动下载"）。核心 Python 测试（228 条）、API 契约、前端 typecheck/Vitest/生产构建和打包合规已通过；发布包启动冒烟 `scripts/smoke_launch.py` 本机通过。目标机验收要求收敛至 `docs/RELEASE_SOP.md`，真实浏览器/WebView2/DPI/域控环境仍需按清单在目标环境执行。
 
 以下事项不属于当前版本功能，后续若实施必须同步补充测试和验收记录：
 
@@ -442,7 +442,7 @@ v7.3.5 当前交付包含：FastAPI 本地服务、React 工作台、pywebview �
 | 包体与启动时间增长 | 域控部署困难 | 使用系统 WebView2，不引入 Electron，不加载 CDN |
 
 ## 14. 当前交付定义
-当前源码可作为 v7.3.5 的维护和发布基线，理由如下：
+当前源码可作为 v7.3.6 的维护和发布基线，理由如下：
 
 - 旧 UI 不再是交付路径，业务编排集中在应用层；
 - Python 核心、应用层、API、桌面壳和前端边界符合本文件约定；
