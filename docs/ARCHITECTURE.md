@@ -365,11 +365,11 @@ Pydantic 模型是 API 单一事实源。CI 由 FastAPI OpenAPI 生成 TypeScrip
 
 | 层级 | 工具 | 必测内容 | 当前状态 |
 |---|---|---|---|
-| 核心回归 | pytest | 保留所有现有核心、邮箱、审核测试 | 已通过，168 条 |
+| 核心回归 | pytest | 保留所有现有核心、邮箱、审核测试 | 已通过，217 条 |
 | 应用层 | pytest + fake event bus/filesystem | 状态迁移、单任务互斥、取消、归档条件、事件顺序 | 已通过 |
 | API | FastAPI TestClient/httpx | DTO 校验、错误码、密钥脱敏、冲突与路径拒绝 | 已通过 |
 | WebSocket | pytest | 初始快照、事件顺序、断线重连校准、慢客户端策略 | 服务端契约已通过，真实浏览器重连待补 |
-| 前端单测 | Vitest + Testing Library | store 层（8 条） | 已纳入，8 条通过 |
+| 前端单测 | Vitest + Testing Library | store 层 + 事件游标纯函数 | 已纳入，17 条通过 |
 | E2E | Playwright | 手动选择到完成、停止、断线恢复、设置、日志过滤 | 未纳入自动化；手工场景见 docs/ACCEPTANCE_CHECKLIST.md §6 |
 | 打包冒烟 | Windows 干净机/域控机 | 启动、WebView2、DPI、中文 PDF、输出打开、退出回收 | 本机 smoke_launch.py 通过；目标机按 ACCEPTANCE_CHECKLIST.md §4 |
 
@@ -401,7 +401,7 @@ dist/SYNTEC-电子票据处理系统/
 生产模式不开放 Swagger UI，不输出 Uvicorn access log。开发模式可以独立运行 Vite 和 FastAPI，并通过显式环境变量启用文档与调试日志。
 
 ## 12. 交付状态与边界
-v7.3.3 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、手动邮箱收件、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。任务启动/取消已收敛为 DevBase 契约（旧 `/jobs` 兼容端点已移除，`/jobs/start` 带启动前同步预检）；邮箱后台轮询与程序内自动更新链路已移除（收件统一手动拉取；更新为"仅检测提示 + Release 页面手动下载"）。核心 Python 测试（168 条）、API 契约、前端 typecheck/Vitest/生产构建和打包合规已通过；发布包启动冒烟 `scripts/smoke_launch.py` 本机通过。目标机验收要求收敛至 `docs/ACCEPTANCE_CHECKLIST.md`，真实浏览器/WebView2/DPI/域控环境仍需按清单在目标环境执行。
+v7.3.4 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、手动邮箱收件（拉取批次目录隔离）、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。任务启动/取消已收敛为 DevBase 契约（旧 `/jobs` 兼容端点已移除，`/jobs/start` 带启动前同步预检）；邮箱后台轮询与程序内自动更新链路已移除（收件统一手动拉取；更新为"仅检测提示 + Release 页面手动下载"）。核心 Python 测试（217 条）、API 契约、前端 typecheck/Vitest/生产构建和打包合规已通过；发布包启动冒烟 `scripts/smoke_launch.py` 本机通过。目标机验收要求收敛至 `docs/ACCEPTANCE_CHECKLIST.md`，真实浏览器/WebView2/DPI/域控环境仍需按清单在目标环境执行。
 
 以下事项不属于当前版本功能，后续若实施必须同步补充测试和验收记录：
 
@@ -443,7 +443,7 @@ v7.3.3 当前交付包含：FastAPI 本地服务、React 工作台、pywebview �
 | 包体与启动时间增长 | 域控部署困难 | 使用系统 WebView2，不引入 Electron，不加载 CDN |
 
 ## 14. 当前交付定义
-当前源码可作为 v7.3.3 的维护和发布基线，理由如下：
+当前源码可作为 v7.3.4 的维护和发布基线，理由如下：
 
 - 旧 UI 不再是交付路径，业务编排集中在应用层；
 - Python 核心、应用层、API、桌面壳和前端边界符合本文件约定；

@@ -1,7 +1,7 @@
 # 项目维护说明（PROJECT_DEV）
 
 > 本文件记录发票处理系统的核心业务规则、技术约定与历史踩坑点。
-> 当前交付基线：v7.3.3。
+> 当前交付基线：v7.3.4。
 > **修改业务逻辑前，请先阅读本文件，避免重复踩坑。**
 
 ---
@@ -138,7 +138,7 @@ web/
 | 10 | 配置硬编码 | 税号写死在 config.py | `config_manager.py` 读写 INI + Web 设置视图 | 修改税号后下次处理生效 |
 | 11 | 类型路由 if-elif 难扩展 | 新增类型要改核心方法 | `@register_type` 装饰器 + `_TYPE_REGISTRY` 注册表 | 新增类型只加装饰器 |
 
-## 7. 当前能力（v7.3.2）
+## 7. 当前能力（v7.3.4）
 
 | # | 改进 | 实现位置 | 说明 |
 |---|---|---|---|
@@ -199,7 +199,7 @@ python scripts/smoke_launch.py --target exe
 
 ```
 
-截至 v7.3.3，本机 Windows 环境已验证：217 条 Python 测试通过（含任务历史 10 条、单实例 3 条、历史路由契约 2 条、WS 心跳/断链回收 2 条、`/jobs/current` 响应模型 1 条、邮件拉取批次隔离与 ZIP 容错、配置健壮性 9 条、提取正则 17 条、审核报告防注入 6 条、关窗等待 3 条），Ruff、前端 typecheck/build、Vitest（8 条）和 SYNTEC PyInstaller 域控合规检查通过；发布包启动冒烟（`scripts/smoke_launch.py`）通过，更新检测由 `test_update_checker.py` 单测覆盖。目标机验收（真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户）按 `docs/ACCEPTANCE_CHECKLIST.md` 在目标环境执行（全自动判定，无人工观察项）。
+截至 v7.3.4，本机 Windows 环境已验证：217 条 Python 测试通过（含任务历史 10 条、单实例 3 条、历史路由契约 2 条、WS 心跳/断链回收 2 条、`/jobs/current` 响应模型 1 条、邮件拉取批次隔离与 ZIP 容错、配置健壮性 9 条、提取正则 17 条、审核报告防注入 6 条、关窗等待 3 条），Ruff、前端 typecheck/build、Vitest（17 条：store 层 8 + 事件游标 9）和 SYNTEC PyInstaller 域控合规检查通过；发布包启动冒烟（`scripts/smoke_launch.py`）通过，更新检测由 `test_update_checker.py` 单测覆盖。目标机验收（真实浏览器 WebSocket 断线恢复、干净 Windows/域控账户）按 `docs/ACCEPTANCE_CHECKLIST.md` 在目标环境执行（全自动判定，无人工观察项）。
 
 测试文件：
 - `tests/test_processor.py`：核心逻辑单元测试

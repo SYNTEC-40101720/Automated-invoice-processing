@@ -13,7 +13,7 @@
 | # | 项目 | 命令 / 判定 | 结果 |
 |---|---|---|---|
 | 1.1 | 五版本源一致 | `python scripts/build_syntec.py`（内含版本一致性校验） | ☐ |
-| 1.2 | Python 测试 | `python -m pytest tests/ -q` 全绿（当前基线 168 条，以实测为准） | ☐ |
+| 1.2 | Python 测试 | `python -m pytest tests/ -q` 全绿（当前基线 217 条，以实测为准） | ☐ |
 | 1.3 | Python 静态检查 | `python -m ruff check backend tests scripts` 零告警 | ☐ |
 | 1.4 | 前端类型检查 | `npm --prefix web run typecheck` 零错误 | ☐ |
 | 1.5 | 前端单测 | `npm --prefix web run test` 全绿（当前基线 8 条） | ☐ |
@@ -127,6 +127,9 @@ v7.3.0 起程序内无自动更新链路（`405d8fd` 移除）——升级 = 检
 
 | §1 自动化与发布构建（v7.3.3） | 40101720 | 2026-10-02 | ☑通过 | Ruff、168 条 Python 测试、TypeScript、Vitest 8 条、Vite 构建、PyInstaller 域控合规均通过；EXE 冒烟 health=7.3.3、日志无 CRITICAL、干净退出并释放端口 |
 | §4 桌面功能（v7.3.3 发布包） | 40101720 | 2026-10-02 | ☑通过 | `acceptance_driver.py --only 4`：启动/health、Explorer 打开输出目录、干净退出与端口回收通过；12 份生成占位 PDF 为 `completed_with_warnings`（成功 0、失败 12），仅验证处理流程，不作为业务识别通过基线 |
+| §1 静态与自动化（v7.3.4） | 40101720 | 2026-10-03 | ☑通过 | pytest 217 / ruff 零告警 / tsc / Vitest 17 / build / CI 绿（6479413）；ZIP SHA-256 5c0fa974... 与 .sha256 一致，GitHub digest 一致 |
+| §3 启动冒烟（v7.3.4） | 40101720 | 2026-10-03 | ☑通过 | EXE 完整模式：health=7.3.4、日志无 CRITICAL、干净退出、端口释放；更新检测核对 available=false（7.3.4 = Release 最新） |
+| §2+§4+§6 全量（v7.3.4 发布） | 40101720 | 2026-10-03 | ☑通过 | `acceptance_driver.py` 全量 16 项全过 0 失败；§2 五项前置通过；§4 窗口句柄/12 份占位样本（completed_with_warnings，成功 0、失败 12，仅验证处理流程）/Explorer 打开/干净退出端口释放（exit=0）；§6 实时事件 48 条（progress=5/log=20）、进度单调 1.0、断线重连游标补齐 171 条编号连续、双客户端隔离、设置 8→4 保存还原、日志分页不重不漏。取消场景复跑 `--only 6` 仍因占位样本处理过快降级跳过（与 v7.3.2 相同，属占位样本特性非缺陷；取消链路单测覆盖见 tests/application/test_job_service.py） |
 
 ### 人工观察项留痕
 

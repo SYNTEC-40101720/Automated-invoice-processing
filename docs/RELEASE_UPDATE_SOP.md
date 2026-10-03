@@ -160,6 +160,27 @@ SHA-256：
 
 ## 9. 发布记录
 
+### v7.3.4（2026-10-03 发布）
+
+```text
+应用：SYNTEC-电子票据处理系统
+仓库：SYNTEC-40101720/Automated-invoice-processing
+当前版本：7.3.3
+目标版本：7.3.4
+Release URL：https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.3.4
+资产名：SYNTEC-Invoice-Processor-v7.3.4.zip
+资产大小：61.64 MB（64,630,958 字节）
+SHA-256：5c0fa974d8d58b75f4e1fec479964435bd7c5075a2870efd713877bb63e3b14b（GitHub digest 一致）
+主程序版本资源：CompanyName=SYNTEC，FileVersion/ProductVersion=[IP_ADDRESS]，LegalCopyright=Copyright © SYNTEC 2026
+质量基线：217 条 Python 测试、Ruff、TypeScript、Vitest 17 条、Vite 构建通过；PyInstaller 域控合规通过
+启动冒烟：health=7.3.4，日志无 CRITICAL，进程干净退出且端口释放
+当前版检测结果：available=false 不误报（7.3.4 = Release 最新，实测核对）
+桌面验收：§2+§4+§6 全量 16 项全过 0 失败；取消场景占位样本处理过快降级跳过（与 v7.3.2 相同特性，复跑 --only 6 仍降级，取消链路由单测覆盖）
+已知限制：AI 提示注入与真实税控 PDF 语料版式验证不在范围（PROJECT_DEV 遗留项）
+```
+
+内容：14 条审查缺陷修复批次（邮箱拉取批次目录隔离、ZIP 成员名清洗与加密/损坏容错、拉取单飞锁、配置健壮性 %/BOM/GBK/密文损坏、乘车日期正则双花括号、三层类别判定、打车单程 100 元与高铁座位差标、Excel 公式注入防护、关窗等待任务终态）+ 前端 WS 事件游标重构（跨重启游标回退保护）；测试基线 168 → 217，Vitest 8 → 17。文档基线同步整合（ARCHITECTURE/PROJECT_DEV/README 版本历史与测试数统一）。
+
 ### v7.3.3（2026-10-02 发布）
 
 ```text
