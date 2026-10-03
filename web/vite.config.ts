@@ -8,7 +8,11 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
-      '/api': 'http://127.0.0.1:8000',
+      // ws: true：WebSocket 升级请求也走代理，缺省时 WS 握手会挂起直到超时
+      '/api': {
+        target: 'http://127.0.0.1:8000',
+        ws: true,
+      },
     },
   },
   build: {
