@@ -46,6 +46,9 @@
 | ADR-006 | 单 Python 进程、后端后台线程 | 降低打包和进程回收复杂度；CPU/I/O 工作仍由受控线程池执行 |
 | ADR-007 | 配置继续使用 INI + DPAPI | 兼容已有用户配置和密钥，首期不做无收益迁移 |
 | ADR-008 | 前端资源全部内置 | 域控和离线环境不依赖 CDN、在线字体或远程脚本 |
+| ADR-009 | OCR 级联用 RapidOCR（onnxruntime）仅扫描件 fallback | 纯离线中文 OCR、无 torch/paddle 重依赖、`ocr_enabled` 可回退；详见 `docs/ADR-2026-10-27-识别增强.md` D1 |
+| ADR-010 | 抽取模板化为旁路伴随记录，硬编码处理器兜底 | 新开票方降为加 YAML 配置；模板全覆盖前不改变判定与输出，风险最小；详见同 ADR 文档 D2 |
+| ADR-011 | 内容去重用 sha256 全局索引（logs/duplicate_index.json） | 防同一发票跨批次重复报销；损坏重置宁重复不误跳；详见同 ADR 文档 D4 |
 
 ### 2.1 pywebview 预研门槛
 
@@ -400,7 +403,7 @@ dist/SYNTEC-电子票据处理系统/
 生产模式不开放 Swagger UI，不输出 Uvicorn access log。开发模式可以独立运行 Vite 和 FastAPI，并通过显式环境变量启用文档与调试日志。
 
 ## 12. 交付状态与边界
-v7.3.7 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、手动邮箱收件（拉取批次目录隔离）、收件目录统一入口（`GET /email/inbox/scan` + 收件页「处理收件箱」，trigger=inbox 覆盖根目录散放与批次子目录、各自目录归档）、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。任务启动/取消已收敛为 DevBase 契约（旧 `/jobs` 兼容端点已移除，`/jobs/start` 带启动前同步预检）；邮箱后台轮询与程序内自动更新链路已移除（收件统一手动拉取；更新为"仅检测提示 + Release 页面手动下载"）。核心 Python 测试（236 条）、API 契约、前端 typecheck/Vitest/生产构建和打包合规已通过；发布包启动冒烟 `scripts/smoke_launch.py` 本机通过。目标机验收要求收敛至 `docs/RELEASE_SOP.md`，真实浏览器/WebView2/DPI/域控环境仍需按清单在目标环境执行。
+v7.3.7→v7.4 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、手动邮箱收件（拉取批次目录隔离）、收件目录统一入口（`GET /email/inbox/scan` + 收件页「处理收件箱」，trigger=inbox 覆盖根目录散放与批次子目录、各自目录归档）、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查，以及 v7.4 识别增强四件套（OCR 级联仅扫描件 fallback `ocr_enabled` 开关、YAML 模板旁路抽取、审阅队列 `manual_review_files` 随任务快照下发+处理页 UI、sha256 内容去重 `duplicates` 计数与 `logs/duplicate_index.json` 索引；见 `docs/ADR-2026-10-27-识别增强.md` 与 PROJECT_DEV §3.7/§12）。任务启动/取消已收敛为 DevBase 契约（旧 `/jobs` 兼容端点已移除，`/jobs/start` 带启动前同步预检）；邮箱后台轮询与程序内自动更新链路已移除（收件统一手动拉取；更新为"仅检测提示 + Release 页面手动下载"）。核心 Python 测试（279 条）、API 契约、前端 typecheck/Vitest（22 条）/生产构建和打包合规已通过；发布包启动冒烟 `scripts/smoke_launch.py` 本机通过。目标机验收要求收敛至 `docs/RELEASE_SOP.md`，真实浏览器/WebView2/DPI/域控环境仍需按清单在目标环境执行。
 
 以下事项不属于当前版本功能，后续若实施必须同步补充测试和验收记录：
 

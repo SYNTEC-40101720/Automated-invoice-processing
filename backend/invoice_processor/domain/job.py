@@ -52,6 +52,7 @@ class JobStats:
     success: int = 0
     failure: int = 0
     tax_issues: int = 0
+    duplicates: int = 0
 
     def to_dict(self) -> dict[str, int]:
         return {
@@ -59,6 +60,7 @@ class JobStats:
             'success': self.success,
             'failure': self.failure,
             'tax_issues': self.tax_issues,
+            'duplicates': self.duplicates,
         }
 
 
@@ -106,6 +108,8 @@ class Job:
     error_code: str | None = None
     error_message: str | None = None
     result: dict[str, Any] | None = None
+    duplicates: int = 0
+    manual_review_files: list[dict[str, str]] = field(default_factory=list)
 
     def transition(self, target: JobStatus) -> None:
         if target == self.status:
@@ -155,4 +159,6 @@ class Job:
             'error_code': self.error_code,
             'error_message': self.error_message,
             'result': self.result,
+            'duplicates': self.duplicates,
+            'manual_review_files': self.manual_review_files,
         }

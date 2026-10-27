@@ -89,7 +89,9 @@ def make_source(tmp_path, count=2):
     source = tmp_path / 'source'
     source.mkdir()
     for index in range(count):
-        (source / f'invoice-{index}.pdf').write_bytes(b'pdf')
+        # 内容按序号差异化：全局内容去重会把同内容文件判为重复，
+        # 既有测试假定每份文件都被处理，因此这里必须各不相同
+        (source / f'invoice-{index}.pdf').write_bytes(f'pdf-{index}'.encode())
     return source
 
 
@@ -416,3 +418,78 @@ def test_job_service_excludes_settlement_statements_from_scan_and_archive(tmp_pa
     # 归档只移动处理清单内的文件；结账单留在源目录原位
     assert (source / '华住结账单.pdf').is_file()
     assert not (source / '已处理' / '华住结账单.pdf').exists()
+
+
+def _write_pdf(path, data: bytes):
+    path.write_bytes(data)
+    return path
+
+
+def test_job_service_dedup_skips_same_content_pdf_in_same_batch(tmp_path):
+    """同批两份同内容 PDF：第二份命中全局索引，跳过处理留在原地"""
+    from invoice_processor.core.duplicate_check import (
+        DuplicateIndex,
+        compute_sha256,
+    )
+
+    index = DuplicateIndex(tmp_path / 'logs' / 'duplicate_index.json')
+    index.load()
+    service, processor = make_service(tmp_path)
+    service._duplicate_index = index
+    source = make_source(tmp_path, count=1)
+    _write_pdf(source / 'invoice-0-copy.pdf', b'pdf-0')
+
+    final = service.run_job_sync(str(source), JobTrigger.INBOX)
+
+    assert final['status'] == JobStatus.SUCCEEDED.value
+    assert final['stats']['duplicates'] == 1
+    assert final['stats']['success'] == 1
+    # 处理清单按文件名排序，'invoice-0-copy.pdf' < 'invoice-0.pdf'：
+    # 排序靠前的先处理入索引，另一份命中后跳过
+    assert processor.files == ['invoice-0-copy.pdf']
+    # 重复的那份既不处理也不归档，留在原地
+    assert (source / 'invoice-0.pdf').is_file()
+    assert not (source / '已处理' / 'invoice-0.pdf').exists()
+    index.save()
+    reloaded = DuplicateIndex(tmp_path / 'logs' / 'duplicate_index.json')
+    reloaded.load()
+    assert reloaded.contains(
+        compute_sha256(source / 'invoice-0.pdf')
+    )
+
+
+def test_job_service_dedup_blocks_same_content_across_jobs(tmp_path):
+    """跨任务重复：第二个任务命中索引，不再处理同内容文件"""
+    from invoice_processor.core.duplicate_check import DuplicateIndex, compute_sha256
+
+    index = DuplicateIndex(tmp_path / 'logs' / 'duplicate_index.json')
+    index.load()
+    service, processor = make_service(tmp_path)
+    service._duplicate_index = index
+    source = make_source(tmp_path, count=1)
+
+    first = service.run_job_sync(str(source), JobTrigger.INBOX)
+    assert first['stats']['duplicates'] == 0
+    assert processor.files == ['invoice-0.pdf']
+
+    # 第二个任务：同一份内容（同名重建）再次提交
+    _write_pdf(source / 'invoice-0.pdf', b'pdf-0')
+    second = service.run_job_sync(str(source), JobTrigger.INBOX)
+
+    assert second['status'] == JobStatus.SUCCEEDED.value
+    assert second['stats']['duplicates'] == 1
+    assert second['stats']['success'] == 0
+    assert processor.files == ['invoice-0.pdf']  # 没有新增处理
+    assert compute_sha256(source / 'invoice-0.pdf') in index._entries
+
+
+def test_job_service_without_index_keeps_legacy_behavior(tmp_path):
+    """未注入 duplicate_index（生产接线前/单测默认）→ 无去重语义"""
+    service, processor = make_service(tmp_path)
+    source = make_source(tmp_path, count=2)
+
+    final = service.run_job_sync(str(source), JobTrigger.INBOX)
+
+    assert final['stats']['duplicates'] == 0
+    assert final['stats']['success'] == 2
+    assert processor.files == ['invoice-0.pdf', 'invoice-1.pdf']

@@ -7,13 +7,19 @@ import os
 import shutil
 import threading
 from collections.abc import Callable
-from concurrent.futures import CancelledError, ThreadPoolExecutor, as_completed
+from concurrent.futures import (
+    CancelledError,
+    Future,
+    ThreadPoolExecutor,
+    as_completed,
+)
 from dataclasses import dataclass
 from typing import Any
 
 from devbase.application.event_bus import EventBus
 
 from ..config_manager import get_inbox_dir, get_max_workers
+from ..core.duplicate_check import DuplicateIndex, compute_sha256
 from ..core.exclusions import is_excluded_filename
 from ..core.processor import InvoiceProcessor
 from ..domain.errors import (
@@ -102,6 +108,7 @@ class JobService:
         file_service_factory: Callable[..., InvoiceFileService] = InvoiceFileService,
         job_history_limit: int = 100,
         job_history_store: JobHistoryStore | None = None,
+        duplicate_index: DuplicateIndex | None = None,
     ):
         self.events = event_bus or EventBus()
         self._processor_factory = processor_factory
@@ -111,6 +118,8 @@ class JobService:
         self._file_service_factory = file_service_factory
         # 跨启动处理历史（终态旁路落盘）；None 时历史功能停用
         self._job_history_store = job_history_store
+        # 全局内容去重索引（跨任务 sha256）；None 时去重功能停用
+        self._duplicate_index = duplicate_index
         self._lock = threading.RLock()
         self._handles: dict[str, _JobHandle] = {}
         self._current_job_id: str | None = None
@@ -366,8 +375,10 @@ class JobService:
             self._log(job, f'使用 {self._max_workers()} 线程并发处理', 'info')
 
             file_service = self._file_service_factory(processor)
-            success_count, failure_count = self._process_files(
-                job, processor, file_service, pdf_files, cancel_event
+            success_count, failure_count, duplicate_rel_paths = (
+                self._process_files(
+                    job, processor, file_service, pdf_files, cancel_event
+                )
             )
             if cancel_event.is_set() or self._is_cancel_requested(job):
                 self._finish_cancelled(job)
@@ -376,7 +387,12 @@ class JobService:
             self._log(
                 job,
                 f'统计: 总 {job.stats.total} | 成功 {success_count} '
-                f'| 失败 {failure_count}',
+                f'| 失败 {failure_count}'
+                + (
+                    f' | 跳过重复 {job.stats.duplicates}'
+                    if job.stats.duplicates
+                    else ''
+                ),
                 'info',
             )
             self._set_phase(job, JobPhase.POST_PROCESS, '执行后处理…')
@@ -431,7 +447,12 @@ class JobService:
                 if cancel_event.is_set() or self._is_cancel_requested(job):
                     self._finish_cancelled(job)
                     return
-                archived = self._archive_files(job, pdf_files)
+                # 重复文件留在原地：不进处理流程，也不参与归档
+                archive_targets = tuple(
+                    rel for rel in pdf_files
+                    if rel not in duplicate_rel_paths
+                )
+                archived = self._archive_files(job, archive_targets)
                 result['archived'] = archived
                 if archived:
                     self._log(job, f'已归档 {archived} 个已处理发票', 'info')
@@ -443,7 +464,15 @@ class JobService:
             with self._lock:
                 job.result = result
                 job.phase = JobPhase.DONE
-                job.message = f'处理完成 — 成功 {success_count}/{job.stats.total}'
+                duplicates_suffix = (
+                    f'，跳过重复 {job.stats.duplicates}'
+                    if job.stats.duplicates
+                    else ''
+                )
+                job.message = (
+                    f'处理完成 — 成功 {success_count}/{job.stats.total}'
+                    f'{duplicates_suffix}'
+                )
                 final_status = (
                     JobStatus.SUCCEEDED
                     if failure_count == 0 and not tax_issues
@@ -476,10 +505,12 @@ class JobService:
                     processor.clear_cache()
                 except Exception:
                     logger.exception('清理处理器缓存失败')
-            # 终态旁路落盘处理历史（锁序约束：不得在持 service 锁时做
-            # 磁盘 IO；store 自身线程安全，IO 失败在 store 内部降级）。
+            # 终态旁路落盘处理历史与去重索引（锁序约束：不得在持
+            # service 锁时做磁盘 IO；两者 IO 失败均内部降级不 fail 任务）。
             if self._job_history_store is not None and job.status.is_terminal:
                 self._job_history_store.append(job.to_dict())
+            if self._duplicate_index is not None and job.status.is_terminal:
+                self._duplicate_index.save()
             with self._lock:
                 # 保留 handle 供任务历史查询，仅释放运行时资源引用；
                 # 历史上限由 _trim_job_history_locked 统一裁剪。
@@ -495,26 +526,55 @@ class JobService:
         file_service: InvoiceFileService,
         pdf_files: tuple[str, ...],
         cancel_event: threading.Event,
-    ) -> tuple[int, int]:
+    ) -> tuple[int, int, list[str]]:
+        """处理 PDF 批次；返回 (成功数, 失败数, 归集到需人工处理的相对路径)。
+
+        去重判定在提交前由主线程串行完成（锁序：sha256/contains/add 均
+        在 service 锁外做磁盘 IO），命中全局索引的文件跳过处理并留在
+        原地（不进处理流程、不参与归档）。
+        """
         success_count = 0
         failure_count = 0
         completed_count = 0
+        duplicates_count = 0
+        duplicate_rel_paths: list[str] = []
+        manual_review_rel_paths: list[str] = []
+        index = self._duplicate_index
+        pending: dict[Future, str] = {}
         executor = ThreadPoolExecutor(max_workers=self._max_workers())
-        futures = {
-            executor.submit(
+        for filename in pdf_files:
+            content_hash: str | None = None
+            if index is not None:
+                file_path = os.path.join(job.source_dir, filename)
+                try:
+                    # 锁外磁盘 IO：不在持 service 锁时计算/查询索引
+                    content_hash = compute_sha256(file_path)
+                except OSError as exc:
+                    self._log(
+                        job, f'重复检测跳过（读取失败）: {filename}，{exc}',
+                        'warning',
+                    )
+                else:
+                    if index.contains(content_hash):
+                        duplicates_count += 1
+                        duplicate_rel_paths.append(filename)
+                        self._log(job, f'重复文件，已跳过: {filename}', 'warning')
+                        continue
+                    # 处理前先入索引（含处理失败场景：失败文件同样不该在
+                    # 后续任务里被当作新内容重放处理）
+                    index.add(content_hash, {'first_seen': filename})
+            pending[executor.submit(
                 file_service.process_file,
                 filename,
                 job.source_dir,
                 job.output_dir,
                 cancel_event.is_set,
-            ): filename
-            for filename in pdf_files
-        }
+            )] = filename
         try:
-            for future in as_completed(futures):
+            for future in as_completed(pending):
                 if cancel_event.is_set():
-                    for pending in futures:
-                        pending.cancel()
+                    for pending_future in pending:
+                        pending_future.cancel()
                     break
                 if future.cancelled():
                     continue
@@ -523,7 +583,7 @@ class JobService:
                 except CancelledError:
                     continue
                 except Exception as exc:
-                    filename = futures[future]
+                    filename = pending[future]
                     file_result = FileProcessResult(
                         filename,
                         None,
@@ -536,6 +596,11 @@ class JobService:
                     success_count += 1
                 elif file_result.outcome == 'failure':
                     failure_count += 1
+                    if '已归集到需人工处理' in file_result.message:
+                        manual_review_rel_paths.append(
+                            {'rel': file_result.filename,
+                             'msg': file_result.message}
+                        )
                 self._log(job, file_result.message, file_result.level)
                 with self._lock:
                     job.stats.success = success_count
@@ -544,7 +609,60 @@ class JobService:
                 self._set_progress(job, 0.70 * completed_count / len(pdf_files))
         finally:
             executor.shutdown(wait=True, cancel_futures=cancel_event.is_set())
-        return success_count, failure_count
+        with self._lock:
+            job.stats.duplicates = duplicates_count
+        self._publish_stats(job)
+        self._publish_snapshot(job)
+        # 归集清单落 job（终态快照可见）；返回待收集中间态
+        review_items = self._build_review_items(
+            manual_review_rel_paths, job.output_dir
+        )
+        with self._lock:
+            job.manual_review_files = review_items
+        self._publish_snapshot(job)
+        return success_count, failure_count, duplicate_rel_paths
+
+    @staticmethod
+    def _build_review_items(
+        collected: list[dict[str, str]], output_dir: str | None
+    ) -> list[dict[str, str]]:
+        """把处理结果归集清单映射为需人工处理列表（path = 实际落点）。
+
+        归集时文件被复制到 output_dir/需人工处理/ 下（计数器改名后可能
+        与原名不同），所以 path 取目录里实际存在的文件名；reason 取
+        处理日志的失败原因前缀（如「PDF 已加密」「字段提取失败」）。
+        """
+        if not collected or not output_dir:
+            return []
+        manual_dir = os.path.join(output_dir, '需人工处理')
+        try:
+            present = set(os.listdir(manual_dir))
+        except OSError:
+            return []
+        items: list[dict[str, str]] = []
+        for entry in collected:
+            rel = entry['rel']
+            message = entry['msg']
+            base = os.path.basename(rel)
+            stem, ext = os.path.splitext(base)
+            matched = ''
+            if base in present:
+                matched = base
+            else:
+                counter = 1
+                while True:
+                    candidate = f'{stem}_{counter}{ext}'
+                    if candidate in present:
+                        matched = candidate
+                        break
+                    counter += 1
+                    if counter > 99:
+                        break
+            if not matched:
+                continue
+            reason = message.split('，', 1)[0] if '，' in message else message
+            items.append({'path': matched, 'reason': reason})
+        return items
 
     def _archive_files(self, job: Job, filenames: tuple[str, ...]) -> int:
         """归档已处理文件到各自所在目录的「已处理」子目录。

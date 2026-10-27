@@ -16,6 +16,7 @@ import uvicorn
 from ..api.app import create_app
 from ..application.job_history import JobHistoryStore, default_history_path
 from ..application.job_service import JobService
+from ..core.duplicate_check import DuplicateIndex, default_duplicate_index_path
 from .native_bridge import NativeBridge
 from .single_instance import acquire_single_instance_lock
 
@@ -68,7 +69,10 @@ def run_desktop(
         return
     port = port or _find_free_port()
     token = local_token or secrets.token_urlsafe(32)
-    job_service = JobService(job_history_store=JobHistoryStore(default_history_path()))
+    job_service = JobService(
+        job_history_store=JobHistoryStore(default_history_path()),
+        duplicate_index=DuplicateIndex(default_duplicate_index_path()),
+    )
     app = create_app(
         job_service,
         local_token=token,

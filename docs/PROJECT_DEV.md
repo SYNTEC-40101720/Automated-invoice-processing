@@ -22,6 +22,8 @@
 | API | FastAPI + Uvicorn | HTTP、WebSocket、本地静态资源 |
 | 任务状态 | EventBus + ThreadPoolExecutor | 关键事件不丢失，进度事件可合并 |
 | PDF 文本提取 | pdfplumber ≥0.11.x | 保留空白版本用 `_extract_raw_text` |
+| OCR 级联 | RapidOCR（onnxruntime）+ pypdfium2 | 仅扫描件 fallback（v7.4，见 §12），`ocr_enabled` 开关 |
+| 抽取模板化 | YAML 模板 + pyyaml | 模板伴随抽取（v7.4，见 §12），硬编码兜底 |
 | PDF 合并 | pypdf（**非 PyPDF2**） | PyPDF2 已停止维护，禁止使用 |
 | 并发 | ThreadPoolExecutor | 固定 8 线程（见 config.MAX_WORKERS） |
 | 打包 | PyInstaller | `build_syntec.py`，`--onedir --windowed --noupx` |
@@ -91,6 +93,12 @@
 | 收费公路汇总单 | `process_toll_summary` | `行程单.pdf` |
 | 高铁票 | `process_train_ticket` | `高铁票.pdf` |
 | 通用电子发票 | `process_general_invoice` | `.pdf` |
+
+### 3.7 内容级去重（sha256，v7.4）⚠️
+
+**规则**：处理清单内每个 PDF 计算内容哈希（sha256，流式读取），命中任务内或历史归档索引（`duplicate_index.json`，随历史记录目录持久化，损坏自动重置）的文件**跳过处理**：stats 增 `duplicates` 计数、日志 warning「重复文件，已跳过」、**文件保留原位不处理不归档**。处理结果页显示「已跳过 N 个重复文件」。并发场景下「先查后加」竞态允许（同批两份相同内容最多一份被处理）。
+
+**实现位置**：`core/duplicate_check.py`（compute_sha256 / DuplicateIndex）+ `application/job_service.py` 接入（v7.4 ADR D4）。
 
 ## 4. 进度报告约定
 
@@ -281,5 +289,37 @@ timeout = 60
 - 审核数据来自 `excel_summary._parse_invoice`，含每文件行明细（日期/时间/城市/路线/类别/金额/税额）
 - 网络调用在 worker 线程执行，失败仅告警不影响处理结果
 - **遗留（有意不修）**：AI 审核系统提示词可能被 PDF 文本操纵（提示注入）——影响仅限产生提示性 findings，不阻断流程、不外传数据；彻底修复需重构提示词结构。真实税控 PDF 语料（千分位等版式）的提取正则未验证，目前只用合成文本测过。
+
+---
+
+## 12. 识别增强（v7.4：OCR 级联 + 抽取模板化 + 审阅队列 + 内容去重）
+
+> 决策记录：`docs/ADR-2026-10-27-识别增强.md`（D1–D4，用户逐项确认）。
+
+### 功能
+- **OCR 级联（D1）**：pdfplumber 抽不出有效文本（去空白后 <10 字符）时，pypdfium2 逐页渲染（scale≈2.0）→ RapidOCR（onnxruntime CPU，纯离线）识别并按阅读序拼接；OCR 后仍无有效文本 → 照旧落「需人工处理」。`[ai] ocr_enabled` 开关（默认 true），关闭即回纯 pdfplumber；引擎懒加载单例，初始化失败自动永久禁用（不让任务崩）。日志标注文本来源（`pdfplumber`/`OCR`）。
+- **抽取模板化（D2）**：`core/templates/*.yaml` 按开票方配置关键词与字段正则（浙江增值税/高铁/滴滴 3 个内置模板，支持千分位、全角冒号）；模板引擎当前为**旁路伴随抽取**——命中模板的字段写「模板抽取」日志，不改变 `process_xxx` 判定与输出（用户决策：硬编码处理器保留兜底，模板全覆盖后再评估接管/退役）。
+- **审阅队列 UI（D3）**：任务快照增 `manual_review_files`（`output_dir/需人工处理/` 文件清单 + reason），处理页结果区内嵌清单 + 「打开文件夹」按钮。
+- **内容去重（D4）**：见 §3.7；任务快照增 `duplicates` 计数。
+
+### 配置（config.ini `[ai]` 段新增）
+```ini
+ocr_enabled = true    # 扫描件 OCR fallback 开关（false 即纯 pdfplumber）
+```
+
+### 实现位置
+- `backend/invoice_processor/core/pdf_text.py`：OCR 级联（懒加载 RapidOCR 单例 + pypdfium2 渲染 + 阅读序拼接）
+- `backend/invoice_processor/core/invoice_template_engine.py` + `core/templates/*.yaml`：模板加载/匹配/字段抽取
+- `backend/invoice_processor/core/duplicate_check.py`：sha256 + DuplicateIndex（JSON 持久化，并发锁）
+- `backend/invoice_processor/application/job_service.py`：去重接入 + `manual_review_files`/`duplicates` 快照字段
+- `backend/invoice_processor/api/schemas.py` + `web/src/api/types.ts`：契约同步
+- `web/src/features/ProcessingView.tsx`：审阅队列 UI + 重复提示
+- `invoice_processor.spec`：RapidOCR 模型/onnxruntime/cv2 DLL 收集（`collect_data_files("rapidocr_onnxruntime")` + `collect_dynamic_libs("onnxruntime"/"cv2")`）
+- 探测脚本：`scripts/probe_ocr_cascade.py`（image-only PDF 全链路验证）
+
+### 注意
+- OCR 引擎初始化有首次调用开销（模型加载约 1–2s），仅首个扫描件触发；文本版 PDF 零开销
+- 模板正则改错会静默不命中（兜底仍工作），改模板后跑 `tests/core/test_invoice_template_engine.py` 验证
+- 打包体积约 +30–60MB（onnxruntime + 模型）；如发布包体积超标，先检查 spec 的 datas 是否重复收集
 
 

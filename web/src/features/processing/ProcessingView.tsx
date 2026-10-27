@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { CheckCircle2, FolderOpen, History, LoaderCircle, Play, Square, TriangleAlert } from 'lucide-react'
+import { CheckCircle2, ClipboardList, FolderOpen, History, LoaderCircle, Play, Square, TriangleAlert } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../api/client'
 import type { Job, JobHistoryEntry, JobStatus } from '../../api/types'
@@ -45,6 +45,8 @@ export function ProcessingView({ job, onChooseDirectory, onStart, onCancel, onOp
             ? '已取消'
             : '已就绪'
   const statusTone = active ? 'working' : finished ? 'success' : job?.status === 'failed' ? 'error' : ''
+  const duplicates = job?.stats.duplicates ?? job?.duplicates ?? 0
+  const reviewFiles = job?.manual_review_files ?? []
   useInvalidateHistoryOnTerminal(job)
   return (
     <div className="editor-view processing-view">
@@ -107,6 +109,35 @@ export function ProcessingView({ job, onChooseDirectory, onStart, onCancel, onOp
             <div><CheckCircle2 size={18} /><span>处理结果已生成</span></div>
             <div className="result-path">{job.output_dir}</div>
             <button className="secondary-button" onClick={() => job.output_dir && onOpenOutput(job.output_dir)} disabled={!job.output_dir}>打开输出目录</button>
+          </section>
+        )}
+
+        {duplicates > 0 && (
+          <div className="inline-warning dedup-hint" role="status">
+            <CheckCircle2 size={14} /> 已跳过 {duplicates} 个重复文件（与历史内容相同，留在原目录）
+          </div>
+        )}
+
+        {finished && reviewFiles.length > 0 && (
+          <section className="feature-section manual-review-section" aria-label="需人工处理">
+            <div className="audit-summary-heading">
+              <div>
+                <span className="field-label">需人工处理</span>
+                <strong>{reviewFiles.length} 个文件未能自动完成</strong>
+              </div>
+              <button className="secondary-button" onClick={() => job.output_dir && onOpenOutput(job.output_dir)} disabled={!job.output_dir}>
+                <FolderOpen size={15} /> 打开文件夹
+              </button>
+            </div>
+            <ul className="manual-review-list">
+              {reviewFiles.map((item) => (
+                <li key={item.path} className="manual-review-item">
+                  <ClipboardList size={15} />
+                  <span className="manual-review-path" title={item.path}>{fileNameOf(item.path)}</span>
+                  <span className="manual-review-reason">{item.reason}</span>
+                </li>
+              ))}
+            </ul>
           </section>
         )}
 
@@ -205,6 +236,12 @@ function formatTime(iso: string): string {
   if (Number.isNaN(date.getTime())) return iso
   const pad = (value: number) => String(value).padStart(2, '0')
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function fileNameOf(path: string): string {
+  const normalized = path.replaceAll('\\', '/')
+  const name = normalized.split('/').pop() ?? path
+  return name
 }
 
 function Metric({ label, value, tone }: { label: string; value: number; tone: string }) {

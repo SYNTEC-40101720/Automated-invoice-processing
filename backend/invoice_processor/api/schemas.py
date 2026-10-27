@@ -38,6 +38,14 @@ class JobStatsDTO(BaseModel):
     success: int = 0
     failure: int = 0
     tax_issues: int = 0
+    duplicates: int = 0
+
+
+class ReviewFileItem(BaseModel):
+    """需人工处理清单中的一项（相对路径 + 原因说明）。"""
+
+    path: str
+    reason: str
 
 
 class JobSnapshotResponse(BaseModel):
@@ -60,6 +68,10 @@ class JobSnapshotResponse(BaseModel):
     error_code: str | None = None
     error_message: str | None = None
     result: dict[str, Any] | None = None
+    duplicates: int = 0
+    manual_review_files: list[ReviewFileItem] = Field(
+        default_factory=list
+    )
 
 
 class DirectoryScanResponse(BaseModel):

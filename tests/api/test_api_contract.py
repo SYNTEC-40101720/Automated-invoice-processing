@@ -179,6 +179,7 @@ def test_current_job_endpoint_serializes_via_response_model(tmp_path):
     assert payload['status'] == 'queued'
     assert payload['stats'] == {
         'total': 0, 'success': 0, 'failure': 0, 'tax_issues': 0,
+        'duplicates': 0,
     }
     # OpenAPI 契约可见（前端类型生成单一事实源）。
     schema = client.get('/api/v1/openapi.json').json()
@@ -187,6 +188,7 @@ def test_current_job_endpoint_serializes_via_response_model(tmp_path):
         'id', 'source_dir', 'output_dir', 'trigger', 'status', 'phase',
         'progress', 'message', 'stats', 'started_at', 'finished_at',
         'cancel_requested', 'error_code', 'error_message', 'result',
+        'duplicates', 'manual_review_files',
     }
 
 
@@ -746,10 +748,11 @@ def test_inbox_start_processes_root_files_and_archives(tmp_path, monkeypatch):
 
     inbox = tmp_path / '收件箱'
     inbox.mkdir()
-    (inbox / '待处理发票.pdf').write_bytes(b'%PDF')
+    # 两份占位 PDF 内容必须不同：全局内容去重会跳过同内容文件并留在原地
+    (inbox / '待处理发票.pdf').write_bytes(b'%PDF-root')
     batch = inbox / '拉取_20261003_120000'
     batch.mkdir()
-    (batch / '批次发票.pdf').write_bytes(b'%PDF')
+    (batch / '批次发票.pdf').write_bytes(b'%PDF-batch')
     monkeypatch.setattr(
         'invoice_processor.application.job_service.get_inbox_dir',
         lambda: str(inbox),

@@ -1,0 +1,1 @@
+# Automated-invoice-processing-main（工作约定）  > 2026-10-18 由 DSH 会话创建的最小骨架：目前只有旧会话记忆接线；项目特有约定（构建/测试/编码坑）以后按需补充。  - 开工前先读旧会话记忆：`~\.claude\projects\D--FN-Automated-invoice-processing-main\memory\MEMORY.md`（共 12 个记忆文件；Claude Code 历史结论）。 

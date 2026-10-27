@@ -45,6 +45,8 @@ _DEFAULTS = {
         'api_base': 'https://api.deepseek.com',
         'model': 'deepseek-v4-flash',
         'timeout': '60',
+        # OCR 级联开关（扫描件 fallback，ADR 2026-10-27 D1）
+        'ocr_enabled': 'true',
     },
 }
 
@@ -302,6 +304,15 @@ def get_ai_config() -> dict:
 def get_ai_enabled() -> bool:
     """AI 审核是否启用"""
     return get_ai_config()['enabled'].lower() in ('1', 'true', 'yes', 'on')
+
+
+def is_ocr_enabled() -> bool:
+    """OCR 级联是否启用（config [ai] ocr_enabled，默认开启）。
+
+    OCR 关闭时 pdf_text 走纯 pdfplumber 原路径（等价旧行为）；
+    手编非法值回退关闭，不抛异常。
+    """
+    return get_ai_config()['ocr_enabled'].lower() in ('1', 'true', 'yes', 'on')
 
 
 def get_ai_api_key() -> str:

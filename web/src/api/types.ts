@@ -23,6 +23,7 @@ export interface JobStats {
   success: number
   failure: number
   tax_issues: number
+  duplicates?: number
 }
 
 export interface JobResult {
@@ -54,6 +55,13 @@ export interface Job {
   error_code: string | null
   error_message: string | null
   result: JobResult | null
+  duplicates?: number
+  manual_review_files?: ReviewFileItem[]
+}
+
+export interface ReviewFileItem {
+  path: string
+  reason: string
 }
 
 export interface AuditFinding {

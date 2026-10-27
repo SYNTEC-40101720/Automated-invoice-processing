@@ -3,20 +3,32 @@
 
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
+
 
 ROOT = Path(SPECPATH)
 BACKEND = ROOT / "backend"
 APP_NAME = "SYNTEC-电子票据处理系统"
 block_cipher = None
 
+# OCR 级联（RapidOCR/onnxruntime）依赖资源：模型、字典、配置与原生 DLL。
+# rapidocr_onnxruntime 自带模型文件随包分发（onnx + ppocr_keys 等）。
+_RAPIDOCR_DATAS = collect_data_files("rapidocr_onnxruntime")
+_ONNXRUNTIME_BINARIES = collect_dynamic_libs("onnxruntime")
+_CV2_BINARIES = collect_dynamic_libs("cv2")
+
 
 a = Analysis(
     [str(ROOT / "main.py")],
     pathex=[str(BACKEND)],
-    binaries=[],
+    binaries=[
+        *_ONNXRUNTIME_BINARIES,
+        *_CV2_BINARIES,
+    ],
     datas=[
         (str(ROOT / "logo.ico"), "."),
         (str(ROOT / "web" / "dist"), "web/dist"),
+        *_RAPIDOCR_DATAS,
     ],
     hiddenimports=[
         "invoice_processor.api.app",
@@ -35,6 +47,7 @@ a = Analysis(
         "uvicorn.protocols.websockets.auto",
         "uvicorn.lifespan",
         "uvicorn.lifespan.on",
+        "rapidocr_onnxruntime",
     ],
     hookspath=[],
     hooksconfig={},

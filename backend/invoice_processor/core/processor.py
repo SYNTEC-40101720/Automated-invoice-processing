@@ -5,9 +5,13 @@
     - InvoiceOutputWriter: 输出文件命名 / 去重 / 复制 / 税号异常归集
     - PdfMerger          : PDF 合并与分类
     - invoice_types      : 发票类型注册表与各类型处理逻辑
+    - invoice_template_engine : 模板抽取引擎（ADR D2，当前仅旁路记录）
 
-公共 API 与历史版本一致（含被测试 / UI 直接依赖的方法），内部实现委托给上述组件。
-职责划分清晰后，本类只负责：构造组件、薄委托、以及 post_process 的编排。
+模板抽取衔接策略（ADR D2 · 兜底优先，用户明确要求）：
+    模板当前仅旁路记录——在 process_zhejiang_invoice / process_highspeed_rail /
+    process_didi_trip 三个被模板命中票种的入口处，先调模板 extract_fields 做
+    伴随抽取并写「模板抽取」info 日志，随后照常走原硬编码逻辑。模板不改变
+    determine_processor_type 的判定，也不改变处理结果；模板稳定后再评估接管。
 """
 import os
 import re
@@ -21,6 +25,12 @@ from .invoice_output import (
     _PREFIX_SUFFIX,
     InvoiceOutputWriter,
     _normalize_amount,
+)
+from .invoice_template_engine import (
+    extract_fields as _tpl_extract_fields,
+)
+from .invoice_template_engine import (
+    match_template as _tpl_match,
 )
 from .invoice_types import (
     _TYPE_REGISTRY,
@@ -162,13 +172,42 @@ class InvoiceProcessor:
         """根据文本内容确定发票类型
 
         返回首个命中的处理方法（proc 上的方法对象，保持对象身份以便 == 比较）。
+        模板引擎不参与本判定（ADR D2 兜底优先：模板仅旁路记录）。
         """
         return determine_processor_type(self, text)
+
+    # ── 模板伴随抽取（ADR D2：仅旁路日志，不改变判定与输出） ──
+    def _log_template_extract(self, source_path: str, text: str | None) -> None:
+        """被模板命中票种的伴随抽取：命中模板则写「模板抽取」info 日志
+
+        失败静默（模板层异常不干扰主流程）；无命中不写日志。
+        """
+        try:
+            if not text:
+                return
+            template = _tpl_match(text)
+            if template is None:
+                return
+            fields = _tpl_extract_fields(text, template)
+            rendered = '，'.join(
+                f'{k}={v}' for k, v in fields.items() if v is not None
+            )
+            filename = os.path.basename(source_path)
+            if rendered:
+                msg = (
+                    f'模板抽取: [{template.doc_type}] {filename} ({rendered})'
+                )
+            else:
+                msg = f'模板抽取: [{template.doc_type}] {filename}（字段未命中）'
+            self._log_core(msg, level='info')
+        except Exception:
+            pass  # 旁路日志失败不影响处理结果
 
     # ── 各类型发票处理（薄委托方法，保持方法对象身份） ──
     # 逻辑实现见 invoice_types 模块；此处仅转发，确保
     # determine_processor_type 返回的 handler == proc.process_X。
     def process_zhejiang_invoice(self, source_path: str, output_dir: str) -> str | None:
+        self._log_template_extract(source_path, self.extract_pdf_text(source_path))
         return process_zhejiang_invoice(self, source_path, output_dir)
 
     def process_jiangsu_toll(self, source_path: str, output_dir: str) -> str | None:
@@ -178,9 +217,11 @@ class InvoiceProcessor:
         return process_jiangsu_invoice(self, source_path, output_dir)
 
     def process_highspeed_rail(self, source_path: str, output_dir: str) -> str | None:
+        self._log_template_extract(source_path, self.extract_pdf_text(source_path))
         return process_highspeed_rail(self, source_path, output_dir)
 
     def process_didi_trip(self, source_path: str, output_dir: str) -> str | None:
+        self._log_template_extract(source_path, self.extract_pdf_text(source_path))
         return process_didi_trip(self, source_path, output_dir)
 
     def process_toll_summary(self, source_path: str, output_dir: str) -> str | None:
