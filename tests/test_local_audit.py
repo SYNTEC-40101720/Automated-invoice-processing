@@ -55,6 +55,84 @@ class TestCheckRows:
         out = check_rows(rows)
         assert not any('住宿税率异常' in f['issue'] for f in out)
 
+
+class TestAmountCaps:
+    """类别金额合理性上限（吸收同事仓库口径，超出仅标疑）"""
+
+    def test_taxi_over_cap(self):
+        """网约车单笔超 300 元标疑（与 100 元差标规则并存）"""
+        rows = {
+            'A-350.00行程单.pdf': [
+                {'date': '2026-07-27', 'transport_amount': 350.0,
+                 'category': 'transport', 'route': '杭州 机场'},
+            ],
+        }
+        out = check_rows(rows)
+        assert any('网约车单笔金额 350.00 元超出合理性上限' in f['issue'] for f in out)
+
+    def test_taxi_under_cap_ok(self):
+        rows = {
+            'A-299.00行程单.pdf': [
+                {'date': '2026-07-27', 'transport_amount': 299.0,
+                 'category': 'transport', 'route': '杭州 机场'},
+            ],
+        }
+        out = check_rows(rows)
+        assert not any('超出合理性上限' in f['issue'] for f in out)
+
+    def test_rail_over_cap(self):
+        """火车票单张超 2000 元标疑"""
+        rows = {
+            'X-2500.00高铁票.pdf': [
+                {'date': '2026-07-27', 'transport_amount': 2500.0,
+                 'category': 'transport', 'seat_class': '二等座'},
+            ],
+        }
+        out = check_rows(rows)
+        assert any('火车票单张金额 2500.00 元超出合理性上限' in f['issue'] for f in out)
+
+    def test_rail_under_cap_ok(self):
+        rows = {
+            'X-500.00高铁票.pdf': [
+                {'date': '2026-07-27', 'transport_amount': 500.0,
+                 'category': 'transport', 'seat_class': '二等座'},
+            ],
+        }
+        out = check_rows(rows)
+        assert not any('超出合理性上限' in f['issue'] for f in out)
+
+    def test_hotel_over_cap(self):
+        """住宿单张（不含税+税额）超 5000 元标疑"""
+        rows = {
+            'H-6000.00.pdf': [
+                {'date': '2026-07-27', 'hotel_amount': 5600.0,
+                 'hotel_tax': 504.0, 'category': 'hotel'},
+            ],
+        }
+        out = check_rows(rows)
+        assert any('住宿单张金额 6104.00 元超出合理性上限' in f['issue'] for f in out)
+
+    def test_hotel_under_cap_ok(self):
+        rows = {
+            'H-1060.00.pdf': [
+                {'date': '2026-07-27', 'hotel_amount': 1000.0,
+                 'hotel_tax': 60.0, 'category': 'hotel'},
+            ],
+        }
+        out = check_rows(rows)
+        assert not any('超出合理性上限' in f['issue'] for f in out)
+
+    def test_trip_without_detail_not_taxi_cap(self):
+        """无逐笔明细的行程单（通行费汇总）不适用网约车上限"""
+        rows = {
+            'T-400.00行程单.pdf': [
+                {'date': '2026-07-27', 'transport_amount': 400.0,
+                 'category': 'transport'},
+            ],
+        }
+        out = check_rows(rows)
+        assert not any('超出合理性上限' in f['issue'] for f in out)
+
     def test_taxi_single_trip_over_threshold(self):
         """打车单程超 100 元差标"""
         rows = {

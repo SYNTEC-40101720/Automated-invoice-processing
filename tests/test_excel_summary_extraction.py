@@ -104,6 +104,34 @@ class TestParseDidiTrips:
         assert [t['amount'] for t in trips] == [25.10, 30.00]
 
 
+class TestTripCountGate:
+    """页头「共计 N 笔」与解析笔数一致性闸门（吸收同事仓库口径）"""
+
+    _BASE = (
+        '行程起止日期 2026-07-01 至 2026-07-05\n'
+        '1 快享 12-28 09:30 星期日 杭州 A地|B地 5.3 25.10\n'
+        '2 快享 01-03 18:00 星期六 杭州 C地|D地 8.0 30.00\n'
+    )
+
+    def _declared_text(self, declared):
+        return f'共计 {declared} 笔\n' + self._BASE
+
+    def test_declared_matches_parsed(self):
+        trips = _parse_didi_trip_details(self._declared_text(2))
+        assert trips is not None
+        assert len(trips) == 2
+
+    def test_declared_mismatch_discards_all(self):
+        """声明 3 笔只解析出 2 笔 → 整体放弃，回落发票金额归集"""
+        trips = _parse_didi_trip_details(self._declared_text(3))
+        assert trips is None
+
+    def test_no_declared_count_keeps_legacy(self):
+        """旧版无「共计 N 笔」字段 → 不校验，行为不变"""
+        trips = _parse_didi_trip_details(self._BASE)
+        assert trips is not None
+
+
 class TestSeatClassExtraction:
     def _rail_invoice(self, tmp_path, seat):
         filename = 'X123-500.00高铁票.pdf'

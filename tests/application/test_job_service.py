@@ -253,6 +253,54 @@ def test_job_service_runs_pipeline_and_publishes_terminal_snapshot(tmp_path):
     assert any(event.type == 'job.completed' for event in event_bus.history())
 
 
+def test_ledger_appended_on_success(tmp_path):
+    """成功终态在输出目录上级追加台账行，缺失合计列填 0（openpyxl 可用）"""
+    openpyxl = pytest.importorskip('openpyxl')
+    service, _ = make_service(tmp_path)
+    source = make_source(tmp_path)
+
+    final = service.run_job_sync(str(source))
+
+    assert final['status'] == JobStatus.SUCCEEDED.value
+    # 台账与输出目录同级：FakeProcessor 输出 tmp_path/source/output
+    ledger = tmp_path / 'source' / '发票打印汇总档案.xlsx'
+    assert ledger.is_file()
+    ws = openpyxl.load_workbook(ledger).active
+    rows = list(ws.iter_rows(values_only=True))
+    assert rows[0][:7] == (
+        '任务编号', '完成时间', '输出目录', '发票总数', '成功', '失败', '跳过重复'
+    )
+    data = rows[1]
+    assert data[0] == final['id']
+    assert data[3] == 2 and data[4] == 2 and data[5] == 0
+    assert data[7] == 0  # transport 合计缺失时落 0
+    assert data[8] == 0 and data[9] == 0
+
+
+def test_ledger_failure_does_not_break_job(tmp_path, monkeypatch, caplog):
+    """台账写盘抛错只记 warning，任务仍成功"""
+    service, _ = make_service(tmp_path)
+    source = make_source(tmp_path)
+
+    import invoice_processor.application.job_service as js
+
+    real_isfile = js.os.path.isfile
+
+    def flaky_isfile(path):
+        # 只对台账文件名命中时抛错，避免打断其他 isfile 调用
+        if str(path).endswith('发票打印汇总档案.xlsx'):
+            raise RuntimeError('disk full')
+        return real_isfile(path)
+
+    monkeypatch.setattr(js.os.path, 'isfile', flaky_isfile)
+
+    with caplog.at_level('WARNING'):
+        final = service.run_job_sync(str(source))
+
+    assert final['status'] == JobStatus.SUCCEEDED.value
+    assert any('归档台账写入失败' in rec.message for rec in caplog.records)
+
+
 def test_run_job_sync_runs_pipeline_for_host_runtime(tmp_path):
     service, processor = make_service(tmp_path)
     source = make_source(tmp_path)

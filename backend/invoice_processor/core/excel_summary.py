@@ -216,6 +216,11 @@ def _parse_didi_trip_details(raw_text: str) -> list[dict] | None:
 
     从原始文本（保留空白）中提取每笔行程的日期、时间、城市、路线与金额。
     返回: [{'date', 'time', 'city', 'route', 'mileage', 'amount'}, ...] 或 None
+
+    保守原则（吸收同事仓库实测口径）：页头声明「共计 N 笔」时，解析出的
+    笔数必须与 N 一致；不一致说明明细行解析不全（OCR 截断/版式变化），
+    整体放弃逐笔拆分返回 None，回落到按发票金额单行归集——绝不部分拆分
+    （部分拆分会把金额拆错日期，汇总与打印都会跟着错）。
     """
     # 提取起止日期的年份；跨年行程（如 2025-12-28 至 2026-01-05）
     # 取两个年份，按行程月份归属：月份小于起始月（12 月起的行程单里
@@ -228,6 +233,9 @@ def _parse_didi_trip_details(raw_text: str) -> list[dict] | None:
         return None
     start_year, start_month = ym.group(1), int(ym.group(2))
     end_year = ym.group(4) or start_year
+
+    # 页头声明的行程笔数（旧版行程单可能没有该字段 → 不校验）
+    declared = re.search(r'共计\s*(\d+)\s*笔', raw_text)
 
     def _trip_year(mm: str) -> str:
         return end_year if int(mm) < start_month else start_year
@@ -261,7 +269,17 @@ def _parse_didi_trip_details(raw_text: str) -> list[dict] | None:
                 'amount': amount,
             })
 
-    return trips if trips else None
+    if not trips:
+        return None
+    if declared and len(trips) != int(declared.group(1)):
+        logger.warning(
+            '行程单笔数不符（声明 %s 笔，解析出 %d 笔），'
+            '放弃逐笔拆分，按发票金额整单归集',
+            declared.group(1),
+            len(trips),
+        )
+        return None
+    return trips
 
 
 def _parse_invoice(output_dir: str, filename: str, processor) -> list[dict] | None:

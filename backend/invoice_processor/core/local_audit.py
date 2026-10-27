@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 TAXI_TRIP_THRESHOLD = 100.0
 RAIL_FLAGGED_SEATS = ('一等座', '商务座')
 VALID_TAX_RATES = (0.01, 0.02, 0.03, 0.05, 0.06, 0.09, 0.10, 0.13)
+# 类别金额合理性上限（吸收同事仓库口径，超出仅标疑不阻断）：
+# 网约车单笔 / 火车票单张 / 住宿单张
+AMOUNT_CAPS = {'taxi': 300.0, 'rail': 2000.0, 'hotel': 5000.0}
 
 
 def _suffix_of(filename: str) -> str:
@@ -124,7 +127,59 @@ def check_rows(rows_by_file: dict[str, list[dict]]) -> list[dict]:
                         'issue': f'高铁票座位等级为{seat}，差标仅限二等座',
                         'suggestion': '确认是否需附超标说明或说明一等座事由',
                     })
+        # 类别金额合理性上限（超出标疑，与差标规则相互独立）
+        cap, cap_label = _amount_cap_for(f, rows)
+        if cap is not None and cap_label:
+            findings.append({
+                'file': f,
+                'type': 'other',
+                'issue': f'{cap_label}金额 {cap:.2f} 元超出合理性上限',
+                'suggestion': '核对金额是否异常（录入错误/虚开等）',
+            })
     return findings
+
+
+def _amount_cap_for(
+    filename: str, rows: list[dict]
+) -> tuple[float | None, str]:
+    """判定文件适用的金额上限；超出返回 (金额, 类别标签)，否则 (None, '')。
+
+    数据可区分性：滴滴行程单逐笔行程（有 route/time）= 网约车；
+    高铁票后缀 = 火车票；住宿发票 = 住宿。行程单逐笔合计与文件名金额
+    的差标校验另有规则，这里只看单笔/单张合理性。
+    """
+    is_trip = '行程单' in filename
+    has_trip_detail = any('route' in r or 'time' in r for r in rows)
+
+    def _sum(pred) -> float:
+        return round(sum(
+            r.get('transport_amount') or 0 for r in rows if pred(r)
+        ), 2)
+
+    if is_trip and has_trip_detail:
+        # 网约车：逐笔行程里任一笔超上限即标疑（按最大一笔报）
+        max_trip = max(
+            (r.get('transport_amount') or 0 for r in rows
+             if 'route' in r or 'time' in r),
+            default=0.0,
+        )
+        if max_trip > AMOUNT_CAPS['taxi']:
+            return max_trip, '网约车单笔'
+        return None, ''
+    if '高铁票' in filename:
+        total = _sum(lambda r: True)
+        if total > AMOUNT_CAPS['rail']:
+            return total, '火车票单张'
+        return None, ''
+    if any(r.get('category') == 'hotel' for r in rows):
+        total = round(sum(
+            (r.get('hotel_amount') or 0) + (r.get('hotel_tax') or 0)
+            for r in rows
+        ), 2)
+        if total > AMOUNT_CAPS['hotel']:
+            return total, '住宿单张'
+        return None, ''
+    return None, ''
 
 
 def run_local_audit(output_dir: str, processor) -> list[dict]:

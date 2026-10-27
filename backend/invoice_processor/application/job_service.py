@@ -14,6 +14,7 @@ from concurrent.futures import (
     as_completed,
 )
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 from devbase.application.event_bus import EventBus
@@ -483,6 +484,8 @@ class JobService:
             self._publish_snapshot(job)
             self.events.publish('job.completed', result, job.id)
             self._log(job, '所有处理已完成！', 'success')
+            # 成功终态统一追加归档台账（任何触发方式）；取消/失败不记
+            self._append_ledger_entry(job, result)
         except Exception as exc:
             logger.exception('任务处理失败: %s', job.id)
             with self._lock:
@@ -663,6 +666,56 @@ class JobService:
             reason = message.split('，', 1)[0] if '，' in message else message
             items.append({'path': matched, 'reason': reason})
         return items
+
+    def _append_ledger_entry(self, job: Job, result: dict) -> None:
+        """归档台账：任务成功终态时向输出目录上级追加一行汇总档案。
+
+        台账文件「发票打印汇总档案.xlsx」位于输出目录同级（每个输出
+        容器一份）。写入失败仅记 warning，不影响任务终态。
+        """
+        try:
+            from openpyxl import Workbook, load_workbook
+
+            totals = result.get('totals') or {}
+            ledger_path = os.path.join(
+                os.path.dirname(job.output_dir or '') or '.',
+                '发票打印汇总档案.xlsx',
+            )
+            headers = [
+                '任务编号', '完成时间', '输出目录', '发票总数', '成功',
+                '失败', '跳过重复', '交通费', '住宿费', '住宿费税金',
+                '税号异常', '人工审核报告',
+            ]
+            if os.path.isfile(ledger_path):
+                wb = load_workbook(ledger_path)
+                ws = wb.active
+            else:
+                wb = Workbook()
+                ws = wb.active
+                ws.title = '归档台账'
+                ws.append(headers)
+            row = [
+                job.id,
+                datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S'),
+                job.output_dir or '',
+                job.stats.total,
+                job.stats.success,
+                job.stats.failure,
+                job.stats.duplicates,
+                float(totals.get('transport') or 0),
+                float(totals.get('hotel') or 0),
+                float(totals.get('hotel_tax') or 0),
+                job.stats.tax_issues,
+                (result.get('audit') or {}).get('report') or '',
+            ]
+            ws.append(row)
+            wb.save(ledger_path)
+            self._log(
+                job, f'归档台账已更新: {ledger_path}', 'info'
+            )
+        except Exception as exc:
+            logger.warning('归档台账写入失败: %s', exc)
+            self._log(job, f'归档台账写入失败: {exc}', 'warning')
 
     def _archive_files(self, job: Job, filenames: tuple[str, ...]) -> int:
         """归档已处理文件到各自所在目录的「已处理」子目录。

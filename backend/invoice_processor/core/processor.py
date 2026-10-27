@@ -268,8 +268,34 @@ class InvoiceProcessor:
         # ⑦ 生成费用汇总 Excel；写盘完成后才报告最终进度
         excel = self.generate_expense_summary(output_dir)
         _report(1.00)
+        totals = self._read_summary_totals(output_dir)
         return {'amount_map': amount_map, 'tax_issues': tax_issues,
-                'merged': merged, 'excel': excel}
+                'merged': merged, 'excel': excel, 'totals': totals}
+
+    @staticmethod
+    def _read_summary_totals(output_dir: str) -> dict[str, float] | None:
+        """读取刚生成的费用汇总合计（供归档台账使用）；缺失返回 None。
+
+        直接读 xlsx 合计行（openpyxl 只读值），避免重新解析全部 PDF。
+        """
+        excel_path = os.path.join(output_dir, '费用汇总.xlsx')
+        if not os.path.isfile(excel_path):
+            return None
+        try:
+            import openpyxl
+            ws = openpyxl.load_workbook(
+                excel_path, read_only=True, data_only=True
+            ).active
+            for row in ws.iter_rows(values_only=True):
+                if row and row[0] == '合计':
+                    return {
+                        'transport': float(row[1] or 0),
+                        'hotel': float(row[2] or 0),
+                        'hotel_tax': float(row[3] or 0),
+                    }
+        except Exception:
+            pass
+        return None
 
     # ── 后处理各阶段（Composed Method：每阶段单一职责，便于阅读与单测） ──
     def _phase_amount_mapping(self, output_dir: str) -> dict[str, str]:
