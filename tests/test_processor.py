@@ -332,3 +332,61 @@ def test_itinerary_in_manual_review_is_not_rechecked_for_tax_id(tmp_path, monkey
     assert tax_issues == []
     assert itinerary.is_file()
     assert not (output_dir / "税号异常").exists()
+
+# ═══════════════════════════════════════════════════════════
+# 费用汇总合计行读取（台账数据源；v7.6.2 回归：7 列布局）
+# ═══════════════════════════════════════════════════════════
+
+def _write_summary_workbook(tmp_path, header, total_row):
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(header)
+    ws.append(['2026-10-20', 100, 50, 30, 15, 200, 18])
+    ws.append(total_row)
+    output_dir = tmp_path / 'output'
+    output_dir.mkdir(exist_ok=True)
+    wb.save(output_dir / '费用汇总.xlsx')
+    return str(output_dir)
+
+
+def test_read_summary_totals_seven_columns(tmp_path):
+    """v7.6.0 列拆后 7 列布局：住宿/税金必须落在 F/G 列（P0 回归）"""
+    totals = InvoiceProcessor._read_summary_totals(
+        _write_summary_workbook(
+            tmp_path,
+            ['日期', '大众运输', '出租车', '过路费', '私车补贴', '住宿费', '住宿费税金'],
+            ['合计', 100, 50, 30, 15, 200, 18],
+        )
+    )
+
+    assert totals == {
+        'transport': 180.0,
+        'rail': 100.0,
+        'taxi': 50.0,
+        'toll': 30.0,
+        'subsidy': 15.0,
+        'hotel': 200.0,
+        'hotel_tax': 18.0,
+    }
+
+
+def test_read_summary_totals_old_six_columns_still_readable(tmp_path):
+    """旧 6 列布局（无补贴列）不崩：按缺列兜 0"""
+    totals = InvoiceProcessor._read_summary_totals(
+        _write_summary_workbook(
+            tmp_path,
+            ['日期', '大众运输', '出租车', '过路费', '住宿费', '住宿费税金'],
+            ['合计', 100, 50, 30, 200, 18],
+        )
+    )
+
+    assert totals['hotel'] == 200.0
+    assert totals['hotel_tax'] == 18.0
+    assert totals['subsidy'] == 0.0
+    assert totals['transport'] == 180.0
+
+
+def test_read_summary_totals_missing_file(tmp_path):
+    assert InvoiceProcessor._read_summary_totals(str(tmp_path)) is None

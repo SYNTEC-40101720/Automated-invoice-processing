@@ -130,6 +130,8 @@ def generate_summary_pdf(
             bottomMargin=24,
             title=title,
             author='SYNTEC 电子票据处理系统',
+            creator='SYNTEC',
+            producer='SYNTEC 电子票据处理系统',
         )
 
         story: list = []

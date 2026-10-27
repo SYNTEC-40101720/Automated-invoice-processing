@@ -20,8 +20,12 @@ from ..core.private_car import (
     calculate_private_car_cost,
     export_private_car_excel,
 )
+from ..domain.errors import ApplicationError
 
 logger = logging.getLogger(__name__)
+
+# 登记行持久化上限（config.ini 单值存放，防无限膨胀）
+MAX_ROWS = 2000
 
 # 登记行 11 列字段（API 层命名；core/private_car.py 用 user/toll/parking，
 # 服务层统一映射，避免前端与模板两套口径）
@@ -90,7 +94,14 @@ class PrivateCarService:
         每行只接受 ROW_FIELDS 字段；distance/subsidy 由里程实时计算，
         单行不完整（缺日期/里程/结束<出发）不抛错——保存是非破坏性的，
         完整校验在导出（strict）时进行，与同事版 collect_rows 口径一致。
+        超过 MAX_ROWS 抛 PRIVATE_CAR_TOO_MANY_ROWS（防 config.ini 无限膨胀）。
         """
+        if len(rows) > MAX_ROWS:
+            raise ApplicationError(
+                'PRIVATE_CAR_TOO_MANY_ROWS',
+                f'登记行数不能超过 {MAX_ROWS} 行',
+                {'max_rows': MAX_ROWS, 'submitted': len(rows)},
+            )
         normalized: list[dict] = []
         for raw in rows:
             if not isinstance(raw, dict):

@@ -253,7 +253,9 @@ def export_private_car_excel(
             plate_font = copy(sheet['K2'].font)
             plate_font.name, plate_font.sz = '宋体', 12
             sheet['K2'].font = plate_font
-            _set_text(sheet['K2'], license_plate.strip())
+            plate_text = license_plate.strip()
+            if plate_text:  # 空车牌保留模板预置值，不写空串覆盖
+                _set_text(sheet['K2'], plate_text)
             for offset, values in enumerate(values_rows[page * 8:(page + 1) * 8]):
                 row = 4 + offset * 2
                 sheet.cell(

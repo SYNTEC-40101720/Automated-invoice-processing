@@ -86,6 +86,19 @@ class TestRows:
         rows = car_service.replace_rows([_valid_row(start_time='9:00')])
         assert rows[0]['start_time'] == '9:00'
 
+    def test_replace_rows_rejects_over_cap(self, car_service):
+        from invoice_processor.application.private_car_service import MAX_ROWS
+
+        with pytest.raises(ApplicationError) as exc_info:
+            car_service.replace_rows([_valid_row()] * (MAX_ROWS + 1))
+        assert exc_info.value.code == 'PRIVATE_CAR_TOO_MANY_ROWS'
+
+    def test_replace_rows_accepts_at_cap(self, car_service):
+        from invoice_processor.application.private_car_service import MAX_ROWS
+
+        rows = car_service.replace_rows([_valid_row()] * MAX_ROWS)
+        assert len(rows) == MAX_ROWS
+
 
 class TestDailyTotals:
     def test_aggregates_by_date(self, car_service):

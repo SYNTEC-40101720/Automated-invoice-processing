@@ -14,7 +14,7 @@ from concurrent.futures import (
     as_completed,
 )
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from devbase.application.event_bus import EventBus
@@ -699,8 +699,8 @@ class JobService:
             )
             headers = [
                 '任务编号', '完成时间', '输出目录', '发票总数', '成功',
-                '失败', '跳过重复', '交通费', '住宿费', '住宿费税金',
-                '税号异常', '人工审核报告',
+                '失败', '跳过重复', '交通费', '私车补贴', '住宿费',
+                '住宿费税金', '税号异常', '人工审核报告',
             ]
             if os.path.isfile(ledger_path):
                 wb = load_workbook(ledger_path)
@@ -712,13 +712,15 @@ class JobService:
                 ws.append(headers)
             row = [
                 job.id,
-                datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S'),
+                # 本地时间（财务对账口径；UTC 会比本地早 8 小时）
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 job.output_dir or '',
                 job.stats.total,
                 job.stats.success,
                 job.stats.failure,
                 job.stats.duplicates,
                 float(totals.get('transport') or 0),
+                float(totals.get('subsidy') or 0),
                 float(totals.get('hotel') or 0),
                 float(totals.get('hotel_tax') or 0),
                 job.stats.tax_issues,

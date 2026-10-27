@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { CheckCircle2, ClipboardList, FolderOpen, History, LoaderCircle, Play, Square, TriangleAlert } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { CheckCircle2, ClipboardList, FolderOpen, History, LoaderCircle, Play, Printer, Square, TriangleAlert } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../api/client'
 import type { Job, JobHistoryEntry, JobStatus } from '../../api/types'
@@ -108,7 +108,10 @@ export function ProcessingView({ job, onChooseDirectory, onStart, onCancel, onOp
           <section className="result-strip">
             <div><CheckCircle2 size={18} /><span>处理结果已生成</span></div>
             <div className="result-path">{job.output_dir}</div>
-            <button className="secondary-button" onClick={() => job.output_dir && onOpenOutput(job.output_dir)} disabled={!job.output_dir}>打开输出目录</button>
+            <div className="result-actions">
+              <button className="secondary-button" onClick={() => job.output_dir && onOpenOutput(job.output_dir)} disabled={!job.output_dir}>打开输出目录</button>
+              <PrintSummaryButton outputDir={job.output_dir ?? ''} />
+            </div>
           </section>
         )}
 
@@ -147,8 +150,31 @@ export function ProcessingView({ job, onChooseDirectory, onStart, onCancel, onOp
   )
 }
 
-function useInvalidateHistoryOnTerminal(job: Job | null) {
-  const queryClient = useQueryClient()
+function PrintSummaryButton({ outputDir }: { outputDir: string }) {
+  const [printing, setPrinting] = useState(false)
+  const pdfPath = outputDir ? `${outputDir.replace(/\/+$/, '')}\\出差清单.pdf` : ''
+  const onPrint = async () => {
+    if (!pdfPath || printing) return
+    setPrinting(true)
+    try {
+      const bridge = window.pywebview?.api
+      if (bridge?.print_pdf) await bridge.print_pdf(pdfPath, 1)
+      else window.open(`file:///${pdfPath.replaceAll('\\', '/')}`, '_blank')
+    } catch {
+      // 打印失败静默：清单文件仍可在输出目录手动打印
+    } finally {
+      setPrinting(false)
+    }
+  }
+  return (
+    <button className="secondary-button" onClick={onPrint} disabled={!pdfPath || printing} title={pdfPath}>
+      {printing ? <LoaderCircle size={15} className="spin" /> : <Printer size={15} />}
+      打印出差清单
+    </button>
+  )
+}
+
+function useInvalidateHistoryOnTerminal(job: Job | null) {  const queryClient = useQueryClient()
   const status = job?.status ?? null
   const prevStatus = useRef<JobStatus | null>(null)
   useEffect(() => {

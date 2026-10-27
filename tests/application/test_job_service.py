@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import threading
+from datetime import datetime
 
 import pytest
 from devbase.application.event_bus import EventBus
@@ -268,14 +269,17 @@ def test_ledger_appended_on_success(tmp_path):
     assert ledger.is_file()
     ws = openpyxl.load_workbook(ledger).active
     rows = list(ws.iter_rows(values_only=True))
-    assert rows[0][:7] == (
-        '任务编号', '完成时间', '输出目录', '发票总数', '成功', '失败', '跳过重复'
+    assert rows[0][:10] == (
+        '任务编号', '完成时间', '输出目录', '发票总数', '成功', '失败',
+        '跳过重复', '交通费', '私车补贴', '住宿费',
     )
     data = rows[1]
     assert data[0] == final['id']
     assert data[3] == 2 and data[4] == 2 and data[5] == 0
     assert data[7] == 0  # transport 合计缺失时落 0
-    assert data[8] == 0 and data[9] == 0
+    assert data[8] == 0 and data[9] == 0 and data[10] == 0
+    # 完成时间应为本地日期（当天），证明不再是 UTC（早 8 小时会落在昨天）
+    assert data[1].startswith(datetime.now().strftime('%Y-%m-%d'))
 
 
 def test_ledger_failure_does_not_break_job(tmp_path, monkeypatch, caplog):

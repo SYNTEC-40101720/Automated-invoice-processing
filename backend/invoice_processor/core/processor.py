@@ -297,21 +297,32 @@ class InvoiceProcessor:
             ws = openpyxl.load_workbook(
                 excel_path, read_only=True, data_only=True
             ).active
+            header: dict[str, int] = {}
             for row in ws.iter_rows(values_only=True):
-                if row and row[0] == '合计':
-                    # v7.6.0 列拆后：B=大众运输 C=出租车 D=过路费 E=住宿 F=税金
-                    # transport = 三列交通合计（台账口径保持「交通费」总览）
-                    transport = (
-                        float(row[1] or 0) + float(row[2] or 0)
-                        + float(row[3] or 0)
-                    )
+                if not row:
+                    continue
+                if row[0] == '日期':
+                    # 按表头文字定位列，兼容 6 列（无补贴）与 7 列（v7.6.0+）布局
+                    header = {
+                        str(cell): idx for idx, cell in enumerate(row)
+                        if cell is not None
+                    }
+                    continue
+                if row[0] == '合计' and header:
+                    def _at(title: str) -> float:
+                        idx = header.get(title)
+                        value = row[idx] if idx is not None and len(row) > idx else 0
+                        return float(value or 0)
+
+                    transport = _at('大众运输') + _at('出租车') + _at('过路费')
                     return {
                         'transport': round(transport, 2),
-                        'rail': float(row[1] or 0),
-                        'taxi': float(row[2] or 0),
-                        'toll': float(row[3] or 0),
-                        'hotel': float(row[4] or 0),
-                        'hotel_tax': float(row[5] or 0),
+                        'rail': _at('大众运输'),
+                        'taxi': _at('出租车'),
+                        'toll': _at('过路费'),
+                        'subsidy': _at('私车补贴'),
+                        'hotel': _at('住宿费'),
+                        'hotel_tax': _at('住宿费税金'),
                     }
         except Exception:
             pass

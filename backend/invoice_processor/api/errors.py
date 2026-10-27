@@ -26,6 +26,7 @@ async def application_error_handler(
         'AI_CONNECTION_FAILED': 502,
         'PRIVATE_CAR_NO_ROWS': 422,
         'PRIVATE_CAR_ROW_INVALID': 422,
+        'PRIVATE_CAR_TOO_MANY_ROWS': 422,
     }.get(exc.code, 400)
     return JSONResponse(
         status_code=status_code,
