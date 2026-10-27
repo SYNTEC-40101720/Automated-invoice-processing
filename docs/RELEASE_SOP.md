@@ -312,6 +312,28 @@ SHA-256：
 
 ## 11. 发布记录
 
+### v7.6.2（2026-10-27 发布）
+
+```text
+应用：SYNTEC-电子票据处理系统
+仓库：SYNTEC-40101720/Automated-invoice-processing
+当前版本：7.6.1
+目标版本：7.6.2（patch：审查修复六项）
+Release URL：https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.6.2
+资产名：SYNTEC-Invoice-Processor-v7.6.2.zip
+资产大小：134.20 MB（140,723,617 字节）
+SHA-256：101a6bc4d9e17e07d1595a75c2e2f03b204a97dbc56e0220fce03da4f1e0853f（GitHub digest 一致）
+主程序版本资源：域控合规检查全部通过（build_syntec.py 内置校验）
+质量基线：339 条 Python 测试（新增 7 列布局回归/6 列兼容/行数上限用例）、Ruff 零告警、TypeScript 0 错、Vitest 22 条；CI 40468569827 与 40468732088 均 success
+密钥扫描：git diff regex 扫描 0 命中（c238a4c 提交前执行）
+启动冒烟：health=7.6.2（%TEMP%\invoice-smoke-762 副本），日志无 CRITICAL，窗口关闭流程正常收敛，端口释放，无孤儿进程
+已知限制：与 v7.6.1 相同（三条联动仅按日期完全相同融合；清单 PDF 字体仅 STSong-Light；私车模板仅 v1 版式；print_pdf 走默认打印机）
+已知数据问题（历史版本）：v7.6.0/v7.6.1 的归档台账「住宿费/住宿费税金」两列因 _read_summary_totals 按旧 6 列布局读取而错位（住宿费=补贴、税金=住宿费），本版起按表头定位恢复正确；受影响台账历史行需人工核对
+过程异常：首推 c238a4c CI Ruff E501（tests/test_processor.py:359 长行 89>88），fd59be4 拆行后转绿——发版前本地 ruff 已跑但测试文件新增长断言仍漏检（该行在 ruff 修复时未重新生成），教训同 v7.6.0：lint 修复后必须重跑全量 ruff
+```
+
+内容：全面审查后的修复版本。P0：`core/processor.py:_read_summary_totals` 改按表头文字定位列（兼容 6/7 列布局），修复台账住宿两列错位。P1：台账加「私车补贴」列（12→13 列）；台账「完成时间」UTC→本地时间；打印桥接线——`web/src/vite-env.d.ts` 声明 `print_pdf(path, copies)`，ProcessingView 结果区加「打印出差清单」按钮（`output_dir\出差清单.pdf`，无桥时回退打开文件）。P2：`replace_rows` 行数上限 2000（`PRIVATE_CAR_TOO_MANY_ROWS` 422）；空车牌保留模板 K2 预置值（`core/private_car.py`）；出差清单 PDF 元数据 creator/producer 设 SYNTEC（`core/summary_pdf.py`）。
+
 ### v7.6.1（2026-10-27 发布）
 
 ```text
