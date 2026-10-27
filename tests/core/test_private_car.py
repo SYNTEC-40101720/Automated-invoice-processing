@@ -149,6 +149,19 @@ class TestExportPrivateCarExcel:
         finally:
             workbook.close()
 
+    def test_template_metadata_is_scrubbed(self, tmp_path):
+        path = self.export(tmp_path, [normalize_row(_row())])
+        workbook = load_workbook(path)
+        try:
+            properties = workbook.properties
+            assert properties.creator == 'SYNTEC'
+            assert properties.lastModifiedBy == 'SYNTEC'
+            assert properties.title == '私车公用费用统计表'
+            # 模板带入的旧创建时间（2018-12-20）必须被替换
+            assert properties.created.year == datetime.now().year
+        finally:
+            workbook.close()
+
     def test_failed_replace_keeps_old_file(self, tmp_path):
         rows = [normalize_row(_row())]
         path = self.export(tmp_path, rows)

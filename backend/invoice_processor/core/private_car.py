@@ -26,6 +26,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 from openpyxl import load_workbook
+from openpyxl.packaging.core import DocumentProperties
 
 logger = logging.getLogger(__name__)
 
@@ -227,6 +228,12 @@ def export_private_car_excel(
             temporary_path = Path(stream.name)
         shutil.copyfile(template, temporary_path)
         workbook = load_workbook(temporary_path)
+        # 清除模板带入的旧作者/公司/创建时间等元数据，避免外发文件泄露出处。
+        workbook.properties = DocumentProperties(
+            creator='SYNTEC', lastModifiedBy='SYNTEC',
+            created=datetime.now(), modified=datetime.now(),
+            title='私车公用费用统计表',
+        )
         original = workbook.active
         sheets = [original]
         for page in range(1, (len(values_rows) + 7) // 8):
