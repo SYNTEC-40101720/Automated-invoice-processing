@@ -5,6 +5,7 @@
 - 修改后下次启动生效（UI 设置入口实时保存）
 """
 import configparser
+import json
 import logging
 import os
 import sys
@@ -47,6 +48,12 @@ _DEFAULTS = {
         'timeout': '60',
         # OCR 级联开关（扫描件 fallback，ADR 2026-10-27 D1）
         'ocr_enabled': 'true',
+    },
+    # 私车公用登记（v7.6.0）：车牌/使用人自动记忆 + 行 JSON 持久化
+    'private_car': {
+        'license_plate': '',
+        'user_name': '',
+        'rows_json': '[]',
     },
 }
 
@@ -137,6 +144,7 @@ def set_all_config(
     business: dict | None = None,
     email: dict | None = None,
     ai: dict | None = None,
+    private_car: dict | None = None,
 ) -> None:
     """一次性保存多段配置，避免前端连续 PATCH 留下半套配置。"""
     with _CONFIG_LOCK:
@@ -160,6 +168,15 @@ def set_all_config(
             _set_section_values(cfg, 'email', email, secret_key='auth_code')
         if ai:
             _set_section_values(cfg, 'ai', ai, secret_key='api_key')
+        if private_car:
+            private_car = dict(private_car)
+            if 'rows_json' in private_car and isinstance(
+                private_car['rows_json'], (list, tuple)
+            ):
+                private_car['rows_json'] = json.dumps(
+                    list(private_car['rows_json']), ensure_ascii=False
+                )
+            _set_section_values(cfg, 'private_car', private_car)
         save_config(cfg)
 
 
@@ -349,3 +366,42 @@ def set_ai_config(**kwargs) -> None:
     api_key 明文写入时自动经 DPAPI 加密，config.ini 不保留明文。
     """
     set_all_config(ai=kwargs)
+
+
+# ── 私车公用登记（v7.6.0）──────────────────────────────
+
+def get_private_car_config() -> dict:
+    """读取私车公用登记配置（缺失字段用默认值）"""
+    cfg = load_config()
+    return {
+        k: _safe_get(cfg, 'private_car', k, v)
+        for k, v in _DEFAULTS['private_car'].items()
+    }
+
+
+def get_private_car_license_plate() -> str:
+    """车牌号（自动记忆）"""
+    return get_private_car_config()['license_plate'].strip()
+
+
+def get_private_car_user_name() -> str:
+    """使用者姓名（自动记忆）"""
+    return get_private_car_config()['user_name'].strip()
+
+
+def get_private_car_rows() -> list[dict]:
+    """登记行 JSON 反序列化；手编损坏时回退空列表。"""
+    raw = get_private_car_config()['rows_json'].strip() or '[]'
+    try:
+        rows = json.loads(raw)
+    except (ValueError, TypeError):
+        logger.warning('私车登记行 JSON 损坏，按空表处理')
+        return []
+    if not isinstance(rows, list):
+        return []
+    return [row for row in rows if isinstance(row, dict)]
+
+
+def set_private_car_config(**kwargs) -> None:
+    """便捷写入：私车公用登记。仅接受 _DEFAULTS['private_car'] 中的键。"""
+    set_all_config(private_car=kwargs)

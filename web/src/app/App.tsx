@@ -20,6 +20,7 @@ import { useWorkbenchEvents } from '../hooks/useWorkbenchEvents'
 import { ProcessingView } from '../features/processing/ProcessingView'
 import { AuditView } from '../features/AuditView'
 import { InboxView } from '../features/InboxView'
+import { PrivateCarView } from '../features/PrivateCarView'
 import { SettingsView, type ThemeMode } from '../features/SettingsView'
 import { useWorkbench } from '../stores/workbench'
 
@@ -246,7 +247,9 @@ export function App() {
             ? <InboxView emailSettings={emailSettings} />
             : activeView === 'audit'
               ? <AuditView job={job} />
-              : <SettingsView
+              : activeView === 'private-car'
+                ? <PrivateCarView />
+                : <SettingsView
                 version={healthQuery.data?.version ?? null}
                 update={updateQuery.data ?? null}
                 onCheckUpdate={checkForUpdate}

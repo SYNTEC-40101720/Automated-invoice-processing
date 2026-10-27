@@ -9,6 +9,12 @@ import type {
   JobHistoryResponse,
   JobTrigger,
   LogEntry,
+  PrivateCarExportRequest,
+  PrivateCarExportResponse,
+  PrivateCarMeta,
+  PrivateCarMetaPatch,
+  PrivateCarRow,
+  PrivateCarRowsResponse,
   SettingsResponse,
   UpdateResponse,
   ToolListResponse,
@@ -114,6 +120,17 @@ export const api = {
   }),
   pullEmail: () => request<EmailPullResponse>('/email/pull', { method: 'POST' }),
   scanInbox: () => request<InboxScanResponse>('/email/inbox/scan'),
+  privateCarMeta: () => request<PrivateCarMeta>('/private-car/meta'),
+  updatePrivateCarMeta: (body: PrivateCarMetaPatch) => request<PrivateCarMeta>('/private-car/meta', {
+    method: 'PATCH', body: JSON.stringify(body),
+  }),
+  privateCarRows: () => request<PrivateCarRowsResponse>('/private-car/rows'),
+  replacePrivateCarRows: (rows: PrivateCarRow[]) => request<PrivateCarRowsResponse>('/private-car/rows', {
+    method: 'PUT', body: JSON.stringify({ rows }),
+  }),
+  exportPrivateCar: (body: PrivateCarExportRequest) => request<PrivateCarExportResponse>('/private-car/export', {
+    method: 'POST', body: JSON.stringify(body),
+  }),
 }
 
 export function connectEvents(

@@ -1,4 +1,4 @@
-import { ArrowRight, FileCheck2, Inbox, PanelLeft, ScanSearch, Settings } from 'lucide-react'
+import { ArrowRight, Car, FileCheck2, Inbox, PanelLeft, ScanSearch, Settings } from 'lucide-react'
 import type { PointerEventHandler, ReactNode } from 'react'
 import type { ToolDescriptor } from '../api/types'
 import type { WorkbenchView } from '../stores/workbench'
@@ -27,6 +27,12 @@ const businessItems: NavigationItem[] = [
     label: '审核中心',
     subtitle: '异常与核验',
     icon: <ScanSearch size={18} strokeWidth={1.6} />,
+  },
+  {
+    id: 'private-car',
+    label: '私车公用',
+    subtitle: '登记与导出',
+    icon: <Car size={18} strokeWidth={1.6} />,
   },
 ]
 

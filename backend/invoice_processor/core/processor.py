@@ -232,13 +232,20 @@ class InvoiceProcessor:
 
     # ── 后处理：金额映射 / 占位替换 / 税号检查 / 合并 / 汇总 ──
     def post_process(self, output_dir: str,
-                     progress_callback: Callable[[float], None] | None = None) -> dict:
+                     progress_callback: Callable[[float], None] | None = None,
+                     daily_manual_totals: dict[str, tuple[float, float]] | None = None) -> dict:
         """后处理：金额映射 + 待搜索替换 + 税号检查 + 发票分类 + PDF 合并 + 费用汇总
 
         进度契约（供 UI 进度条使用，post_process 保证满足）：
             - 首条进度必为 0.0，末条进度必为 1.0；
             - 进度值单调不减，且始终落在 [0.0, 1.0]。
         各阶段的比例分配见 _phase_* 方法。
+
+        Args:
+            output_dir: 输出目录
+            progress_callback: 进度回调
+            daily_manual_totals: 私车公用按日合计 {日期: (补贴, 过路费)}
+                （三条联动：同日过路费以私车表为准、补贴只并同日、不新增行）
 
         返回: {'amount_map': dict, 'tax_issues': list[str],
                'merged': str|None, 'excel': str|None}
@@ -265,8 +272,10 @@ class InvoiceProcessor:
         tax_issues += self._phase_scan_manual_dir(output_dir, _report)
         # ⑥ 合并分类后的 PDF（内部进度 0.75~0.98）
         merged = self._phase_merge(output_dir, special_invoices, normal_files, _report)
-        # ⑦ 生成费用汇总 Excel；写盘完成后才报告最终进度
-        excel = self.generate_expense_summary(output_dir)
+        # ⑦ 生成费用汇总 Excel（融合私车公用按日合计，三条联动）；写盘完成后才报告最终进度
+        excel = self.generate_expense_summary(
+            output_dir, daily_manual_totals=daily_manual_totals,
+        )
         _report(1.00)
         totals = self._read_summary_totals(output_dir)
         return {'amount_map': amount_map, 'tax_issues': tax_issues,
@@ -288,10 +297,19 @@ class InvoiceProcessor:
             ).active
             for row in ws.iter_rows(values_only=True):
                 if row and row[0] == '合计':
+                    # v7.6.0 列拆后：B=大众运输 C=出租车 D=过路费 E=住宿 F=税金
+                    # transport = 三列交通合计（台账口径保持「交通费」总览）
+                    transport = (
+                        float(row[1] or 0) + float(row[2] or 0)
+                        + float(row[3] or 0)
+                    )
                     return {
-                        'transport': float(row[1] or 0),
-                        'hotel': float(row[2] or 0),
-                        'hotel_tax': float(row[3] or 0),
+                        'transport': round(transport, 2),
+                        'rail': float(row[1] or 0),
+                        'taxi': float(row[2] or 0),
+                        'toll': float(row[3] or 0),
+                        'hotel': float(row[4] or 0),
+                        'hotel_tax': float(row[5] or 0),
                     }
         except Exception:
             pass
@@ -413,12 +431,16 @@ class InvoiceProcessor:
             progress_callback=_on_merge_progress,
         )
 
-    def generate_expense_summary(self, output_dir: str) -> str | None:
+    def generate_expense_summary(
+        self, output_dir: str,
+        daily_manual_totals: dict[str, tuple[float, float]] | None = None,
+    ) -> str | None:
         """生成费用汇总 Excel（委托 excel_summary 模块）
 
-        遍历输出目录中的 PDF，提取日期、类别、金额，按日期归集生成 Excel。
+        遍历输出目录中的 PDF，提取日期、类别、金额，按日期归集生成 Excel；
+        daily_manual_totals 非空时融合私车公用按日合计（三条联动）。
         """
-        return _generate_excel(output_dir, self)
+        return _generate_excel(output_dir, self, daily_manual_totals)
 
     def create_amount_mapping(self, folder_path: str) -> dict[str, str]:
         """创建金额映射表"""

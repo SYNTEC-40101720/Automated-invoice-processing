@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { DomainEvent, Job, LogEntry } from '../api/types'
 
 export type SettingsSection = 'system' | 'business' | 'email' | 'ai'
-export type WorkbenchView = 'processing' | 'inbox' | 'audit' | 'settings'
+export type WorkbenchView = 'processing' | 'inbox' | 'audit' | 'private-car' | 'settings'
 
 interface WorkbenchState {
   connected: boolean

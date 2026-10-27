@@ -941,3 +941,130 @@ def test_job_history_endpoint_empty_when_store_disabled(tmp_path):
     )
     assert response.status_code == 200
     assert response.json() == {'items': []}
+
+
+# ── 私车公用登记（v7.6.0）────────────────────────────────
+
+PRIVATE_CAR_HEADERS = {'X-Local-Token': 'test-token'}
+
+
+def test_private_car_meta_roundtrip(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        'invoice_processor.config_manager.get_config_path',
+        lambda: tmp_path / 'config.ini',
+    )
+    client = TestClient(make_app(tmp_path))
+
+    empty = client.get('/api/v1/private-car/meta', headers=PRIVATE_CAR_HEADERS)
+    assert empty.status_code == 200
+    assert empty.json() == {'license_plate': '', 'user_name': ''}
+
+    patched = client.patch(
+        '/api/v1/private-car/meta',
+        headers=PRIVATE_CAR_HEADERS,
+        json={'license_plate': '苏U930FQ', 'user_name': '张三'},
+    )
+    assert patched.status_code == 200
+    assert patched.json() == {'license_plate': '苏U930FQ', 'user_name': '张三'}
+
+    # 持久化：新 client（同 config 路径）读回
+    again = TestClient(make_app(tmp_path))
+    assert again.get(
+        '/api/v1/private-car/meta', headers=PRIVATE_CAR_HEADERS
+    ).json() == {'license_plate': '苏U930FQ', 'user_name': '张三'}
+
+    rejects = client.patch(
+        '/api/v1/private-car/meta',
+        headers=PRIVATE_CAR_HEADERS,
+        json={'unknown_field': 'x'},
+    )
+    assert rejects.status_code == 422
+
+
+def test_private_car_rows_put_computes_distance_and_subsidy(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        'invoice_processor.config_manager.get_config_path',
+        lambda: tmp_path / 'config.ini',
+    )
+    client = TestClient(make_app(tmp_path))
+
+    response = client.put(
+        '/api/v1/private-car/rows',
+        headers=PRIVATE_CAR_HEADERS,
+        json={'rows': [{
+            'date': '2026-10-23', 'user_name': '张三', 'destination': '上海',
+            'start_time': '9:00', 'end_time': '17:00',
+            'start_mileage': '44118', 'end_mileage': '44165',
+            'toll_fee': '88', 'parking_fee': '10',
+        }]},
+    )
+    assert response.status_code == 200
+    rows = response.json()['rows']
+    assert len(rows) == 1
+    assert rows[0]['distance_text'] == '47'
+    assert rows[0]['subsidy_text'] == '70.50'
+
+    # 空行被过滤，持久化后读回一致
+    assert client.get(
+        '/api/v1/private-car/rows', headers=PRIVATE_CAR_HEADERS
+    ).json()['rows'] == rows
+
+
+def test_private_car_export_endpoint(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        'invoice_processor.config_manager.get_config_path',
+        lambda: tmp_path / 'config.ini',
+    )
+    client = TestClient(make_app(tmp_path))
+    out = tmp_path / 'out'
+    out.mkdir()
+
+    empty = client.post(
+        '/api/v1/private-car/export',
+        headers=PRIVATE_CAR_HEADERS,
+        json={'output_directory': str(out)},
+    )
+    assert empty.status_code == 422
+    assert empty.json()['error']['code'] == 'PRIVATE_CAR_NO_ROWS'
+
+    invalid = client.post(
+        '/api/v1/private-car/export',
+        headers=PRIVATE_CAR_HEADERS,
+        json={
+            'output_directory': str(out),
+            'rows': [{
+                'date': '2026-10-23', 'user_name': '张三', 'destination': '上海',
+                'start_time': '9:00', 'end_time': '17:00',
+                'start_mileage': '100', 'end_mileage': '50',
+            }],
+        },
+    )
+    assert invalid.status_code == 422
+    assert invalid.json()['error']['code'] == 'PRIVATE_CAR_ROW_INVALID'
+
+    ok = client.post(
+        '/api/v1/private-car/export',
+        headers=PRIVATE_CAR_HEADERS,
+        json={
+            'output_directory': str(out),
+            'rows': [{
+                'date': '2026-10-23', 'user_name': '张三', 'destination': '上海',
+                'start_time': '9:00', 'end_time': '17:00',
+                'start_mileage': '44118', 'end_mileage': '44165',
+                'toll_fee': '88', 'parking_fee': '10',
+            }],
+        },
+    )
+    assert ok.status_code == 200
+    assert ok.json()['path'].endswith('.xlsx')
+    assert (tmp_path / 'out' / ok.json()['path'].split('\\')[-1]).is_file()
+
+
+def test_private_car_endpoints_require_token(tmp_path):
+    client = TestClient(make_app(tmp_path))
+    for method, url in (
+        ('get', '/api/v1/private-car/meta'),
+        ('put', '/api/v1/private-car/rows'),
+        ('post', '/api/v1/private-car/export'),
+    ):
+        assert getattr(client, method)(url).status_code == 401

@@ -24,6 +24,8 @@ async def application_error_handler(
         'EMAIL_PULL_FAILED': 502,
         'AI_CONFIGURATION_INCOMPLETE': 422,
         'AI_CONNECTION_FAILED': 502,
+        'PRIVATE_CAR_NO_ROWS': 422,
+        'PRIVATE_CAR_ROW_INVALID': 422,
     }.get(exc.code, 400)
     return JSONResponse(
         status_code=status_code,

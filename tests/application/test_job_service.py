@@ -35,7 +35,7 @@ class FakeProcessor:
     def clear_cache(self):
         self.clear_called = True
 
-    def post_process(self, output_dir, progress_callback=None):
+    def post_process(self, output_dir, progress_callback=None, daily_manual_totals=None):
         if progress_callback:
             progress_callback(0.0)
             progress_callback(1.0)
@@ -355,7 +355,7 @@ def test_start_job_rejects_empty_source_and_running_conflict(tmp_path):
     release = threading.Event()
 
     class BlockingProcessor(FakeProcessor):
-        def post_process(self, output_dir, progress_callback=None):
+        def post_process(self, output_dir, progress_callback=None, daily_manual_totals=None):
             started.set()
             release.wait(timeout=5)
             return super().post_process(output_dir, progress_callback)
@@ -389,7 +389,7 @@ def test_cancelled_job_does_not_run_post_process(tmp_path):
             resume.wait(timeout=5)
             super().reset_dedup()
 
-        def post_process(self, output_dir, progress_callback=None):
+        def post_process(self, output_dir, progress_callback=None, daily_manual_totals=None):
             raise AssertionError('取消后不应执行后处理')
 
     in_process = threading.Event()
@@ -416,7 +416,7 @@ def test_cancel_during_post_process_skips_audit_and_archive(tmp_path):
     audit_calls = []
 
     class BlockingProcessor(FakeProcessor):
-        def post_process(self, output_dir, progress_callback=None):
+        def post_process(self, output_dir, progress_callback=None, daily_manual_totals=None):
             post_started.set()
             release_post.wait(timeout=5)
             return super().post_process(output_dir, progress_callback)

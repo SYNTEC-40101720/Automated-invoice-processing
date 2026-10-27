@@ -34,6 +34,7 @@ from ..domain.job import Job, JobPhase, JobStatus, JobTrigger
 from .audit_service import AuditService
 from .invoice_file_service import FileProcessResult, InvoiceFileService
 from .job_history import JobHistoryStore
+from .private_car_service import PrivateCarService
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +111,7 @@ class JobService:
         job_history_limit: int = 100,
         job_history_store: JobHistoryStore | None = None,
         duplicate_index: DuplicateIndex | None = None,
+        private_car_service: PrivateCarService | None = None,
     ):
         self.events = event_bus or EventBus()
         self._processor_factory = processor_factory
@@ -121,9 +123,21 @@ class JobService:
         self._job_history_store = job_history_store
         # 全局内容去重索引（跨任务 sha256）；None 时去重功能停用
         self._duplicate_index = duplicate_index
+        # 私车公用服务（三条联动数据源）；None 时费用汇总不带私车数据
+        self._private_car_service = private_car_service
         self._lock = threading.RLock()
         self._handles: dict[str, _JobHandle] = {}
         self._current_job_id: str | None = None
+
+    def _private_car_daily_totals(self) -> dict[str, tuple[float, float]]:
+        """私车公用按日合计 {日期: (补贴, 过路费)}；无数据/服务缺失返回 {}。"""
+        if self._private_car_service is None:
+            return {}
+        try:
+            return self._private_car_service.collect_daily_totals()
+        except Exception as exc:  # 私车数据读失败不阻断发票任务
+            logger.warning('私车公用数据读取失败（汇总不含私车联动）: %s', exc)
+            return {}
 
     def run_job_sync(
         self,
@@ -402,7 +416,9 @@ class JobService:
                 self._set_progress(job, 0.70 + 0.30 * ratio)
 
             result = processor.post_process(
-                output_dir, progress_callback=on_post_progress
+                output_dir,
+                progress_callback=on_post_progress,
+                daily_manual_totals=self._private_car_daily_totals(),
             )
             for issue in result.get('tax_issues') or []:
                 self._log(job, issue, 'warning')

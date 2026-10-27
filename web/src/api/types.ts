@@ -199,3 +199,42 @@ export interface JobHistoryEntry {
 export interface JobHistoryResponse {
   items: JobHistoryEntry[]
 }
+
+export interface PrivateCarRow {
+  date: string
+  user_name: string
+  destination: string
+  start_time: string
+  end_time: string
+  start_mileage: string
+  end_mileage: string
+  distance_text: string
+  subsidy_text: string
+  toll_fee: string
+  parking_fee: string
+}
+
+export interface PrivateCarMeta {
+  license_plate: string
+  user_name: string
+}
+
+export interface PrivateCarMetaPatch {
+  license_plate?: string | null
+  user_name?: string | null
+}
+
+export interface PrivateCarExportRequest {
+  output_directory: string
+  license_plate?: string | null
+  source_directory?: string | null
+  rows?: PrivateCarRow[] | null
+}
+
+export interface PrivateCarRowsResponse {
+  rows: PrivateCarRow[]
+}
+
+export interface PrivateCarExportResponse {
+  path: string
+}

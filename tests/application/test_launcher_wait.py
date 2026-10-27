@@ -19,10 +19,10 @@ class BlockingPostProcessProcessor(FakeProcessor):
         self.started = threading.Event()
         self.release = threading.Event()
 
-    def post_process(self, output_dir, progress_callback=None):
+    def post_process(self, output_dir, progress_callback=None, daily_manual_totals=None):
         self.started.set()
         self.release.wait(timeout=5)
-        return super().post_process(output_dir, progress_callback)
+        return super().post_process(output_dir, progress_callback, daily_manual_totals)
 
 
 def _run_job_async(service, source):

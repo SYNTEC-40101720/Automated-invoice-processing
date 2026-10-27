@@ -20,6 +20,32 @@ _TRANSPORT_KEYWORDS = [
 ]
 # 弱交通关键字：可能出现在住宿场景（如「商务出行」），排在住宿之后
 _TRANSPORT_KEYWORDS_WEAK = ['出行']
+# 交通子类别关键字（列拆口径：大众运输/出租车/过路费，吸收同事仓库汇总列）
+# 大众运输 = 高铁/火车；出租车 = 滴滴行程单与滴滴发票；过路费 = 通行费发票
+_RAIL_KEYWORDS = ['高铁', '火车', '乘车', '高铁票']
+_TAXI_KEYWORDS = ['滴滴', '行程单', '出租']
+_TOLL_KEYWORDS = ['通行费', '过路', '过桥']
+
+
+def _determine_transport_kind(text: str, filename: str = '') -> str:
+    """交通发票的子类别：rail=大众运输 / taxi=出租车 / toll=过路费。
+
+    文件名优先（行程单/高铁票后缀是强信号），再按文本关键字判定；
+    都不命中时默认大众运输（与旧口径「交通费」归集一致）。
+    """
+    if '行程单' in filename or any(k in filename for k in _TAXI_KEYWORDS):
+        return 'taxi'
+    if '高铁票' in filename or any(k in filename for k in _RAIL_KEYWORDS):
+        return 'rail'
+    if any(k in filename for k in _TOLL_KEYWORDS):
+        return 'toll'
+    if any(k in text for k in _TAXI_KEYWORDS):
+        return 'taxi'
+    if any(k in text for k in _RAIL_KEYWORDS):
+        return 'rail'
+    if any(k in text for k in _TOLL_KEYWORDS):
+        return 'toll'
+    return 'rail'
 
 # ── 日期提取模式 ────────────────────────────────────────
 # 优先匹配带特定前缀的日期字段，fallback 到通用日期
@@ -309,6 +335,12 @@ def _parse_invoice(output_dir: str, filename: str, processor) -> list[dict] | No
     if category == 'unknown':
         category = _determine_category_from_filename(filename) or 'unknown'
 
+    # 交通子类别（列拆口径：大众运输/出租车/过路费）
+    transport_kind = (
+        _determine_transport_kind(text, filename)
+        if category == 'transport' else None
+    )
+
     # ── 行程单：按天拆分逐笔行程 ──
     if '行程单' in filename and category == 'transport':
         # 用原始文本（保留空白）解析行程明细
@@ -323,6 +355,7 @@ def _parse_invoice(output_dir: str, filename: str, processor) -> list[dict] | No
                         'hotel_amount': None,
                         'hotel_tax': None,
                         'category': 'transport',
+                        'transport_kind': transport_kind,
                         'time': t.get('time'),
                         'city': t.get('city'),
                         'route': t.get('route'),
@@ -364,6 +397,7 @@ def _parse_invoice(output_dir: str, filename: str, processor) -> list[dict] | No
         'hotel_amount': hotel_amount,
         'hotel_tax': hotel_tax,
         'category': category,
+        'transport_kind': transport_kind,
         **extra,
     }]
 
@@ -394,7 +428,8 @@ def _build_workbook(rows: list[dict]) -> openpyxl.Workbook:
     """构建 Excel 工作簿
 
     rows: 按日期排序的字典列表，每项含:
-        date, transport_amount, hotel_amount, hotel_tax
+        date, rail_amount, taxi_amount, toll_amount, subsidy_amount,
+        hotel_amount, hotel_tax
     """
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -402,12 +437,18 @@ def _build_workbook(rows: list[dict]) -> openpyxl.Workbook:
 
     # 列宽
     ws.column_dimensions['A'].width = 14   # 日期
-    ws.column_dimensions['B'].width = 16   # 交通费
-    ws.column_dimensions['C'].width = 16   # 住宿费
-    ws.column_dimensions['D'].width = 16   # 住宿费税金
+    ws.column_dimensions['B'].width = 14   # 大众运输
+    ws.column_dimensions['C'].width = 14   # 出租车
+    ws.column_dimensions['D'].width = 14   # 过路费
+    ws.column_dimensions['E'].width = 14   # 私车补贴
+    ws.column_dimensions['F'].width = 14   # 住宿费
+    ws.column_dimensions['G'].width = 14   # 住宿费税金
 
     # ── 表头 ──
-    headers = ['日期', '交通费', '住宿费', '住宿费税金']
+    headers = [
+        '日期', '大众运输', '出租车', '过路费', '私车补贴',
+        '住宿费', '住宿费税金',
+    ]
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=h)
         cell.fill = _HEADER_FILL
@@ -416,17 +457,26 @@ def _build_workbook(rows: list[dict]) -> openpyxl.Workbook:
         cell.border = _THIN_BORDER
 
     # ── 数据行 ──
-    total_transport = 0.0
+    total_rail = 0.0
+    total_taxi = 0.0
+    total_toll = 0.0
+    total_subsidy = 0.0
     total_hotel = 0.0
     total_hotel_tax = 0.0
 
     for i, row_data in enumerate(rows, 2):
         date_str = row_data['date']
-        trans_amt = row_data['transport_amount'] or 0.0
+        rail_amt = row_data.get('rail_amount') or 0.0
+        taxi_amt = row_data.get('taxi_amount') or 0.0
+        toll_amt = row_data.get('toll_amount') or 0.0
+        subsidy_amt = row_data.get('subsidy_amount') or 0.0
         hotel_amt = row_data['hotel_amount'] or 0.0
         hotel_tax = row_data['hotel_tax'] or 0.0
 
-        total_transport += trans_amt
+        total_rail += rail_amt
+        total_taxi += taxi_amt
+        total_toll += toll_amt
+        total_subsidy += subsidy_amt
         total_hotel += hotel_amt
         total_hotel_tax += hotel_tax
 
@@ -436,22 +486,25 @@ def _build_workbook(rows: list[dict]) -> openpyxl.Workbook:
         c.alignment = _DATA_ALIGN
         c.border = _THIN_BORDER
 
-        # 交通费
-        c = ws.cell(row=i, column=2, value=trans_amt if trans_amt > 0 else None)
-        c.font = _DATA_FONT
-        c.alignment = _NUM_ALIGN
-        c.border = _THIN_BORDER
-        c.number_format = '#,##0.00'
+        # 大众运输 / 出租车 / 过路费 / 私车补贴
+        for col, amt in (
+            (2, rail_amt), (3, taxi_amt), (4, toll_amt), (5, subsidy_amt),
+        ):
+            c = ws.cell(row=i, column=col, value=amt if amt > 0 else None)
+            c.font = _DATA_FONT
+            c.alignment = _NUM_ALIGN
+            c.border = _THIN_BORDER
+            c.number_format = '#,##0.00'
 
         # 住宿费
-        c = ws.cell(row=i, column=3, value=hotel_amt if hotel_amt > 0 else None)
+        c = ws.cell(row=i, column=6, value=hotel_amt if hotel_amt > 0 else None)
         c.font = _DATA_FONT
         c.alignment = _NUM_ALIGN
         c.border = _THIN_BORDER
         c.number_format = '#,##0.00'
 
         # 住宿费税金
-        c = ws.cell(row=i, column=4, value=hotel_tax if hotel_tax > 0 else None)
+        c = ws.cell(row=i, column=7, value=hotel_tax if hotel_tax > 0 else None)
         c.font = _DATA_FONT
         c.alignment = _NUM_ALIGN
         c.border = _THIN_BORDER
@@ -465,7 +518,10 @@ def _build_workbook(rows: list[dict]) -> openpyxl.Workbook:
     c.alignment = _DATA_ALIGN
     c.border = _THIN_BORDER
 
-    for col, val in [(2, total_transport), (3, total_hotel), (4, total_hotel_tax)]:
+    for col, val in [
+        (2, total_rail), (3, total_taxi), (4, total_toll),
+        (5, total_subsidy), (6, total_hotel), (7, total_hotel_tax),
+    ]:
         c = ws.cell(row=total_row, column=col, value=val)
         c.fill = _TOTAL_FILL
         c.font = _TOTAL_FONT
@@ -477,9 +533,11 @@ def _build_workbook(rows: list[dict]) -> openpyxl.Workbook:
     note_row = total_row + 2
     notes = [
         '备注：',
-        '1. 交通费 = 价税合计（高铁按乘车日期、打车按行程日期、通行费按开票日期归集）',
-        '2. 住宿费 = 不含税金额，住宿费税金 = 税额（按入住日期归集，跨天归到入住日）',
-        f'3. 生成时间: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
+        '1. 交通费拆分为大众运输（高铁/火车）/出租车（滴滴）/过路费（通行费）三列，均为价税合计',
+        '   （高铁按乘车日期、打车按行程日期、通行费按开票日期归集）',
+        '2. 私车补贴按行驶里程×1.5元/公里计算（按行程日期归集，与私车公用登记表联动）',
+        '3. 住宿费 = 不含税金额，住宿费税金 = 税额（按入住日期归集，跨天归到入住日）',
+        f'4. 生成时间: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
     ]
     for j, note in enumerate(notes):
         c = ws.cell(row=note_row + j, column=1, value=note)
@@ -488,14 +546,25 @@ def _build_workbook(rows: list[dict]) -> openpyxl.Workbook:
     return wb
 
 
-def generate_expense_summary(output_dir: str, processor) -> str | None:
+def generate_expense_summary(
+    output_dir: str,
+    processor,
+    daily_manual_totals: dict[str, tuple[float, float]] | None = None,
+) -> str | None:
     """生成费用汇总 Excel 文件
 
     遍历输出目录中的 PDF，提取日期、类别、金额，按日期归集后生成 Excel。
 
+    三条联动（v7.6.0，私车公用登记 → 费用汇总）：
+        ① 补贴+过路费只同步到日期完全相同的汇总行，不新增行；
+        ② 对应日期过路费以私车登记表为准（防止通行费发票重复计）；
+        ③ 停车费仅进私车 Excel，不进汇总。
+
     Args:
         output_dir: 处理后的输出目录（包含 PDF 文件）
         processor: InvoiceProcessor 实例（用于文本提取缓存）
+        daily_manual_totals: 私车公用按日合计 {日期: (补贴, 过路费)}，
+            来自 PrivateCarService.collect_daily_totals；None 表示无私车数据
 
     Returns:
         Excel 文件路径，失败返回 None
@@ -535,7 +604,10 @@ def generate_expense_summary(output_dir: str, processor) -> str | None:
 
         # 逐文件解析
         data_by_date: dict[str, dict] = defaultdict(
-            lambda: {'transport_amount': 0.0, 'hotel_amount': 0.0, 'hotel_tax': 0.0}
+            lambda: {
+                'rail_amount': 0.0, 'taxi_amount': 0.0, 'toll_amount': 0.0,
+                'subsidy_amount': 0.0, 'hotel_amount': 0.0, 'hotel_tax': 0.0,
+            }
         )
         parsed_count = 0
         skipped_count = 0
@@ -554,7 +626,8 @@ def generate_expense_summary(output_dir: str, processor) -> str | None:
             for result in results:
                 date = result['date']
                 if result['transport_amount'] is not None:
-                    data_by_date[date]['transport_amount'] += result['transport_amount']
+                    kind = result.get('transport_kind') or 'rail'
+                    data_by_date[date][f'{kind}_amount'] += result['transport_amount']
                 if result['hotel_amount'] is not None:
                     data_by_date[date]['hotel_amount'] += result['hotel_amount']
                 if result['hotel_tax'] is not None:
@@ -564,12 +637,25 @@ def generate_expense_summary(output_dir: str, processor) -> str | None:
             logger.warning('未能从任何 PDF 中提取到有效数据')
             return None
 
+        # 三条联动：融合私车公用按日合计（补贴 / 过路费）
+        # ① 只同步日期完全相同的行（不新增行）；② 同日过路费以私车表为准
+        manual = daily_manual_totals or {}
+        for d, values in data_by_date.items():
+            subsidy_amt, toll_amt = manual.get(d, (0.0, 0.0))
+            if subsidy_amt:
+                values['subsidy_amount'] = float(subsidy_amt)
+            if toll_amt:
+                values['toll_amount'] = float(toll_amt)
+
         # 按日期排序
         sorted_dates = sorted(data_by_date.keys())
         rows = [
             {
                 'date': d,
-                'transport_amount': data_by_date[d]['transport_amount'],
+                'rail_amount': data_by_date[d]['rail_amount'],
+                'taxi_amount': data_by_date[d]['taxi_amount'],
+                'toll_amount': data_by_date[d]['toll_amount'],
+                'subsidy_amount': data_by_date[d].get('subsidy_amount', 0.0),
                 'hotel_amount': data_by_date[d]['hotel_amount'],
                 'hotel_tax': data_by_date[d]['hotel_tax'],
             }
@@ -585,6 +671,14 @@ def generate_expense_summary(output_dir: str, processor) -> str | None:
             f'（{parsed_count} 个文件，{len(rows)} 个日期'
             f'{f"，跳过 {skipped_count} 个重复发票" if skipped_count else ""}）'
         )
+
+        # 生成出差清单 PDF（与 Excel 同源同口径；失败不影响 Excel）
+        try:
+            from .summary_pdf import generate_summary_pdf
+            generate_summary_pdf(output_dir, rows)
+        except Exception as pdf_error:  # noqa: BLE001 - 清单失败仅告警
+            logger.warning(f'出差清单 PDF 生成失败（不影响汇总 Excel）: {pdf_error}')
+
         return excel_path
 
     except Exception as e:

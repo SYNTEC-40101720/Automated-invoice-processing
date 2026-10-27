@@ -254,3 +254,56 @@ class InboxScanResponse(BaseModel):
     pending_count: int
     pending_files: list[str] = Field(default_factory=list)
     batches: list[InboxBatchSummary] = Field(default_factory=list)
+
+
+class PrivateCarRow(BaseModel):
+    """私车公用登记行（11 列与同事版口径一致；distance/subsidy 只读回显）。"""
+
+    model_config = ConfigDict(extra='forbid')
+
+    date: str = ''
+    user_name: str = ''
+    destination: str = ''
+    start_time: str = ''
+    end_time: str = ''
+    start_mileage: str = ''
+    end_mileage: str = ''
+    distance_text: str = ''
+    subsidy_text: str = ''
+    toll_fee: str = ''
+    parking_fee: str = ''
+
+
+class PrivateCarRowsPayload(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    rows: list[PrivateCarRow] = Field(default_factory=list)
+
+
+class PrivateCarRowsResponse(BaseModel):
+    rows: list[PrivateCarRow] = Field(default_factory=list)
+
+
+class PrivateCarMeta(BaseModel):
+    license_plate: str
+    user_name: str
+
+
+class PrivateCarMetaPatch(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    license_plate: str | None = Field(default=None, max_length=20)
+    user_name: str | None = Field(default=None, max_length=40)
+
+
+class PrivateCarExportRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    output_directory: str = Field(min_length=1)
+    license_plate: str | None = Field(default=None, max_length=20)
+    source_directory: str | None = None
+    rows: list[PrivateCarRow] | None = None
+
+
+class PrivateCarExportResponse(BaseModel):
+    path: str

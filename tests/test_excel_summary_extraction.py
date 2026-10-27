@@ -5,6 +5,7 @@
 运行方式: pytest tests/test_excel_summary_extraction.py -v
 """
 from invoice_processor.core.excel_summary import (
+    _build_workbook,
     _determine_category,
     _extract_date,
     _parse_didi_trip_details,
@@ -24,6 +25,54 @@ class FakeProcessor:
 
     def _extract_raw_text(self, path):
         return self.raw_text, None
+
+
+class TestWorkbookSubsidyColumn:
+    """三条联动（v7.6.0）：补贴列落位与融合规则"""
+
+    _BASE_ROWS = [
+        {
+            'date': '2026-07-01', 'rail_amount': 100.0, 'taxi_amount': 0.0,
+            'toll_amount': 20.0, 'subsidy_amount': 0.0, 'hotel_amount': 0.0,
+            'hotel_tax': 0.0,
+        },
+    ]
+
+    def test_headers_seven_columns_with_subsidy(self):
+        wb = _build_workbook(self._BASE_ROWS)
+        ws = wb.active
+        headers = [ws.cell(row=1, column=c).value for c in range(1, 8)]
+        assert headers == [
+            '日期', '大众运输', '出租车', '过路费', '私车补贴',
+            '住宿费', '住宿费税金',
+        ]
+
+    def test_subsidy_written_to_column_e(self):
+        rows = [{**self._BASE_ROWS[0], 'subsidy_amount': 70.5}]
+        ws = _build_workbook(rows).active
+        assert ws.cell(row=2, column=5).value == 70.5
+
+    def test_zero_subsidy_cell_empty(self):
+        ws = _build_workbook(self._BASE_ROWS).active
+        assert ws.cell(row=2, column=5).value is None
+
+    def test_totals_row_includes_subsidy(self):
+        rows = [
+            self._BASE_ROWS[0],
+            {
+                'date': '2026-07-02', 'rail_amount': 0.0, 'taxi_amount': 0.0,
+                'toll_amount': 0.0, 'subsidy_amount': 30.0,
+                'hotel_amount': 0.0, 'hotel_tax': 0.0,
+            },
+        ]
+        ws = _build_workbook(rows).active
+        # 找合计行（A 列 = 合计）
+        total_row = next(
+            r for r in range(2, ws.max_row + 1)
+            if ws.cell(row=r, column=1).value == '合计'
+        )
+        assert ws.cell(row=total_row, column=5).value == 30.0
+        assert ws.cell(row=total_row, column=4).value == 20.0
 
 
 class TestDetermineCategory:

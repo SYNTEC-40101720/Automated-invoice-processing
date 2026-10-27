@@ -18,11 +18,12 @@ from fastapi import FastAPI
 from ..application.invoice_task import build_invoice_registry
 from ..application.job_history import JobHistoryStore, default_history_path
 from ..application.job_service import JobService
+from ..application.private_car_service import PrivateCarService
 from ..core.duplicate_check import DuplicateIndex, default_duplicate_index_path
 from ..domain.errors import ApplicationError
 from ..version import __version__
 from .errors import application_error_handler
-from .routes import email, events, jobs, settings, system, tools
+from .routes import email, events, jobs, private_car, settings, system, tools
 
 
 def create_app(
@@ -33,10 +34,21 @@ def create_app(
     static_dir: str | Path | None = None,
     allowed_origins: Iterable[str] | None = None,
 ) -> FastAPI:
+    # 私车公用服务单实例：挂 app.state（API 用）+ 注入 JobService
+    # 供费用汇总三条联动（同日过路费以私车表为准、补贴并同日）。
+    # 注入式 service（测试/launcher）自带实例则沿用；缺失则补挂同一实例。
+    private_car_service = PrivateCarService(
+        source_directory_provider=lambda: _last_source_directory(service)
+    )
     service = job_service or JobService(
         job_history_store=JobHistoryStore(default_history_path()),
         duplicate_index=DuplicateIndex(default_duplicate_index_path()),
+        private_car_service=private_car_service,
     )
+    if service._private_car_service is None:
+        service._private_car_service = private_car_service
+    else:
+        private_car_service = service._private_car_service
     # 总线单实例化（融合二期）：runtime 复用 service 的总线，业务事件
     # 与生命周期事件共享同一 event_id 编号空间。注入 service 的场景
     # （测试、launcher）同样保证单实例。
@@ -58,12 +70,14 @@ def create_app(
     app.state.job_service = service
     app.state.devbase_runtime = runtime
     app.state.version = version
+    app.state.private_car_service = private_car_service
 
     app.include_router(system.router, prefix='/api/v1')
     app.include_router(jobs.router, prefix='/api/v1')
     app.include_router(events.router, prefix='/api/v1')
     app.include_router(settings.router, prefix='/api/v1')
     app.include_router(email.router, prefix='/api/v1')
+    app.include_router(private_car.router, prefix='/api/v1')
     app.include_router(tools.router, prefix='/api/v1')
     app.add_exception_handler(ApplicationError, application_error_handler)
     mount_static_frontend(app, static_dir)
@@ -76,3 +90,18 @@ def create_app_from_environment() -> FastAPI:
         local_token=os.getenv('PLATFORM_LOCAL_TOKEN'),
         static_dir=os.getenv('PLATFORM_STATIC_DIR'),
     )
+
+
+def _last_source_directory(service: JobService) -> str:
+    """最近一次任务的来源目录名（私车导出文件名客户段）。
+
+    无历史任务返回空串；异常不阻断导出。
+    """
+    try:
+        history = service.job_history_entries()
+    except Exception:  # noqa: BLE001 - 导出辅助信息，失败不阻断
+        return ''
+    if not history:
+        return ''
+    source = str(history[0].get('source_dir') or '')
+    return os.path.basename(source.rstrip('\\/')) if source else ''

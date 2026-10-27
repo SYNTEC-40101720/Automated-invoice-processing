@@ -83,6 +83,60 @@ class NativeBridge(DevBaseNativeBridge):
 
         return super().open_directory(path, checker=checker)
 
+    def print_pdf(self, path: str, copies: int = 1) -> bool:
+        """用 Windows 默认打印机静默打印 PDF（ShellExecute 'printto'）。
+
+        域控环境无需额外驱动配置；打印机未配置/路径无效返回 False，
+        不抛异常（前端据此提示）。
+        """
+        if os.name != 'nt':
+            return False
+        target = Path(path).expanduser()
+        if not target.is_file():
+            return False
+        try:
+            copies = max(1, int(copies))
+        except (TypeError, ValueError):
+            copies = 1
+
+        import ctypes  # noqa: PLC0415 - 仅 Windows 打印路径需要
+
+        shell32 = ctypes.windll.shell32  # type: ignore[attr-defined]
+        shell32.ShellExecuteW.restype = ctypes.c_void_p
+
+        try:
+            for _ in range(copies):
+                # lpParameters = "打印机名"；verb='printto' 由关联的 PDF
+                # 处理器（Edge/Acrobat）接管静默打印，无需第三方依赖。
+                code = shell32.ShellExecuteW(
+                    0, 'printto', str(target),
+                    f'"{_default_printer_name()}"',
+                    '.', 0,
+                )
+                if code is None or code <= 32:  # SE_ERR_* 均 <=32
+                    return False
+            return True
+        except Exception:
+            return False
+
+
+def _default_printer_name() -> str:
+    """读默认打印机名（winspool GetDefaultPrinterW，两段式调用）。"""
+    import ctypes  # noqa: PLC0415
+    from ctypes import wintypes  # noqa: PLC0415
+
+    winspool = ctypes.WinDLL('winspool.drv')
+    winspool.GetDefaultPrinterW.restype = wintypes.BOOL
+    winspool.GetDefaultPrinterW.argtypes = [wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+    size = wintypes.DWORD(0)
+    winspool.GetDefaultPrinterW(None, ctypes.byref(size))
+    if size.value == 0:
+        return ''
+    buf = ctypes.create_unicode_buffer(size.value)
+    if not winspool.GetDefaultPrinterW(buf, ctypes.byref(size)):
+        return ''
+    return buf.value
+
     def get_runtime_info(self) -> dict[str, str | bool]:
         return {
             **super().get_runtime_info(),
