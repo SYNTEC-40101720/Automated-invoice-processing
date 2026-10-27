@@ -312,6 +312,26 @@ SHA-256：
 
 ## 11. 发布记录
 
+### v7.5.0（2026-10-27 发布）
+
+```text
+应用：SYNTEC-电子票据处理系统
+仓库：SYNTEC-40101720/Automated-invoice-processing
+当前版本：7.4.0
+目标版本：7.5.0（minor：吸收融合三项新功能）
+Release URL：https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.5.0
+资产名：SYNTEC-Invoice-Processor-v7.5.0.zip
+资产大小：133.08 MB（139,549,313 字节）
+SHA-256：549f962ef7eab502d1f71de6ee02afa77945647ad1dbdb77084b325a9342489c（GitHub digest 一致）
+主程序版本资源：CompanyName=SYNTEC，FileVersion/ProductVersion=[IP_ADDRESS]，域控合规检查全部通过
+质量基线：291 条 Python 测试（基线 279→291）、Ruff、TypeScript、Vitest 22 条、Vite 构建通过；PyInstaller 域控合规通过
+密钥扫描：diff 扫描 0 命中；误生成 web/pnpm-lock.yaml 与 pnpm-workspace.yaml（pnpm 10 副作用）已删除未入库
+启动冒烟：health=7.5.0（%TEMP% 副本运行），日志无 CRITICAL，窗口关闭流程正常收敛且端口释放
+已知限制：台账合计列依赖当轮生成的费用汇总 xlsx（FakeProcessor/异常场景落 0）；金额上限为静态常量（AMOUNT_CAPS，调差标需改代码）；真实滴滴跨年行程单/大笔数行程单语料回归不在本版范围；桌面验收 §2+§4+§6 未在本版重跑（链路无变化，沿用 v7.4.0 结论）
+```
+
+内容：吸收同事仓库（SYNTEC-20101749）口径三项——**①行程单笔数闸门**：`_parse_didi_trip_details` 解析页头「共计 N 笔」，与实际解析笔数不符时整体放弃逐笔拆分回落发票金额归集（保守原则：部分拆分会把金额拆错日期）；**②金额合理性上限**：`local_audit.AMOUNT_CAPS`（网约车单笔 300/火车票单张 2000/住宿单张 5000），`_amount_cap_for` 按「行程单逐笔明细/高铁票后缀/住宿类行」区分适用上限，超出仅标疑不阻断；**③归档台账**：任务成功终态（与触发器无关）向输出目录上级追加「发票打印汇总档案.xlsx」，含任务统计、分类合计（读当轮费用汇总 xlsx 合计行）与人工审核报告路径，写失败仅 warning 不影响任务终态。
+
 ### v7.4.0（2026-10-27 发布）
 
 ```text
