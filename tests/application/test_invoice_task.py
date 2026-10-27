@@ -77,3 +77,26 @@ def test_validate_start_input_mixed_with_settlement_statements(tmp_path) -> None
     (tmp_path / "invoice-a.pdf").write_bytes(b"%PDF")
 
     validate_start_input({"source_dir": str(tmp_path)})
+
+
+def test_validate_start_input_inbox_root_counts_batch_files(
+    tmp_path, monkeypatch
+) -> None:
+    """trigger=inbox 且源目录为收件根时，批次子目录 PDF 计入预检"""
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    batch = inbox / "拉取_20261002_120000"
+    batch.mkdir()
+    (batch / "附件.pdf").write_bytes(b"%PDF")
+    monkeypatch.setattr(
+        "invoice_processor.application.job_service.get_inbox_dir",
+        lambda: str(inbox),
+    )
+
+    # 根目录自身无 PDF，但批次有：inbox 预检放行，manual 仍拒绝
+    validate_start_input(
+        {"source_dir": str(inbox), "trigger": "inbox"},
+    )
+
+    with pytest.raises(NoPdfFiles):
+        validate_start_input({"source_dir": str(inbox), "trigger": "manual"})

@@ -9,6 +9,7 @@ from devbase.application.job_runtime import JobRuntime
 from fastapi import APIRouter, Depends
 
 from ...application.invoice_task import INVOICE_TOOL_KIND, validate_start_input
+from ...application.job_service import JobService
 from ...config_manager import (
     get_email_auth_code,
     get_email_auto_process,
@@ -21,8 +22,12 @@ from ...config_manager import (
 )
 from ...core.email_pull import pull_invoices
 from ...domain.errors import ApplicationError
-from ..dependencies import get_devbase_runtime, require_local_token
-from ..schemas import EmailPullResponse
+from ..dependencies import (
+    get_devbase_runtime,
+    get_job_service,
+    require_local_token,
+)
+from ..schemas import EmailPullResponse, InboxScanResponse
 
 router = APIRouter(
     prefix='/email',
@@ -107,3 +112,11 @@ def pull_email(
         _pull_lock.release()
 
     return EmailPullResponse(pull=result, job=job)
+
+
+@router.get('/inbox/scan', response_model=InboxScanResponse)
+def scan_inbox(
+    service: JobService = Depends(get_job_service),
+) -> InboxScanResponse:
+    """扫描统一收件目录：根目录散放待处理文件 + 各批次子目录概览。"""
+    return InboxScanResponse(**service.scan_inbox())

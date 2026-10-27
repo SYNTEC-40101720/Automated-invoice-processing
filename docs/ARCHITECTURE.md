@@ -173,7 +173,7 @@ stateDiagram-v2
 4. 执行现有 `post_process`；
 5. 始终执行本地审核，按配置执行 AI 审核；
 6. 写入审核报告；
-7. 仅当 `trigger` 为 `inbox` 或 `email` 且任务进入完成态后归档源 PDF；
+7. 仅当 `trigger` 为 `inbox` 或 `email` 且任务进入完成态后归档源 PDF；`trigger=inbox` 以收件根目录为源时，处理范围扩展为「根目录散放 + 一层批次子目录」统一集合（`list_inbox_tree`），归档回各自目录的 `已处理/`；
 8. 发布最终快照并清理缓存。
 
 首期可把当前 `_process_single_file` 和 `_move_to_manual_review` 原样迁到 `InvoiceFileService`，但应改为公开应用服务 API，不再由 UI 调用 `InvoiceProcessor` 的私有方法。
@@ -356,7 +356,7 @@ Pydantic 模型是 API 单一事实源。CI 由 FastAPI OpenAPI 生成 TypeScrip
 7. 停止后取消未开始任务，不再提交新任务；
 8. 本地审核始终执行，AI 审核失败不阻断主流程；
 9. 邮件使用 `BODY.PEEK`，附件和 Message-ID 继续去重；
-10. 仅通过收件箱/邮箱来源触发的任务在完成后归档源 PDF；工作台手动选择目录处理时不归档；
+10. 仅通过收件箱/邮箱来源触发的任务在完成后归档源 PDF；工作台手动选择目录处理时不归档；收件根目录整体任务（`trigger=inbox`）覆盖根目录散放与各拉取批次子目录，批次文件归回各自批次目录的 `已处理/`；
 11. 密钥继续使用 Windows DPAPI，配置和日志中不出现明文；
 12. 业务核心不依赖 UI 框架。
 
@@ -400,7 +400,7 @@ dist/SYNTEC-电子票据处理系统/
 生产模式不开放 Swagger UI，不输出 Uvicorn access log。开发模式可以独立运行 Vite 和 FastAPI，并通过显式环境变量启用文档与调试日志。
 
 ## 12. 交付状态与边界
-v7.3.7 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、手动邮箱收件（拉取批次目录隔离）、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。任务启动/取消已收敛为 DevBase 契约（旧 `/jobs` 兼容端点已移除，`/jobs/start` 带启动前同步预检）；邮箱后台轮询与程序内自动更新链路已移除（收件统一手动拉取；更新为"仅检测提示 + Release 页面手动下载"）。核心 Python 测试（228 条）、API 契约、前端 typecheck/Vitest/生产构建和打包合规已通过；发布包启动冒烟 `scripts/smoke_launch.py` 本机通过。目标机验收要求收敛至 `docs/RELEASE_SOP.md`，真实浏览器/WebView2/DPI/域控环境仍需按清单在目标环境执行。
+v7.3.7 当前交付包含：FastAPI 本地服务、React 工作台、pywebview 桌面壳、手动邮箱收件（拉取批次目录隔离）、收件目录统一入口（`GET /email/inbox/scan` + 收件页「处理收件箱」，trigger=inbox 覆盖根目录散放与批次子目录、各自目录归档）、配置热加载、日志持久化、本地/AI 审核、SYNTEC 域控打包和 GitHub Release 更新检查。任务启动/取消已收敛为 DevBase 契约（旧 `/jobs` 兼容端点已移除，`/jobs/start` 带启动前同步预检）；邮箱后台轮询与程序内自动更新链路已移除（收件统一手动拉取；更新为"仅检测提示 + Release 页面手动下载"）。核心 Python 测试（236 条）、API 契约、前端 typecheck/Vitest/生产构建和打包合规已通过；发布包启动冒烟 `scripts/smoke_launch.py` 本机通过。目标机验收要求收敛至 `docs/RELEASE_SOP.md`，真实浏览器/WebView2/DPI/域控环境仍需按清单在目标环境执行。
 
 以下事项不属于当前版本功能，后续若实施必须同步补充测试和验收记录：
 

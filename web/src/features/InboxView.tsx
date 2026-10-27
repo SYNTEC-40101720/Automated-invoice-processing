@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ClipboardPaste, FolderOpen, LoaderCircle, RefreshCw } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ClipboardPaste, FolderOpen, LoaderCircle, PlayCircle, RefreshCw } from 'lucide-react'
 import { api } from '../api/client'
 import type { EmailSettings, SettingsResponse } from '../api/types'
 import { useWorkbench } from '../stores/workbench'
@@ -72,6 +72,26 @@ export function InboxView({ emailSettings }: InboxViewProps) {
 
   const goProcessing = () => setView('processing')
 
+  // 统一收件目录扫描：目录与批次概览（由 emailSettings.inbox_dir 驱动，设定目录后自动刷新）
+  const inboxScan = useQuery({
+    queryKey: ['inboxScan', emailSettings?.inbox_dir],
+    queryFn: api.scanInbox,
+    enabled: Boolean(emailSettings?.inbox_dir?.trim()),
+  })
+  const startInboxJob = useMutation({
+    mutationFn: async () => {
+      const scan = await api.scanInbox()
+      // trigger=inbox：收件箱处理完成后按收件语义归档到「已处理」
+      return api.startJob(scan.inbox_dir, 'inbox')
+    },
+    onSuccess: async (job) => {
+      setJob(job)
+      setView('processing')
+    },
+    onError: (error) => setMessage((error as Error).message),
+    onSettled: () => inboxScan.refetch(),
+  })
+
   return (
     <div className="editor-view feature-view">
       <div className="view-scroll feature-scroll">
@@ -127,6 +147,44 @@ export function InboxView({ emailSettings }: InboxViewProps) {
               <span className="switch-track" aria-hidden="true"><span /></span>
             </label>
           </div>
+        </section>
+        <section className="feature-section inbox-scan">
+          <div className="inbox-scan-header">
+            <div className="inbox-processing-copy">
+              <span className="field-label">待处理概览</span>
+              <strong>
+                {inboxScan.isLoading
+                  ? '正在扫描收件目录…'
+                  : inboxScan.error
+                    ? '收件目录扫描失败'
+                    : inboxScan.data
+                      ? `${inboxScan.data.pending_count} 份待处理，${inboxScan.data.batches.length} 个拉取批次`
+                      : '尚未指定收件目录'}
+              </strong>
+              <span className="inbox-control-hint">收件根目录散放文件与各拉取批次目录均可作为处理范围，处理完成后文件归档到各自目录的「已处理」子目录</span>
+            </div>
+            <button
+              className="primary-button"
+              onClick={() => startInboxJob.mutate()}
+              disabled={startInboxJob.isPending || !inboxScan.data || inboxScan.data.pending_count === 0}
+            >
+              {startInboxJob.isPending ? <LoaderCircle size={15} className="spin" /> : <PlayCircle size={15} />} {startInboxJob.isPending ? '正在启动' : '处理收件箱'}
+            </button>
+          </div>
+          {inboxScan.data && inboxScan.data.batches.length > 0 && (
+            <ul className="inbox-batch-list">
+              {inboxScan.data.batches.map((batch) => (
+                <li key={batch.path} className="inbox-batch-item">
+                  <strong title={batch.path}>{batch.name}</strong>
+                  <span>{batch.pdf_count} 份 PDF</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {inboxScan.data && inboxScan.data.pending_count === 0 && inboxScan.data.batches.length === 0 && (
+            <div className="feature-message">收件目录暂无待处理 PDF，可从邮箱拉取或手动放入文件</div>
+          )}
+          {inboxScan.error && <div className="feedback error">{(inboxScan.error as Error).message}</div>}
         </section>
         <section className="feature-section inbox-result">
           <div className="feature-stat"><strong>{result?.downloaded ?? 0}</strong><span>新附件</span></div>

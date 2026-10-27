@@ -9,6 +9,7 @@ import threading
 from collections.abc import Callable
 from concurrent.futures import CancelledError, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from typing import Any
 
 from devbase.application.event_bus import EventBus
 
@@ -28,6 +29,52 @@ from .invoice_file_service import FileProcessResult, InvoiceFileService
 from .job_history import JobHistoryStore
 
 logger = logging.getLogger(__name__)
+
+
+def is_timestamp_output_dir(name: str) -> bool:
+    """识别历史输出目录（YYYYMMDD_HHMMSS_%f，处理器输出目录命名）。"""
+    if len(name) < 16:
+        return False
+    head = name[:16]
+    return (
+        head[:8].isdigit()
+        and head[8] == '_'
+        and head[9:15].isdigit()
+        and head[15] == '_'
+        and name[16:].isdigit()
+    )
+
+
+def is_inbox_root(normalized: str) -> bool:
+    """判断目录是否为配置的收件根目录（realpath 归一后比较）。"""
+    inbox_dir = os.path.realpath(
+        os.path.abspath(os.path.expanduser(get_inbox_dir()))
+    )
+    return os.path.realpath(normalized) == inbox_dir
+
+
+def list_inbox_tree(inbox_dir: str) -> list[str]:
+    """收件根目录全部待处理 PDF，以 source_dir 相对路径表示。
+
+    根目录散放文件直接用文件名，批次子目录文件带一层目录前缀；
+    「已处理」与历史输出目录（时间戳目录）不参与收集。
+    """
+    collected = list(JobService._list_pdf_files(inbox_dir))
+    try:
+        entries = sorted(os.listdir(inbox_dir))
+    except OSError:
+        entries = []
+    for entry in entries:
+        batch_dir = os.path.join(inbox_dir, entry)
+        if not os.path.isdir(batch_dir):
+            continue
+        if entry == '已处理' or is_timestamp_output_dir(entry):
+            continue
+        collected.extend(
+            os.path.join(entry, filename)
+            for filename in JobService._list_pdf_files(batch_dir)
+        )
+    return collected
 
 
 @dataclass
@@ -111,6 +158,47 @@ class JobService:
             'pdf_count': len(self._list_pdf_files(normalized)),
         }
 
+    def scan_inbox(self) -> dict[str, Any]:
+        """扫描统一收件目录：待处理清单（根+批次）+ 各批次子目录概览。
+
+        收件目录不存在时不报错（视为空收件箱），由前端引导先设定目录；
+        批次子目录统计与根目录共用同一收集语义，计数跨根与批次求和。
+        """
+        inbox_raw = get_inbox_dir()
+        inbox = os.path.realpath(os.path.abspath(os.path.expanduser(inbox_raw)))
+        if not os.path.isdir(inbox) or not os.access(inbox, os.R_OK):
+            return {
+                'inbox_dir': inbox,
+                'pending_count': 0,
+                'pending_files': [],
+                'batches': [],
+            }
+        pending_files = list_inbox_tree(inbox)
+        batches: list[dict[str, Any]] = []
+        try:
+            entries = sorted(os.listdir(inbox))
+        except OSError:
+            entries = []
+        for entry in entries:
+            batch_dir = os.path.join(inbox, entry)
+            if not os.path.isdir(batch_dir):
+                continue
+            if entry == '已处理' or is_timestamp_output_dir(entry):
+                continue
+            batches.append(
+                {
+                    'name': entry,
+                    'path': batch_dir,
+                    'pdf_count': len(self._list_pdf_files(batch_dir)),
+                }
+            )
+        return {
+            'inbox_dir': inbox,
+            'pending_count': len(pending_files),
+            'pending_files': pending_files,
+            'batches': batches,
+        }
+
     def _prepare_job(
         self,
         source_dir: str,
@@ -121,7 +209,7 @@ class JobService:
     ) -> tuple[Job, tuple[str, ...], dict]:
         scanned = self.scan_directory(source_dir)
         normalized = scanned['source_dir']
-        pdf_files = self._list_pdf_files(normalized)
+        pdf_files = self._collect_job_entries(trigger, normalized)
         if not pdf_files:
             raise NoPdfFiles(normalized)
 
@@ -149,7 +237,23 @@ class JobService:
             self._handles[job.id] = handle
             self._current_job_id = job.id
             snapshot = job.to_dict()
-        return job, tuple(pdf_files), snapshot
+        return job, pdf_files, snapshot
+
+    def _collect_job_entries(
+        self, trigger: JobTrigger | str, normalized: str
+    ) -> tuple[str, ...]:
+        """确定任务处理清单：根目录整体收件语义 or 单目录。
+
+        - trigger=inbox 且源目录就是收件根目录 → 收集全部（根+批次子目录）
+        - 其余（手动/批次单目录启动）→ 只取该目录一层的 PDF
+        返回值以 source_dir 相对路径表示：根目录文件直接用文件名，
+        批次文件带一层子目录前缀（处理/归档按 join 还原完整路径）。
+        """
+        if JobTrigger(trigger) is JobTrigger.INBOX and is_inbox_root(
+            normalized
+        ):
+            return tuple(list_inbox_tree(normalized))
+        return tuple(self._list_pdf_files(normalized))
 
     def cancel_job(self, job_id: str) -> dict:
         with self._lock:
@@ -327,7 +431,7 @@ class JobService:
                 if cancel_event.is_set() or self._is_cancel_requested(job):
                     self._finish_cancelled(job)
                     return
-                archived = self._archive_files(job.source_dir, pdf_files)
+                archived = self._archive_files(job, pdf_files)
                 result['archived'] = archived
                 if archived:
                     self._log(job, f'已归档 {archived} 个已处理发票', 'info')
@@ -442,23 +546,38 @@ class JobService:
             executor.shutdown(wait=True, cancel_futures=cancel_event.is_set())
         return success_count, failure_count
 
-    def _archive_files(self, source_dir: str, filenames: tuple[str, ...]) -> int:
-        archived_dir = os.path.join(source_dir, '已处理')
-        os.makedirs(archived_dir, exist_ok=True)
-        moved = 0
-        for filename in filenames:
-            source = os.path.join(source_dir, filename)
-            if not os.path.isfile(source):
-                continue
-            target = os.path.join(archived_dir, filename)
-            counter = 1
-            while os.path.exists(target):
-                name, ext = os.path.splitext(filename)
-                target = os.path.join(archived_dir, f'{name}_{counter}{ext}')
-                counter += 1
-            shutil.move(source, target)
-            moved += 1
-        return moved
+    def _archive_files(self, job: Job, filenames: tuple[str, ...]) -> int:
+        """归档已处理文件到各自所在目录的「已处理」子目录。
+
+        收件根目录整体任务（trigger=inbox）时批次文件按各自批次目录归档；
+        其余任务（单目录）保持原有行为：文件全部位于 source_dir 一层。
+        filenames 为 source_dir 相对路径（可含一层子目录前缀）。
+        """
+        source_dir = job.source_dir
+        archived = 0
+        # 按目录分组，同一目录只建一次「已处理」
+        by_dir: dict[str, list[str]] = {}
+        for rel_path in filenames:
+            directory, filename = os.path.split(rel_path)
+            container = os.path.join(source_dir, directory) if directory \
+                else source_dir
+            by_dir.setdefault(container, []).append(filename)
+        for container, names in by_dir.items():
+            archived_dir = os.path.join(container, '已处理')
+            os.makedirs(archived_dir, exist_ok=True)
+            for filename in names:
+                source = os.path.join(container, filename)
+                if not os.path.isfile(source):
+                    continue
+                target = os.path.join(archived_dir, filename)
+                counter = 1
+                while os.path.exists(target):
+                    name, ext = os.path.splitext(filename)
+                    target = os.path.join(archived_dir, f'{name}_{counter}{ext}')
+                    counter += 1
+                shutil.move(source, target)
+                archived += 1
+        return archived
 
     def _get_job_object(self, job_id: str) -> Job:
         with self._lock:

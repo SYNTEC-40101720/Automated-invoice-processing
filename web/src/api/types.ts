@@ -162,6 +162,19 @@ export interface RuntimeJobResponse {
   updated_at: string
 }
 
+export interface InboxBatchSummary {
+  name: string
+  path: string
+  pdf_count: number
+}
+
+export interface InboxScanResponse {
+  inbox_dir: string
+  pending_count: number
+  pending_files: string[]
+  batches: InboxBatchSummary[]
+}
+
 export interface JobHistoryEntry {
   job_id: string
   source_dir: string

@@ -1594,3 +1594,71 @@ body {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+/* 统一收件目录待处理概览（InboxView 扫描区） */
+.inbox-scan {
+  padding: 0;
+  overflow: hidden;
+}
+
+.inbox-scan-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.inbox-scan-header .primary-button {
+  flex: none;
+  min-height: 38px;
+}
+
+.inbox-batch-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inbox-batch-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.inbox-batch-item:last-child {
+  border-bottom: 0;
+}
+
+.inbox-batch-item strong {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--ink);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inbox-batch-item span {
+  flex: none;
+  color: var(--text-subtle);
+  font: 11px "Cascadia Code", monospace;
+}
+
+@media (max-width: 760px) {
+  .inbox-scan-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .inbox-scan-header .primary-button {
+    width: 100%;
+  }
+}

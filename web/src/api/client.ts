@@ -4,8 +4,10 @@ import type {
   EmailPullResponse,
   EmailSettings,
   HealthResponse,
+  InboxScanResponse,
   Job,
   JobHistoryResponse,
+  JobTrigger,
   LogEntry,
   SettingsResponse,
   UpdateResponse,
@@ -49,19 +51,19 @@ export const api = {
   openDirectory: (path: string) => request<{ opened: boolean }>('/system/open-directory', {
     method: 'POST', body: JSON.stringify({ path }),
   }),
-  startJob: async (sourceDir: string) => {
+  startJob: async (sourceDir: string, trigger: JobTrigger = 'manual') => {
     const runtimeJob = await request<RuntimeJobResponse>('/jobs/start', {
       method: 'POST',
       body: JSON.stringify({
         kind: 'invoice_processing',
-        input: { source_dir: sourceDir, trigger: 'manual' },
+        input: { source_dir: sourceDir, trigger },
       }),
     })
     return {
       id: runtimeJob.id,
       source_dir: sourceDir,
       output_dir: null,
-      trigger: 'manual' as const,
+      trigger,
       status: runtimeJob.status,
       phase: 'scan' as const,
       progress: runtimeJob.progress,
@@ -105,6 +107,7 @@ export const api = {
     method: 'POST', body: JSON.stringify(body),
   }),
   pullEmail: () => request<EmailPullResponse>('/email/pull', { method: 'POST' }),
+  scanInbox: () => request<InboxScanResponse>('/email/inbox/scan'),
 }
 
 export function connectEvents(

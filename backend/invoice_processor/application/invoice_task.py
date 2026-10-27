@@ -15,7 +15,7 @@ from ..domain.errors import (
     NoPdfFiles,
 )
 from ..domain.job import JobTrigger
-from .job_service import JobService
+from .job_service import JobService, is_inbox_root, list_inbox_tree
 
 INVOICE_TOOL_KIND = "invoice_processing"
 
@@ -47,19 +47,23 @@ def validate_start_input(input: dict[str, Any]) -> None:
     source_dir = input.get("source_dir")
     if not isinstance(source_dir, str) or not source_dir.strip():
         raise InvalidSourceDirectory(str(source_dir))
+    trigger = resolve_trigger(str(input.get("trigger", JobTrigger.MANUAL.value)))
     normalized = os.path.abspath(os.path.expanduser(source_dir))
     if not os.path.isdir(normalized) or not os.access(normalized, os.R_OK):
         raise InvalidSourceDirectory(normalized)
-    pdf_files = [
-        filename
-        for filename in os.listdir(normalized)
-        if filename.lower().endswith(".pdf")
-        and not is_excluded_filename(filename)
-        and os.path.isfile(os.path.join(normalized, filename))
-    ]
-    if not pdf_files:
+    # 与 JobService 处理清单同语义：trigger=inbox 且源目录为收件根时，
+    # 批次子目录里的 PDF 也计入预检；其余只看目录一层。
+    if trigger is JobTrigger.INBOX and is_inbox_root(normalized):
+        has_pdf = bool(list_inbox_tree(normalized))
+    else:
+        has_pdf = any(
+            filename.lower().endswith(".pdf")
+            and not is_excluded_filename(filename)
+            and os.path.isfile(os.path.join(normalized, filename))
+            for filename in os.listdir(normalized)
+        )
+    if not has_pdf:
         raise NoPdfFiles(normalized)
-    resolve_trigger(str(input.get("trigger", JobTrigger.MANUAL.value)))
 
 
 def run_invoice_pipeline(

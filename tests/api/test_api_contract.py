@@ -679,6 +679,126 @@ def test_email_patch_persists_auto_process(monkeypatch, tmp_path):
     assert response.json()['auto_process'] is True
 
 
+def test_inbox_scan_returns_files_and_batches(monkeypatch, tmp_path):
+    """/email/inbox/scan 契约：根目录待处理清单 + 批次子目录概览"""
+    import os
+
+    inbox = tmp_path / '收件箱'
+    inbox.mkdir()
+    (inbox / '散放发票.pdf').write_bytes(b'pdf')
+    batch = inbox / '拉取_20261002_120000'
+    batch.mkdir()
+    (batch / '附件.pdf').write_bytes(b'pdf')
+    monkeypatch.setattr(
+        'invoice_processor.application.job_service.get_inbox_dir',
+        lambda: str(inbox),
+    )
+
+    client = TestClient(make_app(tmp_path))
+    response = client.get(
+        '/api/v1/email/inbox/scan',
+        headers={'X-Local-Token': 'test-token'},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body['inbox_dir'] == os.path.realpath(str(inbox))
+    # 统一投放区：待处理清单覆盖根目录散放 + 批次子目录（带一层前缀）
+    assert body['pending_files'] == [
+        '散放发票.pdf',
+        os.path.join('拉取_20261002_120000', '附件.pdf'),
+    ]
+    assert body['pending_count'] == 2
+    assert body['batches'] == [
+        {
+            'name': '拉取_20261002_120000',
+            'path': str(batch),
+            'pdf_count': 1,
+        }
+    ]
+
+
+def test_inbox_scan_returns_empty_when_inbox_missing(monkeypatch, tmp_path):
+    """收件目录不存在 → 200 空收件箱（由前端引导先设定目录）"""
+    missing = tmp_path / '不存在的收件箱'
+    monkeypatch.setattr(
+        'invoice_processor.application.job_service.get_inbox_dir',
+        lambda: str(missing),
+    )
+
+    client = TestClient(make_app(tmp_path))
+    response = client.get(
+        '/api/v1/email/inbox/scan',
+        headers={'X-Local-Token': 'test-token'},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        'inbox_dir': str(missing),
+        'pending_count': 0,
+        'pending_files': [],
+        'batches': [],
+    }
+
+
+def test_inbox_start_processes_root_files_and_archives(tmp_path, monkeypatch):
+    """收件目录化闭环：/jobs/start trigger=inbox 处理收件根目录（含批次）并归档"""
+
+    inbox = tmp_path / '收件箱'
+    inbox.mkdir()
+    (inbox / '待处理发票.pdf').write_bytes(b'%PDF')
+    batch = inbox / '拉取_20261003_120000'
+    batch.mkdir()
+    (batch / '批次发票.pdf').write_bytes(b'%PDF')
+    monkeypatch.setattr(
+        'invoice_processor.application.job_service.get_inbox_dir',
+        lambda: str(inbox),
+    )
+    client = TestClient(make_app(tmp_path))
+
+    response = client.post(
+        '/api/v1/jobs/start',
+        headers={'X-Local-Token': 'test-token'},
+        json={
+            'kind': 'invoice_processing',
+            'input': {'source_dir': str(inbox), 'trigger': 'inbox'},
+        },
+    )
+
+    assert response.status_code == 201
+    job = response.json()
+    service = client.app.state.job_service
+    deadline = time.monotonic() + 10
+    final = None
+    while time.monotonic() < deadline:
+        try:
+            final = service.get_job(job['id'])
+        except JobNotFound:
+            # runtime.start 返回快照与 worker 线程注册 handle 之间有窗口
+            time.sleep(0.05)
+            continue
+        if final['status'] in (
+            JobStatus.SUCCEEDED.value,
+            JobStatus.FAILED.value,
+            JobStatus.CANCELLED.value,
+        ):
+            break
+        time.sleep(0.05)
+    # 占位 PDF 解析不出文本 → completed_with_warnings 也是正常终态；
+    # 关键契约是 trigger=inbox 且源 PDF 归档进各自目录的 已处理/
+    assert final is not None and final['status'] in (
+        JobStatus.SUCCEEDED.value,
+        JobStatus.COMPLETED_WITH_WARNINGS.value,
+    )
+    assert final['trigger'] == 'inbox'
+    assert final['stats']['total'] == 2
+    assert (inbox / '已处理' / '待处理发票.pdf').is_file()
+    assert (batch / '已处理' / '批次发票.pdf').is_file()
+    assert not (batch / '批次发票.pdf').exists()
+    # 输出目录建在批次目录下（与各自目录归档语义一致）
+    assert (batch / '已处理').is_dir()
+
+
 def test_static_frontend_is_served_after_api_routes(tmp_path):
     static_dir = tmp_path / 'dist'
     static_dir.mkdir()

@@ -77,7 +77,7 @@
 **规则**：文件名命中排除关键词（`结账单`，华住等酒店结账单非报销票据）的 PDF 不进入任何处理环节。统一口径在 [`core/exclusions.py`](backend/invoice_processor/core/exclusions.py)，三处消费：
 - 邮箱拉取：直接附件与 ZIP 成员命中即跳过（见 §10）
 - 启动预检 `validate_start_input`：只有结账单的目录按 `NO_PDF_FILES` 拒绝启动
-- 处理清单 `_list_pdf_files`：扫描计数、处理、inbox/email 归档均不含结账单（源文件保留原位）
+- 处理清单 `_list_pdf_files`：扫描计数、处理、inbox/email 归档均不含结账单（源文件保留原位）；`trigger=inbox` 且源目录为收件根时处理清单扩展为「根目录散放 + 一层批次子目录」统一集合（`application/job_service.py:list_inbox_tree`，批次文件带 `批次目录/文件名` 相对前缀）
 
 ### 3.6 发票类型路由
 
@@ -225,7 +225,7 @@ python scripts/smoke_launch.py --target exe
 - 过滤：发件方白名单（12306/滴滴/网约车/华住/通行费）或主题含「发票/行程单/报销」
 - 附件：下载 PDF/ZIP，ZIP 自动解压只留 PDF（成员名清洗 Windows 非法字符；加密/损坏成员跳过并在结果 errors 上报，邮件不写入去重记录、下次拉取重试）；附件名命中排除关键词（`结账单` 等，见 §3.5）的直接跳过，直接附件与 ZIP 成员统一口径；按 `message_id` 去重（`processed_messages.json` 在收件根目录，跨批次生效）
 - Web 工作台：收件箱页面可独立指定并显示收件目录，提供手动拉取邮箱附件；不启动后台自动轮询。收件页有「拉取后自动处理」开关（默认关闭，持久化到 config.ini `auto_process`）：开启后拉取到新附件自动以 `trigger=email` 启动任务处理**本次批次目录**，完成后归档至批次内 `已处理/`；启动失败（如已有任务运行）不失败拉取响应，经 `pull.job_error` 反馈原因，附件保留在批次目录可稍后手动处理
-- 通过 `inbox`/`email` trigger 启动的处理任务完成后归档源 PDF
+- 通过 `inbox`/`email` trigger 启动的处理任务完成后归档源 PDF；`trigger=inbox` 以收件根目录为源时，根目录散放文件与各拉取批次子目录的 PDF 一并处理，完成后各归档到**各自目录**的 `已处理/`（批次文件归回批次目录，散放文件归回收件根），重名加 `_N` 序号。收件页「处理收件箱」按钮即按此语义整体启动（预检同样按统一集合判定 `NO_PDF_FILES`）
 
 ### 配置（config.ini `[email]` 段）
 邮箱连接参数可在 Web 工作台「设置」视图填写，含「测试连接」按钮；收件目录在「收件箱」视图设置并显示。邮箱附件仅在用户手动拉取时下载；处理工作区的源文件目录仍由处理页单独选择，不会被收件箱目录替换。

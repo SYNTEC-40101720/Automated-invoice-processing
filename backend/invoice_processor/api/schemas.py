@@ -221,3 +221,24 @@ class AiTestResponse(BaseModel):
 class EmailPullResponse(BaseModel):
     pull: dict[str, Any]
     job: dict[str, Any] | None = None
+
+
+class InboxBatchSummary(BaseModel):
+    """收件目录内一个可独立处理的子目录（拉取批次/手动整理）。"""
+
+    model_config = ConfigDict(extra='forbid')
+
+    name: str
+    path: str
+    pdf_count: int
+
+
+class InboxScanResponse(BaseModel):
+    """收件目录扫描结果：根目录待处理文件 + 各批次分组概览。"""
+
+    model_config = ConfigDict(extra='forbid')
+
+    inbox_dir: str
+    pending_count: int
+    pending_files: list[str] = Field(default_factory=list)
+    batches: list[InboxBatchSummary] = Field(default_factory=list)

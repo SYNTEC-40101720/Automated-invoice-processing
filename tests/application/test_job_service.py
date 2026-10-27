@@ -124,6 +124,117 @@ def test_known_directory_includes_inbox_pull_batches(tmp_path, monkeypatch):
     assert service.is_known_directory(str(nested)) is False
 
 
+def test_scan_inbox_lists_root_files_and_batch_overview(tmp_path, monkeypatch):
+    """收件扫描：待处理清单覆盖根目录散放+批次子目录，批次另给概览"""
+    inbox = tmp_path / 'inbox'
+    inbox.mkdir()
+    (inbox / '散放发票.pdf').write_bytes(b'pdf')
+    (inbox / '结账单.pdf').write_bytes(b'pdf')
+    batch = inbox / '拉取_20261002_120000'
+    batch.mkdir()
+    (batch / '附件1.pdf').write_bytes(b'pdf')
+    (batch / '附件2.pdf').write_bytes(b'pdf')
+    (batch / '说明.txt').write_text('not a pdf')
+    archived = inbox / '已处理'
+    archived.mkdir()
+    (archived / 'old.pdf').write_bytes(b'pdf')
+    monkeypatch.setattr(
+        'invoice_processor.application.job_service.get_inbox_dir',
+        lambda: str(inbox),
+    )
+    service, _ = make_service(tmp_path)
+
+    result = service.scan_inbox()
+
+    assert result['inbox_dir'] == os.path.realpath(str(inbox))
+    # 结账单命中排除关键词，不进入待处理清单；批次文件带一层目录前缀
+    assert result['pending_files'] == [
+        '散放发票.pdf',
+        os.path.join('拉取_20261002_120000', '附件1.pdf'),
+        os.path.join('拉取_20261002_120000', '附件2.pdf'),
+    ]
+    assert result['pending_count'] == 3
+    # 已处理 目录不作为批次；批次只统计 PDF 数，不递归展开清单
+    assert [(entry['name'], entry['pdf_count']) for entry in result['batches']] == [
+        ('拉取_20261002_120000', 2)
+    ]
+    assert result['batches'][0]['path'] == os.path.join(
+        result['inbox_dir'], '拉取_20261002_120000'
+    )
+
+
+def test_scan_inbox_ignores_timestamp_output_directories(tmp_path, monkeypatch):
+    """收件根目录下的历史输出目录（时间戳命名）不算待处理也不算批次"""
+    inbox = tmp_path / 'inbox'
+    inbox.mkdir()
+    (inbox / '待处理.pdf').write_bytes(b'pdf')
+    output = inbox / '20261026_180553_123456'
+    output.mkdir()
+    (output / '历史输出.pdf').write_bytes(b'pdf')
+    monkeypatch.setattr(
+        'invoice_processor.application.job_service.get_inbox_dir',
+        lambda: str(inbox),
+    )
+    service, _ = make_service(tmp_path)
+
+    result = service.scan_inbox()
+
+    assert result['pending_files'] == ['待处理.pdf']
+    assert result['pending_count'] == 1
+    assert result['batches'] == []
+
+
+def test_inbox_root_job_processes_batch_files_and_archives_per_directory(
+    tmp_path, monkeypatch
+):
+    """收件根目录整体任务：批次子目录文件一并处理，归档回各自目录"""
+    inbox = tmp_path / 'inbox'
+    inbox.mkdir()
+    (inbox / '散放发票.pdf').write_bytes(b'pdf')
+    batch = inbox / '拉取_20261002_120000'
+    batch.mkdir()
+    (batch / '附件1.pdf').write_bytes(b'pdf')
+    (batch / '附件2.pdf').write_bytes(b'pdf')
+    monkeypatch.setattr(
+        'invoice_processor.application.job_service.get_inbox_dir',
+        lambda: str(inbox),
+    )
+    service, processor = make_service(tmp_path)
+
+    final = service.run_job_sync(str(inbox), JobTrigger.INBOX)
+
+    assert final['status'] == JobStatus.SUCCEEDED.value
+    assert final['stats']['total'] == 3
+    # 批次文件以相对路径进入处理清单（真实文件服务按 source_dir 拼接定位）
+    assert sorted(processor.files) == [
+        os.path.join('拉取_20261002_120000', '附件1.pdf'),
+        os.path.join('拉取_20261002_120000', '附件2.pdf'),
+        '散放发票.pdf',
+    ]
+    assert final['result']['archived'] == 3
+    # 根文件归档到根目录「已处理」，批次文件归档到各自批次目录
+    assert (inbox / '已处理' / '散放发票.pdf').is_file()
+    assert (batch / '已处理' / '附件1.pdf').is_file()
+    assert (batch / '已处理' / '附件2.pdf').is_file()
+    assert not (inbox / '散放发票.pdf').exists()
+    assert not (batch / '附件1.pdf').exists()
+
+
+def test_scan_inbox_tolerates_missing_inbox_directory(tmp_path, monkeypatch):
+    """收件目录不存在（未配置/已删除）返回空收件箱而不是报错"""
+    monkeypatch.setattr(
+        'invoice_processor.application.job_service.get_inbox_dir',
+        lambda: str(tmp_path / '不存在的收件箱'),
+    )
+    service, _ = make_service(tmp_path)
+
+    result = service.scan_inbox()
+
+    assert result['pending_count'] == 0
+    assert result['pending_files'] == []
+    assert result['batches'] == []
+
+
 def test_job_service_runs_pipeline_and_publishes_terminal_snapshot(tmp_path):
     event_bus = EventBus()
     service, processor = make_service(tmp_path, event_bus)
