@@ -312,6 +312,26 @@ SHA-256：
 
 ## 11. 发布记录
 
+### v7.4.0（2026-10-27 发布）
+
+```text
+应用：SYNTEC-电子票据处理系统
+仓库：SYNTEC-40101720/Automated-invoice-processing
+当前版本：7.3.7
+目标版本：7.4.0（minor：识别增强四件套新功能）
+Release URL：https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.4.0
+资产名：SYNTEC-Invoice-Processor-v7.4.0.zip
+资产大小：133.07 MB（139,537,870 字节；OCR 模型+onnxruntime 入包致体积显著增大）
+SHA-256：fadc3461394021599b918d2837dc8eb13db2eb0938204650647d613e97a98d03（GitHub digest 一致）
+主程序版本资源：CompanyName=SYNTEC，FileVersion/ProductVersion=[IP_ADDRESS]，域控合规检查全部通过
+质量基线：279 条 Python 测试（基线 228→236→279）、Ruff、TypeScript、Vitest 22 条（基线 17）、Vite 构建通过；PyInstaller 域控合规通过
+密钥扫描：2 命中均为变量名误中（api_key 赋值语句），0 真实凭据；.gitignore 排除 config.ini/logs
+启动冒烟：health=7.4.0，日志无 CRITICAL，窗口关闭流程正常收敛且端口释放
+已知限制：OCR 仅对文本抽不出（如加密扫描件）的 PDF fallback，引擎懒加载失败自动禁用；模板抽取为旁路伴随记录不改变判定输出；真实发票语料回归（含多版式扫描件）不在本版范围；桌面验收 §2+§4+§6 未在本版重跑（链路无变化，沿用 v7.3.7 结论）
+```
+
+内容：识别增强四件套（docs/ADR-2026-10-27-识别增强.md，ADR-009~011 已入 ARCHITECTURE §2）——**D1 OCR 级联**：RapidOCR（onnxruntime 纯离线中文）仅对抽不出文本的 PDF fallback，`ocr_enabled` 开关可回退，引擎懒加载失败自动禁用；**D2 抽取模板化**：YAML 模板（浙江增值税/高铁/滴滴）旁路伴随抽取，硬编码兜底保留，新开票方降为加配置；**D3 审阅队列**：`manual_review_files` 随任务快照下发（需人工处理/ 实际清单+真实原因），处理页内嵌清单+打开文件夹；**D4 内容去重**：sha256 全局索引（logs/duplicate_index.json，损坏重置宁重复不误跳），命中跳过处理不归档，`stats.duplicates` 计数。同版累积交付：收件目录统一入口（trigger=inbox 覆盖根目录散放+拉取批次子目录、各自归档）。打包：invoice_processor.spec 收集 RapidOCR 模型/onnxruntime/cv2；pyproject 增 pypdfium2/pyyaml/rapidocr-onnxruntime。
+
 ### v7.3.7（2026-10-03 发布）
 
 ```text
