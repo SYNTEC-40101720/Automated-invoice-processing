@@ -1664,6 +1664,13 @@ body {
 }
 
 /* ── 私车公用（PrivateCarView）：车辆信息行 + 可编辑台账表 ── */
+/* 台账 11 列天然偏宽：本视图放开 820px 内容上限，用满可用宽度 */
+.pc-wide .view-header,
+.pc-wide .feedback,
+.pc-wide .feature-section {
+  max-width: none;
+}
+
 .pc-meta-grid {
   display: flex;
   align-items: flex-end;

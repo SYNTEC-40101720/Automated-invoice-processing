@@ -130,7 +130,7 @@ export function PrivateCarView() {
   }
 
   return (
-    <div className="editor-view feature-view">
+    <div className="editor-view feature-view pc-wide">
       <div className="view-scroll feature-scroll">
         <header className="view-header feature-header">
           <div>
