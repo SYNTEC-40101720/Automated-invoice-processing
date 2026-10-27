@@ -22,7 +22,7 @@ import sys
 import tempfile
 from copy import copy, deepcopy
 from datetime import datetime
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 from openpyxl import load_workbook

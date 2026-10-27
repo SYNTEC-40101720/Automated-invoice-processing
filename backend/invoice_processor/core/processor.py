@@ -233,7 +233,8 @@ class InvoiceProcessor:
     # ── 后处理：金额映射 / 占位替换 / 税号检查 / 合并 / 汇总 ──
     def post_process(self, output_dir: str,
                      progress_callback: Callable[[float], None] | None = None,
-                     daily_manual_totals: dict[str, tuple[float, float]] | None = None) -> dict:
+                     daily_manual_totals: dict[str, tuple[float, float]] | None = None,
+                     ) -> dict:
         """后处理：金额映射 + 待搜索替换 + 税号检查 + 发票分类 + PDF 合并 + 费用汇总
 
         进度契约（供 UI 进度条使用，post_process 保证满足）：
@@ -272,7 +273,8 @@ class InvoiceProcessor:
         tax_issues += self._phase_scan_manual_dir(output_dir, _report)
         # ⑥ 合并分类后的 PDF（内部进度 0.75~0.98）
         merged = self._phase_merge(output_dir, special_invoices, normal_files, _report)
-        # ⑦ 生成费用汇总 Excel（融合私车公用按日合计，三条联动）；写盘完成后才报告最终进度
+        # ⑦ 生成费用汇总 Excel（融合私车公用按日合计，三条联动）
+        # （写盘完成后才报告最终进度）
         excel = self.generate_expense_summary(
             output_dir, daily_manual_totals=daily_manual_totals,
         )

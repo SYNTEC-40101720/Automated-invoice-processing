@@ -5,7 +5,6 @@ config.ini 通过 PLATFORM_CONFIG_PATH 环境变量隔离到临时目录
 """
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
@@ -92,8 +91,10 @@ class TestDailyTotals:
     def test_aggregates_by_date(self, car_service):
         car_service.replace_rows([
             _valid_row(toll_fee='88'),
-            _valid_row(date='2026-10-24', start_mileage='44165', end_mileage='44265', toll_fee='12.5'),
-            _valid_row(date='2026-10-24', start_mileage='44165', end_mileage='44175', toll_fee='', parking_fee=''),
+            _valid_row(date='2026-10-24', start_mileage='44165',
+                       end_mileage='44265', toll_fee='12.5'),
+            _valid_row(date='2026-10-24', start_mileage='44165',
+                       end_mileage='44175', toll_fee='', parking_fee=''),
         ])
         totals = car_service.collect_daily_totals()
         # 100km×1.5=150 + 10km×1.5=15 = 165；过路费 12.5

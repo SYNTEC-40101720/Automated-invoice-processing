@@ -127,7 +127,8 @@ def _default_printer_name() -> str:
 
     winspool = ctypes.WinDLL('winspool.drv')
     winspool.GetDefaultPrinterW.restype = wintypes.BOOL
-    winspool.GetDefaultPrinterW.argtypes = [wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+    winspool.GetDefaultPrinterW.argtypes = [
+        wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
     size = wintypes.DWORD(0)
     winspool.GetDefaultPrinterW(None, ctypes.byref(size))
     if size.value == 0:

@@ -5,16 +5,14 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from openpyxl import load_workbook
-
 from invoice_processor.core.private_car import (
     SUBSIDY_PER_KM,
     calculate_private_car_cost,
     export_private_car_excel,
-    get_private_car_template,
     normalize_row,
     validate_row,
 )
+from openpyxl import load_workbook
 
 TEMPLATE = Path(__file__).resolve().parents[2] / (
     'backend/invoice_processor/core/templates/private_car_v1.xlsx'
@@ -109,7 +107,8 @@ class TestExportPrivateCarExcel:
             assert sheet['E4'].value == time(9, 0)
             assert sheet['F4'].value == time(17, 40)
             assert sheet['E4'].number_format == 'h:mm'
-            assert [sheet.cell(4, col).value for col in range(7, 11)] == [44118, 44165, 47, 70.5]
+            assert [sheet.cell(4, col).value for col in range(7, 11)] == \
+                [44118, 44165, 47, 70.5]
             assert sheet['K4'].value == '过路（桥）费：88'
             assert sheet['K5'].value == '停车费：10'
             assert 'B4:B5' in {str(value) for value in sheet.merged_cells.ranges}
@@ -123,7 +122,9 @@ class TestExportPrivateCarExcel:
 
     def test_more_than_eight_records_use_additional_sheets(self, tmp_path):
         rows = [normalize_row(_row()) for _ in range(9)]
-        rows[-1] = normalize_row(_row(date='2026-10-24', start_mileage='10', end_mileage='20', toll='1', parking='2'))
+        rows[-1] = normalize_row(_row(
+            date='2026-10-24', start_mileage='10', end_mileage='20',
+            toll='1', parking='2'))
         path = self.export(tmp_path, rows)
         assert '2026-10-23至2026-10-24' in path.name
         workbook = load_workbook(path)

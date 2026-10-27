@@ -19,7 +19,8 @@ class BlockingPostProcessProcessor(FakeProcessor):
         self.started = threading.Event()
         self.release = threading.Event()
 
-    def post_process(self, output_dir, progress_callback=None, daily_manual_totals=None):
+    def post_process(self, output_dir, progress_callback=None,
+                     daily_manual_totals=None):
         self.started.set()
         self.release.wait(timeout=5)
         return super().post_process(output_dir, progress_callback, daily_manual_totals)
