@@ -312,6 +312,27 @@ SHA-256：
 
 ## 11. 发布记录
 
+### v7.6.1（2026-10-27 发布）
+
+```text
+应用：SYNTEC-电子票据处理系统
+仓库：SYNTEC-40101720/Automated-invoice-processing
+当前版本：7.6.0
+目标版本：7.6.1（patch：私车公用界面重构）
+Release URL：https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.6.1
+资产名：SYNTEC-Invoice-Processor-v7.6.1.zip
+资产大小：134.20 MB（140,722,041 字节）
+SHA-256：9c0442bde4df935b7c422b243560f8fc01061890c67b85b7f00c1bfddb51aa05（GitHub digest 一致）
+主程序版本资源：CompanyName=SYNTEC，FileVersion/ProductVersion=7.6.1.x，域控合规检查全部通过
+质量基线：333 条 Python 测试、Ruff 零告警、TypeScript、Vitest 22 条、Vite 构建通过；PyInstaller 域控合规通过
+密钥扫描：regex 0 命中；关键词 2 命中均为变量名误中（settings.py api_key 赋值 / audit_service 构造参数），0 真实凭据
+启动冒烟：health=7.6.1（%TEMP% 副本运行），日志无 CRITICAL，窗口关闭流程正常收敛且端口释放
+已知限制：与 v7.6.0 相同（三条联动仅按日期完全相同融合；清单 PDF 字体仅 STSong-Light；私车模板仅 v1 版式；print_pdf 走默认打印机）；桌面验收 §2+§4+§6 未重跑（仅前端样式与交互重构，后端链路无变化）
+过程异常：bump 提交（5144cae）时 pnpm 副作用再生成 web/pnpm-lock.yaml 与 pnpm-workspace.yaml（坏占位 allowBuilds）被误带入，fba8ff1 移除；发版期间再确认无残留
+```
+
+内容：响应用户「界面设计不行要重构」反馈，重构 `web/src/features/PrivateCarView.tsx`——车辆信息（车牌/使用人）+ 行程明细改为台账表格布局（数字右对齐、行驶里程/补贴为只读计算列、表头与合计行 sticky、行 hover 高亮、合计行显示里程/补贴/过路/停车合计）；导出前自动保存明细；新增 pc-* 样式段（web/src/styles/workbench.css，全部走既有 design token，760px 断点收拢纵向布局）。
+
 ### v7.6.0（2026-10-27 发布）
 
 ```text
