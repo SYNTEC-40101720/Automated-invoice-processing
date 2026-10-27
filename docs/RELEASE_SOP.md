@@ -312,6 +312,27 @@ SHA-256：
 
 ## 11. 发布记录
 
+### v7.6.0（2026-10-27 发布）
+
+```text
+应用：SYNTEC-电子票据处理系统
+仓库：SYNTEC-40101720/Automated-invoice-processing
+当前版本：7.5.0
+目标版本：7.6.0（minor：吸收融合第二批——私车公用/清单打印/汇总列拆）
+Release URL：https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.6.0
+资产名：SYNTEC-Invoice-Processor-v7.6.0.zip
+资产大小：134.20 MB（140,722,934 字节）
+SHA-256：f0046a17260fee32fe25a11c56c8ec61a4d26c9453aa244affbfa0a24ce410ae（GitHub digest 一致）
+主程序版本资源：CompanyName=SYNTEC，FileVersion/ProductVersion=[IP_ADDRESS]，域控合规检查全部通过
+质量基线：333 条 Python 测试（基线 291→333）、Ruff、TypeScript、Vitest 22 条、Vite 构建通过；PyInstaller 域控合规通过
+密钥扫描：diff+新增文件扫描 0 命中
+启动冒烟：health=7.6.0（%TEMP% 副本运行），日志无 CRITICAL，窗口关闭流程正常收敛且端口释放
+已知限制：三条联动仅按日期完全相同融合（跨日行程不并）；清单 PDF 字体仅内置 STSong-Light；私车模板仅支持 SYNTEC 财务 v1 版式；print_pdf 走默认打印机（无打印机选择对话框）；桌面验收 §2+§4+§6 未在本版重跑（链路无变化，沿用 v7.4.0 结论）
+过程异常：首推 481fb09 CI Ruff 门禁挂（18 处 E501/F401，新测试文件行超长为主）→ b350a5c 修复全绿；b350a5c 曾误提交运行时模板副本，1980160 移除并已确认仓库根无残留
+```
+
+内容：吸收同事仓库（SYNTEC-20101749）第二批——**①私车公用登记**：`core/private_car.py`（补贴 1.5 元/km、ROUND_HALF_UP、模板 `core/templates/private_car_v1.xlsx` 首次复制、A5 横向每页 8 条、os.replace 原子写）+ `application/private_car_service.py`（config.ini [private_car] 段持久化）+ API `/private-car/*`；**②出差清单 PDF**：`core/summary_pdf.py`（reportlab，A4 横向）任务完成自动生成 + desktop `native_bridge.print_pdf`（ctypes ShellExecuteW printto，零新依赖）；**③费用汇总列拆**：交通费拆大众运输/出租车/过路费三列（`_determine_transport_kind` 文件名优先+文本关键字，默认 rail），台账交通总览兼容；**④三条联动**：私车日补贴并入同日汇总行、同日过路费以私车表为准、停车费仅进私车表；**⑤前端第 5 视图**：`web/src/features/PrivateCarView.tsx`（11 列表格+合计+导出走 select_directory 桥）。
+
 ### v7.5.0（2026-10-27 发布）
 
 ```text
