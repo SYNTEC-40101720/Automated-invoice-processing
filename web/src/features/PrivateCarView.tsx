@@ -26,23 +26,39 @@ const EMPTY_ROW: PrivateCarRow = {
   parking_fee: '',
 }
 
-const COLUMNS: Array<{ key: keyof PrivateCarRow; label: string; width: number; editable: boolean }> = [
-  { key: 'date', label: '日期', width: 110, editable: true },
-  { key: 'user_name', label: '使用人', width: 90, editable: true },
-  { key: 'destination', label: '出差目的地', width: 150, editable: true },
-  { key: 'start_time', label: '开始时间', width: 90, editable: true },
-  { key: 'end_time', label: '结束时间', width: 90, editable: true },
-  { key: 'start_mileage', label: '出发里程数（A）', width: 120, editable: true },
-  { key: 'end_mileage', label: '结束里程数（B）', width: 120, editable: true },
-  { key: 'distance_text', label: '行驶里程数（B-A）', width: 130, editable: false },
-  { key: 'subsidy_text', label: '补贴金额', width: 100, editable: false },
-  { key: 'toll_fee', label: '过路（桥）费', width: 100, editable: true },
-  { key: 'parking_fee', label: '停车费', width: 90, editable: true },
+interface ColumnSpec {
+  key: keyof PrivateCarRow
+  label: string
+  title?: string
+  width?: number
+  kind: 'date' | 'time' | 'text' | 'number' | 'computed'
+}
+
+const COLUMNS: ColumnSpec[] = [
+  { key: 'date', label: '日期', width: 136, kind: 'date' },
+  { key: 'user_name', label: '使用人', width: 92, kind: 'text' },
+  { key: 'destination', label: '出差目的地', kind: 'text' },
+  { key: 'start_time', label: '开始', title: '开始时间', width: 100, kind: 'time' },
+  { key: 'end_time', label: '结束', title: '结束时间', width: 100, kind: 'time' },
+  { key: 'start_mileage', label: '里程 A', title: '出发里程数（A）', width: 96, kind: 'number' },
+  { key: 'end_mileage', label: '里程 B', title: '结束里程数（B）', width: 96, kind: 'number' },
+  { key: 'distance_text', label: '行驶', title: '行驶里程数（B−A），保存后自动计算', width: 84, kind: 'computed' },
+  { key: 'subsidy_text', label: '补贴', title: '补贴金额，按 1.5 元/公里自动计算', width: 88, kind: 'computed' },
+  { key: 'toll_fee', label: '过路（桥）费', width: 96, kind: 'number' },
+  { key: 'parking_fee', label: '停车费', width: 88, kind: 'number' },
 ]
 
 function parseAmount(value: string): number {
   const parsed = Number.parseFloat(value)
   return Number.isFinite(parsed) ? parsed : 0
+}
+
+function formatAmount(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2)
+}
+
+function feedbackTone(text: string): 'success' | 'error' {
+  return /(失败|错误|无效|不能|无法)/.test(text) ? 'error' : 'success'
 }
 
 export function PrivateCarView() {
@@ -52,7 +68,6 @@ export function PrivateCarView() {
   const [meta, setMeta] = useState({ license_plate: '', user_name: '' })
   const [rows, setRows] = useState<PrivateCarRow[]>([])
   const [message, setMessage] = useState('')
-  const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
     if (metaQuery.data) setMeta({ license_plate: metaQuery.data.license_plate, user_name: metaQuery.data.user_name })
@@ -81,7 +96,7 @@ export function PrivateCarView() {
   const saveRows = useMutation({
     mutationFn: () => api.replacePrivateCarRows(rows),
     onSuccess: async (response) => {
-      setMessage('明细已保存（里程差与补贴已按 1.5 元/公里计算）')
+      setMessage('明细已保存，里程差与补贴已按 1.5 元/公里重新计算')
       setRows(response.rows.map((row) => ({ ...EMPTY_ROW, ...row })))
       await queryClient.invalidateQueries({ queryKey: ['private-car-rows'] })
     },
@@ -92,19 +107,26 @@ export function PrivateCarView() {
     mutationFn: async () => {
       const directory = await pickExportDirectory()
       if (!directory) throw new Error('未选择导出目录')
-      setExporting(true)
-      try {
-        await api.replacePrivateCarRows(rows)
-        return await api.exportPrivateCar({ output_directory: directory })
-      } finally {
-        setExporting(false)
-      }
+      await api.replacePrivateCarRows(rows)
+      return await api.exportPrivateCar({ output_directory: directory })
+    },
+    onSuccess: async (response) => {
+      setMessage(`已导出：${response.path}`)
+      await queryClient.invalidateQueries({ queryKey: ['private-car-rows'] })
     },
     onError: (error) => setMessage((error as Error).message),
   })
 
   const updateRow = (index: number, key: keyof PrivateCarRow, value: string) => {
     setRows((current) => current.map((row, i) => (i === index ? { ...row, [key]: value } : row)))
+  }
+
+  const totalFor = (key: keyof PrivateCarRow): string | null => {
+    if (key === 'distance_text') return `${formatAmount(totals.distance)} km`
+    if (key === 'subsidy_text') return `¥${formatAmount(totals.subsidy)}`
+    if (key === 'toll_fee') return `¥${formatAmount(totals.toll)}`
+    if (key === 'parking_fee') return `¥${formatAmount(totals.parking)}`
+    return null
   }
 
   return (
@@ -122,129 +144,161 @@ export function PrivateCarView() {
           </div>
         </header>
 
-        <section className="feature-section" aria-label="私车信息">
-          <div className="private-car-meta-row">
-            <label className="field-label" htmlFor="private-car-plate">车牌号</label>
-            <input
-              id="private-car-plate"
-              className="text-input"
-              maxLength={20}
-              value={meta.license_plate}
-              onChange={(event) => setMeta((current) => ({ ...current, license_plate: event.target.value }))}
-              placeholder="苏U930FQ"
-            />
-            <label className="field-label" htmlFor="private-car-user">使用人</label>
-            <input
-              id="private-car-user"
-              className="text-input"
-              maxLength={40}
-              value={meta.user_name}
-              onChange={(event) => setMeta((current) => ({ ...current, user_name: event.target.value }))}
-              placeholder="张三"
-            />
-            <button type="button" className="ghost-button" onClick={() => saveMeta.mutate()} disabled={saveMeta.isPending}>
+        {message && <div className={`feedback ${feedbackTone(message)}`} role="status">{message}</div>}
+
+        <section className="feature-section" aria-label="车辆信息">
+          <div className="pc-meta-grid">
+            <label>
+              <span>车牌号</span>
+              <input
+                maxLength={20}
+                value={meta.license_plate}
+                onChange={(event) => setMeta((current) => ({ ...current, license_plate: event.target.value }))}
+                placeholder="苏U930FQ"
+              />
+            </label>
+            <label>
+              <span>使用人</span>
+              <input
+                maxLength={40}
+                value={meta.user_name}
+                onChange={(event) => setMeta((current) => ({ ...current, user_name: event.target.value }))}
+                placeholder="张三"
+              />
+            </label>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => saveMeta.mutate()}
+              disabled={saveMeta.isPending}
+            >
               {saveMeta.isPending ? <LoaderCircle size={14} className="spin" /> : <Save size={14} />}
               <span>保存信息</span>
             </button>
           </div>
         </section>
 
-        <section className="feature-section" aria-label="行程明细">
-          <div className="private-car-table-wrap">
-            <table className="private-car-table">
-              <thead>
-                <tr>
-                  <th className="row-index">#</th>
+        <section className="feature-section pc-ledger" aria-label="行程明细">
+          <div className="pc-card-header">
+            <div className="pc-card-title">
+              <strong>行程明细</strong>
+              <span className="feature-section-meta">{rows.length} 条</span>
+            </div>
+            <div className="pc-summary">
+              <span>里程 <strong>{formatAmount(totals.distance)}</strong> km</span>
+              <span>补贴 <strong>¥{formatAmount(totals.subsidy)}</strong></span>
+              <span>过路 <strong>¥{formatAmount(totals.toll)}</strong></span>
+              <span>停车 <strong>¥{formatAmount(totals.parking)}</strong></span>
+            </div>
+          </div>
+
+          {rows.length === 0 ? (
+            <div className="pc-empty">
+              <Car size={18} />
+              <span>暂无行程，点击下方「添加一行」开始登记</span>
+            </div>
+          ) : (
+            <div className="pc-table-wrap">
+              <table className="pc-table">
+                <colgroup>
+                  <col style={{ width: 40 }} />
                   {COLUMNS.map((column) => (
-                    <th key={column.key} style={{ minWidth: column.width }}>{column.label}</th>
+                    <col key={column.key} style={column.width ? { width: column.width } : undefined} />
                   ))}
-                  <th className="row-actions">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row, index) => (
-                  <tr key={index}>
-                    <td className="row-index">{index + 1}</td>
+                  <col style={{ width: 44 }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th className="pc-index">#</th>
                     {COLUMNS.map((column) => (
-                      <td key={column.key}>
-                        {column.editable ? (
-                          <input
-                            className="cell-input"
-                            value={row[column.key]}
-                            onChange={(event) => updateRow(index, column.key, event.target.value)}
-                          />
-                        ) : (
-                          <span className="cell-static">{row[column.key]}</span>
-                        )}
-                      </td>
+                      <th key={column.key} title={column.title}>{column.label}</th>
                     ))}
-                    <td className="row-actions">
-                      <button
-                        type="button"
-                        className="icon-button"
-                        title="删除该行"
-                        onClick={() => setRows((current) => current.filter((_, i) => i !== index))}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
+                    <th className="pc-index" aria-label="操作" />
                   </tr>
-                ))}
-                {rows.length === 0 && (
-                  <tr><td className="empty-row" colSpan={COLUMNS.length + 2}>暂无行程，点击下方「添加一行」开始登记。</td></tr>
-                )}
-              </tbody>
-              {rows.length > 0 && (
+                </thead>
+                <tbody>
+                  {rows.map((row, index) => (
+                    <tr key={index}>
+                      <td className="pc-index">{index + 1}</td>
+                      {COLUMNS.map((column) => {
+                        const numeric = column.kind === 'number' || column.kind === 'computed'
+                        const className = `${numeric ? 'pc-num' : ''} ${column.kind === 'computed' ? 'pc-computed' : ''}`.trim() || undefined
+                        return (
+                          <td key={column.key} className={className}>
+                            {column.kind === 'computed' ? (
+                              <span className="pc-static">{row[column.key]}</span>
+                            ) : (
+                              <input
+                                className="pc-input"
+                                type={column.kind === 'date' ? 'date' : column.kind === 'time' ? 'time' : 'text'}
+                                inputMode={column.kind === 'number' ? 'decimal' : undefined}
+                                value={row[column.key]}
+                                onChange={(event) => updateRow(index, column.key, event.target.value)}
+                              />
+                            )}
+                          </td>
+                        )
+                      })}
+                      <td className="pc-index">
+                        <button
+                          type="button"
+                          className="icon-button subtle"
+                          title={`删除第 ${index + 1} 行`}
+                          onClick={() => setRows((current) => current.filter((_, i) => i !== index))}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
                 <tfoot>
                   <tr>
-                    <td className="row-index" />
+                    <td className="pc-index" />
                     {COLUMNS.map((column) => {
-                      const total = column.key === 'distance_text'
-                        ? totals.distance.toFixed(2)
-                        : column.key === 'subsidy_text'
-                          ? totals.subsidy.toFixed(2)
-                          : column.key === 'toll_fee'
-                            ? totals.toll.toFixed(2)
-                            : column.key === 'parking_fee'
-                              ? totals.parking.toFixed(2)
-                              : ''
+                      const total = totalFor(column.key)
                       return <td key={column.key}>{total ? <strong>{total}</strong> : null}</td>
                     })}
-                    <td />
+                    <td className="pc-index" />
                   </tr>
                 </tfoot>
-              )}
-            </table>
-          </div>
-          <div className="private-car-actions">
-            <button type="button" className="ghost-button" onClick={() => setRows((current) => [...current, { ...EMPTY_ROW }])}>
-              <Plus size={14} />
-              <span>添加一行</span>
-            </button>
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() => saveRows.mutate()}
-              disabled={saveRows.isPending}
-            >
-              {saveRows.isPending ? <LoaderCircle size={14} className="spin" /> : <Save size={14} />}
-              <span>保存明细</span>
-            </button>
-            <button
-              type="button"
-              className="primary-button"
-              onClick={() => exportSheet.mutate()}
-              disabled={exporting || rows.length === 0}
-            >
-              {exporting ? <LoaderCircle size={14} className="spin" /> : <FolderOpen size={14} />}
-              <span>导出费用统计表</span>
-            </button>
-          </div>
-          {(message || exportSheet.isSuccess) && (
-            <p className="private-car-message" role="status">
-              {exportSheet.isSuccess && exportSheet.data ? `已导出：${exportSheet.data.path}` : message}
-            </p>
+              </table>
+            </div>
           )}
+
+          <div className="pc-card-footer">
+            <div className="pc-footer-left">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setRows((current) => [...current, { ...EMPTY_ROW }])}
+              >
+                <Plus size={14} />
+                <span>添加一行</span>
+              </button>
+              <span className="pc-hint">补贴 = 行驶里程 × 1.5 元/公里，保存后自动计算</span>
+            </div>
+            <div className="pc-footer-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => saveRows.mutate()}
+                disabled={saveRows.isPending || rows.length === 0}
+              >
+                {saveRows.isPending ? <LoaderCircle size={14} className="spin" /> : <Save size={14} />}
+                <span>保存明细</span>
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => exportSheet.mutate()}
+                disabled={exportSheet.isPending || rows.length === 0}
+              >
+                {exportSheet.isPending ? <LoaderCircle size={14} className="spin" /> : <FolderOpen size={14} />}
+                <span>导出费用统计表</span>
+              </button>
+            </div>
+          </div>
         </section>
       </div>
     </div>

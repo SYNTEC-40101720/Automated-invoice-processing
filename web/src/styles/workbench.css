@@ -1662,3 +1662,260 @@ body {
     width: 100%;
   }
 }
+
+/* ── 私车公用（PrivateCarView）：车辆信息行 + 可编辑台账表 ── */
+.pc-meta-grid {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 18px;
+}
+
+.pc-meta-grid label {
+  display: grid;
+  gap: 6px;
+  min-width: 200px;
+  flex: 1 1 220px;
+  color: var(--text-subtle);
+  font-size: 10px;
+}
+
+.pc-meta-grid input {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm, 4px);
+  outline: 0;
+  background: var(--surface-raised);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.pc-meta-grid input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.pc-meta-grid .secondary-button {
+  flex: 0 0 auto;
+  align-self: flex-end;
+}
+
+.pc-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pc-card-title {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+}
+
+.pc-card-title strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pc-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: var(--text-subtle);
+  font-size: 11px;
+}
+
+.pc-summary strong {
+  color: var(--text);
+  font: 600 11px "Cascadia Code", monospace;
+}
+
+.pc-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 116px;
+  color: var(--text-subtle);
+  font-size: 12px;
+}
+
+.pc-table-wrap {
+  max-height: 60vh;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.pc-table {
+  width: 100%;
+  min-width: 920px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.pc-table th,
+.pc-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-panel);
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.pc-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 9px 8px;
+  background: var(--surface-raised);
+  color: var(--text-subtle);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pc-table thead th.pc-index {
+  width: 40px;
+  text-align: center;
+}
+
+.pc-table tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: 9px 8px;
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.pc-table tfoot strong {
+  color: var(--ink);
+  font: 600 11px "Cascadia Code", monospace;
+}
+
+.pc-table .pc-index {
+  color: var(--text-subtle);
+  font: 10px "Cascadia Code", monospace;
+  text-align: center;
+}
+
+.pc-table .pc-num {
+  text-align: right;
+}
+
+.pc-table .pc-num .pc-input {
+  text-align: right;
+}
+
+.pc-table .pc-computed {
+  background: var(--surface-sunken);
+}
+
+.pc-static {
+  color: var(--text-muted);
+  font: 11px "Cascadia Code", monospace;
+}
+
+.pc-input {
+  width: 100%;
+  min-width: 72px;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.pc-input:hover {
+  border-color: var(--line-strong);
+}
+
+.pc-input:focus {
+  border-color: var(--accent);
+  background: var(--surface-raised);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.pc-input::-webkit-calendar-picker-indicator {
+  opacity: .45;
+  cursor: pointer;
+}
+
+.pc-table tbody tr:hover .pc-static {
+  color: var(--text);
+}
+
+.pc-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 13px 16px;
+}
+
+.pc-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.pc-footer-left .secondary-button {
+  flex: none;
+}
+
+.pc-hint {
+  overflow: hidden;
+  color: var(--text-subtle);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-footer-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 9px;
+}
+
+@media (max-width: 760px) {
+  .pc-meta-grid,
+  .pc-card-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pc-meta-grid .secondary-button,
+  .pc-footer-actions {
+    width: 100%;
+  }
+
+  .pc-footer-actions .secondary-button,
+  .pc-footer-actions .primary-button {
+    flex: 1;
+  }
+
+  .pc-hint {
+    white-space: normal;
+  }
+}
