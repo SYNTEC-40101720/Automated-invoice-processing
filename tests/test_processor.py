@@ -356,7 +356,8 @@ def test_read_summary_totals_seven_columns(tmp_path):
     totals = InvoiceProcessor._read_summary_totals(
         _write_summary_workbook(
             tmp_path,
-            ['日期', '大众运输', '出租车', '过路费', '私车补贴', '住宿费', '住宿费税金'],
+            ['日期', '大众运输', '出租车', '过路费',
+             '私车补贴', '住宿费', '住宿费税金'],
             ['合计', 100, 50, 30, 15, 200, 18],
         )
     )
