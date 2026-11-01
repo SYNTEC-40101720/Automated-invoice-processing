@@ -150,3 +150,7 @@ python scripts/smoke_launch.py --target source
 版本源为 `backend/invoice_processor/version.py`，递增命令会同步 `pyproject.toml`、Web 包元数据和 PyInstaller 资源（`python scripts/bump_version.py [patch|minor|major]`）；打包脚本只校验五版本源一致并拒绝已发布版本号，不修改任何版本文件。
 
 完整发布流程、验收清单与历史发布记录见 [docs/RELEASE_SOP.md](docs/RELEASE_SOP.md)（§9 验收留痕、§11 发布记录）与 GitHub Releases 页面。
+
+## 配套技能（invoice-processing）
+
+本系统的 DSH 技能化封装在独立仓库 [`agent-skills`](https://github.com/SYNTEC-40101720/agent-skills) 的 `skills/invoice-processing/`：不开桌面软件、在 DSH 会话里进程内直调引擎，完成发票 PDF 批处理、邮箱自动拉取、私车公用登记与设置读写。技能只提供直调配方，业务口径以本仓库代码为唯一真源；引擎升级涉及 `run_job_sync` 签名、触发枚举等契约变化时，需同步复核技能文档。
