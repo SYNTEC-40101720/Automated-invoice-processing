@@ -312,6 +312,28 @@ SHA-256：
 
 ## 11. 发布记录
 
+### v7.6.3（2026-11-15 发布）
+
+```text
+应用：SYNTEC-电子票据处理系统
+仓库：SYNTEC-40101720/Automated-invoice-processing
+当前版本：7.6.2
+目标版本：7.6.3（patch：费用汇总票种/明细/按天汇总增强）
+Release URL：https://github.com/SYNTEC-40101720/Automated-invoice-processing/releases/tag/v7.6.3
+资产名：SYNTEC-Invoice-Processor-v7.6.3.zip（+ .zip.sha256）
+资产大小：136.60 MB（143,236,047 字节）
+SHA-256：858ad55c07f80dd51988a47f50220b4d9c9e7d03747af7937eac19e305ea3711（GitHub digest 一致）
+主程序版本资源：CompanyName=SYNTEC，FileVersion/ProductVersion=7.6.3.0，build_syntec.py 内置域控合规校验全通过
+质量基线：357 条 Python 测试（新增 18 条：票种判定/票据明细/按天汇总/住宿日期优先级）、Ruff 零告警、TypeScript 0 错、Vitest 22 条、Vite 构建通过
+密钥扫描：git grep 正则扫描 0 命中（7ce1016/9a7fecb/4f8baa4 三次提交前）
+导出产物元数据：费用汇总 xlsx 的 creator/lastModifiedBy 改为 SYNTEC（4f8baa4），实测真实批次文件属性面板已为 SYNTEC
+启动冒烟：health=7.6.3，日志无 CRITICAL，端口释放；当前会话无交互桌面，窗口句柄未创建（既有告警，非本版引入）
+已知限制：与 v7.6.2 相同（三条联动仅按日期完全相同融合；清单 PDF 字体仅 STSong-Light；私车模板仅 v1 版式；print_pdf 走默认打印机）
+过程异常：后台任务方式跑 build_syntec.py 中途被中断（dist 被清理后退出），改前台重跑成功；重跑批次时 8 张票命中去重索引为重复属正常（同一批票二次处理），最新产物目录 20261115_225722_676782 未再重出
+```
+
+内容：费用汇总表按「填单」口径增强——票种判定（只有专票填税金）、新增「票据明细」与「按天汇总」两张 sheet、住宿费与住宿税金分列、数字格式去掉千分位、文档属性统一 SYNTEC。配套技能新增 `prepare_batch.py`（建批次目录+拉邮箱+处理）与 `build_filing_table.py`（按天生成填单用表，含差补九档）。
+
 ### v7.6.2（2026-10-27 发布）
 
 ```text
