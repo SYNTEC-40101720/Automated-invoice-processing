@@ -44,23 +44,24 @@ class TestWorkbookSubsidyColumn:
         },
     ]
 
-    def test_headers_seven_columns_with_subsidy(self):
+    def test_headers_five_columns_transport_merged(self):
         wb = _build_workbook(self._BASE_ROWS)
         ws = wb.active
-        headers = [ws.cell(row=1, column=c).value for c in range(1, 8)]
-        assert headers == [
-            '日期', '大众运输', '出租车', '过路费', '私车补贴',
-            '住宿费', '住宿费税金',
-        ]
+        headers = [ws.cell(row=1, column=c).value for c in range(1, 6)]
+        assert headers == ['日期', '交通费', '私车补贴', '住宿费', '住宿费税金']
 
-    def test_subsidy_written_to_column_e(self):
+    def test_transport_merges_rail_taxi_toll(self):
+        ws = _build_workbook(self._BASE_ROWS).active
+        assert ws.cell(row=2, column=2).value == 120.0  # 100+0+20
+
+    def test_subsidy_written_to_column_c(self):
         rows = [{**self._BASE_ROWS[0], 'subsidy_amount': 70.5}]
         ws = _build_workbook(rows).active
-        assert ws.cell(row=2, column=5).value == 70.5
+        assert ws.cell(row=2, column=3).value == 70.5
 
     def test_zero_subsidy_cell_empty(self):
         ws = _build_workbook(self._BASE_ROWS).active
-        assert ws.cell(row=2, column=5).value is None
+        assert ws.cell(row=2, column=3).value is None
 
     def test_totals_row_includes_subsidy(self):
         rows = [
@@ -77,8 +78,8 @@ class TestWorkbookSubsidyColumn:
             r for r in range(2, ws.max_row + 1)
             if ws.cell(row=r, column=1).value == '合计'
         )
-        assert ws.cell(row=total_row, column=5).value == 30.0
-        assert ws.cell(row=total_row, column=4).value == 20.0
+        assert ws.cell(row=total_row, column=3).value == 30.0
+        assert ws.cell(row=total_row, column=2).value == 120.0
 
 
 class TestDetermineCategory:

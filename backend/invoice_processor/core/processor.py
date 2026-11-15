@@ -314,10 +314,17 @@ class InvoiceProcessor:
                         value = row[idx] if idx is not None and len(row) > idx else 0
                         return float(value or 0)
 
-                    transport = _at('大众运输') + _at('出租车') + _at('过路费')
+                    # v7.6.4 起「交通费」单列（高铁+打车+过路费合一）；
+                    # 旧版三列布局仍兼容（列名缺失时兜 0 再相加）。
+                    split = _at('大众运输') + _at('出租车') + _at('过路费')
+                    transport = (
+                        _at('交通费') if split == 0.0 and '交通费' in header
+                        else split
+                    )
                     return {
                         'transport': round(transport, 2),
-                        'rail': _at('大众运输'),
+                        'rail': _at('大众运输') if '大众运输' in header
+                        else transport,
                         'taxi': _at('出租车'),
                         'toll': _at('过路费'),
                         'subsidy': _at('私车补贴'),

@@ -373,6 +373,23 @@ def test_read_summary_totals_seven_columns(tmp_path):
     }
 
 
+def test_read_summary_totals_single_transport_column(tmp_path):
+    """v7.6.4 单列「交通费」布局：transport=单列值，rail=同值兜底"""
+    totals = InvoiceProcessor._read_summary_totals(
+        _write_summary_workbook(
+            tmp_path,
+            ['日期', '交通费', '私车补贴', '住宿费', '住宿费税金'],
+            ['合计', 180, 15, 200, 18],
+        )
+    )
+
+    assert totals['transport'] == 180.0
+    assert totals['rail'] == 180.0
+    assert totals['subsidy'] == 15.0
+    assert totals['hotel'] == 200.0
+    assert totals['hotel_tax'] == 18.0
+
+
 def test_read_summary_totals_old_six_columns_still_readable(tmp_path):
     """旧 6 列布局（无补贴列）不崩：按缺列兜 0"""
     totals = InvoiceProcessor._read_summary_totals(
