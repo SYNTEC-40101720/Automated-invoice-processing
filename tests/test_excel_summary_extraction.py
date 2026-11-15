@@ -6,10 +6,12 @@
 """
 from invoice_processor.core.excel_summary import (
     _build_workbook,
+    _detect_invoice_type,
     _determine_category,
     _extract_date,
     _parse_didi_trip_details,
     _parse_invoice,
+    _summarize_invoice_item,
 )
 
 
@@ -205,3 +207,163 @@ class TestSeatClassExtraction:
     def test_business_class_extracted(self, tmp_path):
         rows = self._rail_invoice(tmp_path, '商务座')
         assert rows and rows[0].get('seat_class') == '商务座'
+
+
+class TestHotelDatePreference:
+    """住宿归集日：报销填最后一天，故开票日期优先于入住日期"""
+
+    def test_invoice_date_wins_over_checkin(self):
+        text = (
+            '开票日期: 2026年11月14日 '
+            '入住日期: 2026年11月10日 离店日期: 2026年11月14日'
+        )
+        assert _extract_date(text, 'hotel') == '2026-11-14'
+
+    def test_checkin_used_when_no_invoice_date(self):
+        text = '入住日期: 2026年11月10日 离店日期: 2026年11月14日'
+        assert _extract_date(text, 'hotel') == '2026-11-10'
+
+
+class TestDailySummarySheet:
+    """「按天汇总」sheet：大众运输合并高铁+打车，住宿费与税金分列"""
+
+    _ROWS = [
+        {
+            'date': '2026-11-10', 'rail_amount': 280.0, 'taxi_amount': 55.7,
+            'toll_amount': 0.0, 'subsidy_amount': 0.0, 'hotel_amount': 0.0,
+            'hotel_tax': 0.0,
+        },
+        {
+            'date': '2026-11-14', 'rail_amount': 269.0, 'taxi_amount': 33.2,
+            'toll_amount': 0.0, 'subsidy_amount': 0.0, 'hotel_amount': 1203.77,
+            'hotel_tax': 72.23,
+        },
+    ]
+
+    def test_sheet_and_headers(self):
+        wb = _build_workbook(self._ROWS)
+        assert '按天汇总' in wb.sheetnames
+        ws = wb['按天汇总']
+        headers = [ws.cell(row=1, column=c).value for c in range(1, 7)]
+        assert headers == [
+            '日期', '大众运输', '住宿费', '住宿税金', '私车补贴', '过路费',
+        ]
+
+    def test_date_and_weekday_merged(self):
+        ws = _build_workbook(self._ROWS)['按天汇总']
+        assert ws.cell(row=2, column=1).value == '2026-11-10 周二'
+        assert ws.cell(row=3, column=1).value == '2026-11-14 周六'
+
+    def test_transport_merges_rail_and_taxi(self):
+        ws = _build_workbook(self._ROWS)['按天汇总']
+        assert round(ws.cell(row=2, column=2).value, 2) == 335.70
+
+    def test_hotel_and_tax_in_separate_columns(self):
+        ws = _build_workbook(self._ROWS)['按天汇总']
+        assert round(ws.cell(row=3, column=3).value, 2) == 1203.77
+        assert round(ws.cell(row=3, column=4).value, 2) == 72.23
+        assert ws.cell(row=2, column=3).value is None
+        assert ws.cell(row=2, column=4).value is None
+
+    def test_total_row(self):
+        ws = _build_workbook(self._ROWS)['按天汇总']
+        total_row = len(self._ROWS) + 2
+        assert ws.cell(row=total_row, column=1).value == '合计'
+        assert round(ws.cell(row=total_row, column=2).value, 2) == 637.90
+        assert round(ws.cell(row=total_row, column=3).value, 2) == 1203.77
+        assert round(ws.cell(row=total_row, column=4).value, 2) == 72.23
+
+class TestInvoiceType:
+    """票种判定：只有增值税专用发票的税额进填单的「增值税专用发票税金」"""
+
+    def test_special_invoice(self):
+        assert _detect_invoice_type(
+            '电子发票（增值税专用发票）住宿服务') == '增值税专用发票'
+
+    def test_normal_invoice(self):
+        assert _detect_invoice_type('电子发票（普通发票）旅客运输服务') == '普通发票'
+
+    def test_rail_e_ticket(self):
+        assert _detect_invoice_type('电子客票 票价: 280.00') == '铁路电子客票'
+
+    def test_trip_sheet_by_filename(self):
+        text = '没有票种字样的文本'
+        assert _detect_invoice_type(
+            text, '26117000001815343296-118.90行程单.pdf') == '行程单'
+
+    def test_unknown_type(self):
+        assert _detect_invoice_type('随便一段文本') == ''
+
+
+class TestSummarizeInvoiceItem:
+    """行程单整张压成一行：金额合计、日期区间标注笔数"""
+
+    def test_trip_sheet_aggregates_trips(self):
+        results = [
+            {'date': '2026-11-10', 'transport_amount': 8.8, 'hotel_amount': None,
+             'hotel_tax': None, 'category': 'transport', 'invoice_type': '行程单'},
+            {'date': '2026-11-14', 'transport_amount': 11.2, 'hotel_amount': None,
+             'hotel_tax': None, 'category': 'transport', 'invoice_type': '行程单'},
+        ]
+        item = _summarize_invoice_item('x行程单.pdf', results)
+        assert item['amount'] == 20.0
+        assert item['tax'] == 0.0
+        assert item['date'] == '2026-11-10 ~ 2026-11-14（2 笔）'
+
+    def test_hotel_invoice_keeps_amount_and_tax(self):
+        results = [{
+            'date': '2026-11-14', 'transport_amount': None, 'hotel_amount': 1203.77,
+            'hotel_tax': 72.23, 'category': 'hotel', 'invoice_type': '增值税专用发票',
+        }]
+        item = _summarize_invoice_item('26332000009878829916-1276.00.pdf', results)
+        assert item['type'] == '增值税专用发票'
+        assert item['amount'] == 1203.77
+        assert item['tax'] == 72.23
+
+
+class TestDetailSheet:
+    """「票据明细」sheet：一张票一行，标出票种与税额"""
+
+    _ROWS = [{
+        'date': '2026-11-14', 'rail_amount': 269.0, 'taxi_amount': 33.2,
+        'toll_amount': 0.0, 'subsidy_amount': 0.0, 'hotel_amount': 1203.77,
+        'hotel_tax': 72.23,
+    }]
+
+    _ITEMS = [
+        {'file': '26332000009878829916-1276.00.pdf', 'type': '增值税专用发票',
+         'category': 'hotel', 'date': '2026-11-14', 'amount': 1203.77, 'tax': 72.23},
+        {'file': '26329130530003442166-280.00高铁票.pdf', 'type': '铁路电子客票',
+         'category': 'transport', 'date': '2026-11-10', 'amount': 280.0, 'tax': 0.0},
+        {'file': '26117000001815343296-118.90行程单.pdf', 'type': '行程单',
+         'category': 'transport', 'date': '2026-11-10 ~ 2026-11-14（10 笔）',
+         'amount': 118.9, 'tax': 0.0},
+    ]
+
+    def test_sheet_and_headers(self):
+        wb = _build_workbook(self._ROWS, self._ITEMS)
+        assert '票据明细' in wb.sheetnames
+        ws = wb['票据明细']
+        assert [ws.cell(row=1, column=c).value for c in range(1, 8)] == [
+            '文件名', '票据类型', '类别', '归集日期', '金额', '税额', '价税合计',
+        ]
+
+    def test_only_special_invoice_shows_tax(self):
+        ws = _build_workbook(self._ROWS, self._ITEMS)['票据明细']
+        assert ws.cell(row=2, column=2).value == '增值税专用发票'
+        assert round(ws.cell(row=2, column=6).value, 2) == 72.23
+        assert ws.cell(row=3, column=2).value == '铁路电子客票'
+        assert ws.cell(row=3, column=6).value is None
+        assert round(ws.cell(row=3, column=7).value, 2) == 280.00
+
+    def test_total_row(self):
+        ws = _build_workbook(self._ROWS, self._ITEMS)['票据明细']
+        total_row = len(self._ITEMS) + 2
+        assert ws.cell(row=total_row, column=1).value == '合计'
+        assert round(ws.cell(row=total_row, column=5).value, 2) == 1602.67
+        assert round(ws.cell(row=total_row, column=6).value, 2) == 72.23
+        assert round(ws.cell(row=total_row, column=7).value, 2) == 1674.90
+
+    def test_no_detail_sheet_without_items(self):
+        assert '票据明细' not in _build_workbook(self._ROWS).sheetnames
+
