@@ -477,13 +477,17 @@ def _build_workbook(
 
     # 列宽
     ws.column_dimensions['A'].width = 14   # 日期
-    ws.column_dimensions['B'].width = 14   # 交通费
-    ws.column_dimensions['C'].width = 14   # 私车补贴
-    ws.column_dimensions['D'].width = 14   # 住宿费
-    ws.column_dimensions['E'].width = 14   # 住宿费税金
+    ws.column_dimensions['B'].width = 14   # 大众运输
+    ws.column_dimensions['C'].width = 14   # 过路费
+    ws.column_dimensions['D'].width = 14   # 私车补贴
+    ws.column_dimensions['E'].width = 14   # 住宿费
+    ws.column_dimensions['F'].width = 14   # 住宿费税金
 
     # ── 表头 ──
-    headers = ['日期', '交通费', '私车补贴', '住宿费', '住宿费税金']
+    headers = [
+        '日期', '大众运输', '过路费', '私车补贴',
+        '住宿费', '住宿费税金',
+    ]
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=h)
         cell.fill = _HEADER_FILL
@@ -493,22 +497,25 @@ def _build_workbook(
 
     # ── 数据行 ──
     total_transport = 0.0
+    total_toll = 0.0
     total_subsidy = 0.0
     total_hotel = 0.0
     total_hotel_tax = 0.0
 
     for i, row_data in enumerate(rows, 2):
         date_str = row_data['date']
+        # 大众运输 = 高铁 + 打车（过路费单列，用户口径 2026-11-15）
         transport_amt = (
             (row_data.get('rail_amount') or 0.0)
             + (row_data.get('taxi_amount') or 0.0)
-            + (row_data.get('toll_amount') or 0.0)
         )
+        toll_amt = row_data.get('toll_amount') or 0.0
         subsidy_amt = row_data.get('subsidy_amount') or 0.0
         hotel_amt = row_data['hotel_amount'] or 0.0
         hotel_tax = row_data['hotel_tax'] or 0.0
 
         total_transport += transport_amt
+        total_toll += toll_amt
         total_subsidy += subsidy_amt
         total_hotel += hotel_amt
         total_hotel_tax += hotel_tax
@@ -519,8 +526,10 @@ def _build_workbook(
         c.alignment = _DATA_ALIGN
         c.border = _THIN_BORDER
 
-        # 交通费 / 私车补贴
-        for col, amt in ((2, transport_amt), (3, subsidy_amt)):
+        # 大众运输 / 过路费 / 私车补贴
+        for col, amt in (
+            (2, transport_amt), (3, toll_amt), (4, subsidy_amt),
+        ):
             c = ws.cell(row=i, column=col, value=amt if amt > 0 else None)
             c.font = _DATA_FONT
             c.alignment = _NUM_ALIGN
@@ -528,14 +537,14 @@ def _build_workbook(
             c.number_format = '0.00'
 
         # 住宿费
-        c = ws.cell(row=i, column=4, value=hotel_amt if hotel_amt > 0 else None)
+        c = ws.cell(row=i, column=5, value=hotel_amt if hotel_amt > 0 else None)
         c.font = _DATA_FONT
         c.alignment = _NUM_ALIGN
         c.border = _THIN_BORDER
         c.number_format = '0.00'
 
         # 住宿费税金
-        c = ws.cell(row=i, column=5, value=hotel_tax if hotel_tax > 0 else None)
+        c = ws.cell(row=i, column=6, value=hotel_tax if hotel_tax > 0 else None)
         c.font = _DATA_FONT
         c.alignment = _NUM_ALIGN
         c.border = _THIN_BORDER
@@ -550,8 +559,8 @@ def _build_workbook(
     c.border = _THIN_BORDER
 
     for col, val in [
-        (2, total_transport), (3, total_subsidy),
-        (4, total_hotel), (5, total_hotel_tax),
+        (2, total_transport), (3, total_toll), (4, total_subsidy),
+        (5, total_hotel), (6, total_hotel_tax),
     ]:
         c = ws.cell(row=total_row, column=col, value=round(val, 2))
         c.fill = _TOTAL_FILL
@@ -564,8 +573,8 @@ def _build_workbook(
     note_row = total_row + 2
     notes = [
         '备注：',
-        '1. 交通费 = 高铁/火车 + 打车 + 过路费合并一列（均为价税合计；'
-        '高铁按乘车日期、打车按行程日期、通行费按开票日期归集）',
+        '1. 大众运输 = 高铁/火车 + 打车合并一列（价税合计；高铁按乘车日期、'
+        '打车按行程日期归集）；过路费 = 通行费发票（按开票日期归集）',
         '2. 私车补贴按行驶里程×1.5元/公里计算（按行程日期归集，与私车公用登记表联动）',
         '3. 住宿费 = 不含税金额，住宿费税金 = 税额'
         '（记在开票日；合并开票即离店/最后一天）',

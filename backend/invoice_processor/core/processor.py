@@ -314,8 +314,9 @@ class InvoiceProcessor:
                         value = row[idx] if idx is not None and len(row) > idx else 0
                         return float(value or 0)
 
-                    # v7.6.4 起「交通费」单列（高铁+打车+过路费合一）；
-                    # 旧版三列布局仍兼容（列名缺失时兜 0 再相加）。
+                    # v7.6.4 短暂试行「交通费」单列，当天即改为 6 列
+                    # （大众运输/过路费/私车补贴/住宿费/住宿费税金）；
+                    # 旧「交通费」单列与三列布局仍兼容（列名缺失时兜 0 再相加）。
                     split = _at('大众运输') + _at('出租车') + _at('过路费')
                     transport = (
                         _at('交通费') if split == 0.0 and '交通费' in header
