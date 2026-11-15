@@ -4,7 +4,11 @@
 
 运行方式: pytest tests/test_excel_summary_extraction.py -v
 """
+import unittest
+
+import openpyxl
 from invoice_processor.core.excel_summary import (
+    _build_day_trips_sheet,
     _build_workbook,
     _detect_invoice_type,
     _determine_category,
@@ -224,54 +228,17 @@ class TestHotelDatePreference:
         assert _extract_date(text, 'hotel') == '2026-11-10'
 
 
-class TestDailySummarySheet:
-    """「按天汇总」sheet：大众运输合并高铁+打车，住宿费与税金分列"""
+class TestSheetLayout:
+    """sheet 布局口径：「按天汇总」已删除，按天口径只在技能 build_filing_table.py"""
 
-    _ROWS = [
-        {
-            'date': '2026-11-10', 'rail_amount': 280.0, 'taxi_amount': 55.7,
-            'toll_amount': 0.0, 'subsidy_amount': 0.0, 'hotel_amount': 0.0,
-            'hotel_tax': 0.0,
-        },
-        {
-            'date': '2026-11-14', 'rail_amount': 269.0, 'taxi_amount': 33.2,
-            'toll_amount': 0.0, 'subsidy_amount': 0.0, 'hotel_amount': 1203.77,
-            'hotel_tax': 72.23,
-        },
-    ]
+    def test_daily_sheet_removed(self):
+        wb = _build_workbook([
+            {'date': '2026-11-10', 'rail_amount': 280.0, 'taxi_amount': 55.7,
+             'toll_amount': 0.0, 'subsidy_amount': 0.0, 'hotel_amount': 0.0,
+             'hotel_tax': 0.0},
+        ])
+        assert '按天汇总' not in wb.sheetnames
 
-    def test_sheet_and_headers(self):
-        wb = _build_workbook(self._ROWS)
-        assert '按天汇总' in wb.sheetnames
-        ws = wb['按天汇总']
-        headers = [ws.cell(row=1, column=c).value for c in range(1, 7)]
-        assert headers == [
-            '日期', '大众运输', '住宿费', '住宿税金', '私车补贴', '过路费',
-        ]
-
-    def test_date_and_weekday_merged(self):
-        ws = _build_workbook(self._ROWS)['按天汇总']
-        assert ws.cell(row=2, column=1).value == '2026-11-10 周二'
-        assert ws.cell(row=3, column=1).value == '2026-11-14 周六'
-
-    def test_transport_merges_rail_and_taxi(self):
-        ws = _build_workbook(self._ROWS)['按天汇总']
-        assert round(ws.cell(row=2, column=2).value, 2) == 335.70
-
-    def test_hotel_and_tax_in_separate_columns(self):
-        ws = _build_workbook(self._ROWS)['按天汇总']
-        assert round(ws.cell(row=3, column=3).value, 2) == 1203.77
-        assert round(ws.cell(row=3, column=4).value, 2) == 72.23
-        assert ws.cell(row=2, column=3).value is None
-        assert ws.cell(row=2, column=4).value is None
-
-    def test_total_row(self):
-        ws = _build_workbook(self._ROWS)['按天汇总']
-        total_row = len(self._ROWS) + 2
-        assert ws.cell(row=total_row, column=1).value == '合计'
-        assert round(ws.cell(row=total_row, column=2).value, 2) == 637.90
-        assert round(ws.cell(row=total_row, column=3).value, 2) == 1203.77
-        assert round(ws.cell(row=total_row, column=4).value, 2) == 72.23
 
 class TestInvoiceType:
     """票种判定：只有增值税专用发票的税额进填单的「增值税专用发票税金」"""
@@ -320,6 +287,20 @@ class TestSummarizeInvoiceItem:
         assert item['amount'] == 1203.77
         assert item['tax'] == 72.23
 
+    def test_time_span_multi_trip(self):
+        results = [
+            {'date': '2026-11-10', 'time': '17:35', 'city': '苏州',
+             'route': 'a b', 'transport_amount': 10.0, 'hotel_amount': None,
+             'hotel_tax': None, 'category': 'transport'},
+            {'date': '2026-11-10', 'time': '08:06', 'city': '苏州',
+             'route': 'c d', 'transport_amount': 20.0, 'hotel_amount': None,
+             'hotel_tax': None, 'category': 'transport'},
+        ]
+        item = _summarize_invoice_item('x-行程单.pdf', results)
+        assert item['time'] == '08:06 ~ 17:35'
+        assert item['city'] == '苏州'
+        assert item['route'] == 'a b；c d'  # 路线保持行程单原顺序
+
 
 class TestDetailSheet:
     """「票据明细」sheet：一张票一行，标出票种与税额"""
@@ -332,11 +313,14 @@ class TestDetailSheet:
 
     _ITEMS = [
         {'file': '26332000009878829916-1276.00.pdf', 'type': '增值税专用发票',
-         'category': 'hotel', 'date': '2026-11-14', 'amount': 1203.77, 'tax': 72.23},
+         'category': 'hotel', 'date': '2026-11-14', 'time': '', 'city': '',
+         'route': '', 'amount': 1203.77, 'tax': 72.23},
         {'file': '26329130530003442166-280.00高铁票.pdf', 'type': '铁路电子客票',
-         'category': 'transport', 'date': '2026-11-10', 'amount': 280.0, 'tax': 0.0},
+         'category': 'transport', 'date': '2026-11-10', 'time': '09:19',
+         'city': '苏州', 'route': '苏州 → 温岭', 'amount': 280.0, 'tax': 0.0},
         {'file': '26117000001815343296-118.90行程单.pdf', 'type': '行程单',
          'category': 'transport', 'date': '2026-11-10 ~ 2026-11-14（10 笔）',
+         'time': '08:06 ~ 17:35', 'city': '苏州', 'route': 'a；b',
          'amount': 118.9, 'tax': 0.0},
     ]
 
@@ -344,26 +328,88 @@ class TestDetailSheet:
         wb = _build_workbook(self._ROWS, self._ITEMS)
         assert '票据明细' in wb.sheetnames
         ws = wb['票据明细']
-        assert [ws.cell(row=1, column=c).value for c in range(1, 8)] == [
-            '文件名', '票据类型', '类别', '归集日期', '金额', '税额', '价税合计',
+        assert [ws.cell(row=1, column=c).value for c in range(1, 11)] == [
+            '文件名', '票据类型', '类别', '归集日期', '时间', '城市', '路线',
+            '金额', '税额', '价税合计',
         ]
 
     def test_only_special_invoice_shows_tax(self):
         ws = _build_workbook(self._ROWS, self._ITEMS)['票据明细']
         assert ws.cell(row=2, column=2).value == '增值税专用发票'
-        assert round(ws.cell(row=2, column=6).value, 2) == 72.23
+        assert round(ws.cell(row=2, column=9).value, 2) == 72.23
         assert ws.cell(row=3, column=2).value == '铁路电子客票'
-        assert ws.cell(row=3, column=6).value is None
-        assert round(ws.cell(row=3, column=7).value, 2) == 280.00
+        assert ws.cell(row=3, column=9).value is None
+        assert round(ws.cell(row=3, column=10).value, 2) == 280.00
+        # 行程时间/城市/路线进表，供填单差补与 BPM 抄录
+        assert ws.cell(row=3, column=5).value == '09:19'
+        assert ws.cell(row=4, column=5).value == '08:06 ~ 17:35'
 
     def test_total_row(self):
         ws = _build_workbook(self._ROWS, self._ITEMS)['票据明细']
         total_row = len(self._ITEMS) + 2
         assert ws.cell(row=total_row, column=1).value == '合计'
-        assert round(ws.cell(row=total_row, column=5).value, 2) == 1602.67
-        assert round(ws.cell(row=total_row, column=6).value, 2) == 72.23
-        assert round(ws.cell(row=total_row, column=7).value, 2) == 1674.90
+        assert round(ws.cell(row=total_row, column=8).value, 2) == 1602.67
+        assert round(ws.cell(row=total_row, column=9).value, 2) == 72.23
+        assert round(ws.cell(row=total_row, column=10).value, 2) == 1674.90
 
     def test_no_detail_sheet_without_items(self):
         assert '票据明细' not in _build_workbook(self._ROWS).sheetnames
+
+class TestDayTripsSheet(unittest.TestCase):
+    """「按日行程」sheet：一天一行首末行程，供填单差补与 BPM 抄写。"""
+
+    def _trips(self):
+        return [
+            {'date': '2026-11-10', 'time': '09:19', 'route': '苏州|温岭'},
+            {'date': '2026-11-10', 'time': '08:26', 'route': '唯亭街道|苏州站'},
+            {'date': '2026-11-10', 'time': '17:35', 'route': '昌泓机器人|酒店'},
+            {'date': '2026-11-11', 'time': '08:20', 'route': '文昌南路|客户'},
+        ]
+
+    def test_sheet_built_with_sorted_first_last(self):
+        wb = openpyxl.Workbook()
+        _build_day_trips_sheet(wb, self._trips())
+        self.assertIn('按日行程', wb.sheetnames)
+        ws = wb['按日行程']
+        self.assertEqual([c.value for c in ws[1]],
+                         ['日期', '首行程时间', '末行程时间',
+                          '首行程起点', '末行程终点'])
+        row2 = [c.value for c in ws[2]]
+        self.assertEqual(row2[0], '2026-11-10')
+        self.assertEqual(row2[1], '08:26')   # 首行程按时间排序
+        self.assertEqual(row2[2], '17:35')   # 末行程为最晚时间
+        self.assertEqual(row2[3], '唯亭街道')
+        self.assertEqual(row2[4], '酒店')
+
+    def test_place_falls_back_to_token_without_pipe(self):
+        wb = openpyxl.Workbook()
+        _build_day_trips_sheet(wb, [{'date': '2026-11-12',
+                                     'time': '09:00',
+                                     'route': '苏州园区站'}])
+        ws = wb['按日行程']
+        self.assertEqual(ws.cell(row=2, column=4).value, '苏州园区站')
+        self.assertEqual(ws.cell(row=2, column=5).value, '苏州园区站')
+
+    def test_no_trips_no_sheet(self):
+        wb = openpyxl.Workbook()
+        _build_day_trips_sheet(wb, [])
+        self.assertNotIn('按日行程', wb.sheetnames)
+
+    def test_entries_without_time_or_date_skipped(self):
+        wb = openpyxl.Workbook()
+        _build_day_trips_sheet(wb, [
+            {'date': '2026-11-13', 'time': '', 'route': 'a|b'},
+            {'date': '', 'time': '10:00', 'route': 'a|b'},
+        ])
+        self.assertNotIn('按日行程', wb.sheetnames)
+
+    def test_time_only_rows_use_empty_place(self):
+        wb = openpyxl.Workbook()
+        _build_day_trips_sheet(wb, [{'date': '2026-11-14',
+                                     'time': '15:37', 'route': ''}])
+        ws = wb['按日行程']
+        self.assertEqual(ws.cell(row=2, column=2).value, '15:37')
+        self.assertEqual(ws.cell(row=2, column=3).value, '15:37')
+        self.assertEqual(ws.cell(row=2, column=4).value, '')
+
 

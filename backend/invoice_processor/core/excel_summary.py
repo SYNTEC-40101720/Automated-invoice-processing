@@ -151,8 +151,10 @@ def _extract_date(text: str, category: str = 'unknown') -> str | None:
             return _fmt(m)
 
     elif category == 'hotel':
-        # ① 优先开票日期：报销把住宿记在离店（=合并开票/开票）当天，
+        # ① 优先开票日期：报销把住宿记在最后一天（离店/合并开票当天）——
+        #    用户口径 2026-11-15 确认「住宿我一般填到最后一天」；
         #    按入住日归集会把连住多晚的房费全压到行程第一天。
+        #    改这里前先看技能 references/policy-allowance.md §2 口径记录。
         m = re.search(
             r'(?:开票|开具)日期\s*[:：]?\s*(\d{4})'
             r'[年/-](\d{1,2})[月/-](\d{1,2})[日]?',
@@ -582,9 +584,6 @@ def _build_workbook(
         c = ws.cell(row=note_row + j, column=1, value=note)
         c.font = _NOTE_FONT
 
-    # ── 按天汇总（填单口径：高铁 + 打车合并成大众运输） ──
-    _build_daily_sheet(wb, rows)
-
     # ── 票据明细（票种 / 税额，填单时判专票用） ──
     if invoice_items:
         _build_detail_sheet(wb, invoice_items)
@@ -592,100 +591,8 @@ def _build_workbook(
     return wb
 
 
-def _build_daily_sheet(wb, rows: list[dict]) -> None:
-    """追加「按天汇总」工作表：一天一行，大众运输 = 高铁 + 打车。
-
-    填单时要按天报交通费，而「费用汇总」把大众运输/出租车拆成两列；
-    这里按天合并，住宿费与税金仍分列（税金只对有专票的住宿有意义）。
-    假别/差补属政策口径（需出差小时数），不在引擎自动计算范围内。
-    """
-    ws = wb.create_sheet('按天汇总')
-    headers = [
-        '日期', '大众运输', '住宿费', '住宿税金', '私车补贴', '过路费',
-    ]
-    for col, h in enumerate(headers, 1):
-        cell = ws.cell(row=1, column=col, value=h)
-        cell.fill = _HEADER_FILL
-        cell.font = _HEADER_FONT
-        cell.alignment = _HEADER_ALIGN
-        cell.border = _THIN_BORDER
-
-    totals = [0.0] * 5
-    for i, row_data in enumerate(rows, 2):
-        # 金额四舍五入到分：openpyxl 直接写浮点和会出现 710.0999999999999
-        nums = [round(x, 2) for x in (
-            (row_data.get('rail_amount') or 0.0) + (row_data.get('taxi_amount') or 0.0),
-            row_data.get('hotel_amount') or 0.0,
-            row_data.get('hotel_tax') or 0.0,
-            row_data.get('subsidy_amount') or 0.0,
-            row_data.get('toll_amount') or 0.0,
-        )]
-        for k, v in enumerate(nums):
-            totals[k] += v
-
-        date_str = row_data['date']
-        try:
-            weekday = '周' + '一二三四五六日'[
-                datetime.strptime(date_str, '%Y-%m-%d').weekday()
-            ]
-        except (TypeError, ValueError):
-            weekday = ''
-
-        # 住宿费与住宿税金分两列（合并一格容易看错位）；0 留空不写数字
-        values = [
-            f'{date_str} {weekday}',
-            nums[0],
-            nums[1] or None,
-            nums[2] or None,
-            nums[3],
-            nums[4],
-        ]
-        for col, val in enumerate(values, 1):
-            cell = ws.cell(row=i, column=col, value=val)
-            cell.font = _DATA_FONT
-            cell.border = _THIN_BORDER
-            if col == 1:
-                cell.alignment = _DATA_ALIGN
-            else:
-                cell.alignment = _NUM_ALIGN
-                cell.number_format = '0.00'
-
-    total_row = len(rows) + 2
-    cell = ws.cell(row=total_row, column=1, value='合计')
-    cell.fill = _TOTAL_FILL
-    cell.font = _TOTAL_FONT
-    cell.alignment = _DATA_ALIGN
-    cell.border = _THIN_BORDER
-    total_values = [
-        round(totals[0], 2),
-        round(totals[1], 2) or None,
-        round(totals[2], 2) or None,
-        round(totals[3], 2),
-        round(totals[4], 2),
-    ]
-    for col, val in enumerate(total_values, 2):
-        cell = ws.cell(row=total_row, column=col, value=val)
-        cell.fill = _TOTAL_FILL
-        cell.font = _TOTAL_FONT
-        cell.alignment = _NUM_ALIGN
-        cell.border = _THIN_BORDER
-        cell.number_format = '0.00'
-
-    for col, width in zip('ABCDEF', (20, 14, 12, 10, 14, 14)):
-        ws.column_dimensions[col].width = width
-
-    notes = [
-        '备注：',
-        '1. 一天一行，大众运输 = 当天高铁/火车 + 当天打车（价税合计）；'
-        '住宿费为不含税金额，住宿税金为该票税额。',
-        '2. 末行为各列合计；不显示每天合计（填单时按列抄，日合计易与系统口径混淆）。',
-        '3. 假别（平日/假日）与差补档位属政策口径，需结合出差小时数填写，'
-        '不在引擎自动计算范围内。',
-    ]
-    note_row = total_row + 2
-    for j, note in enumerate(notes):
-        cell = ws.cell(row=note_row + j, column=1, value=note)
-        cell.font = _NOTE_FONT
+# 「按天汇总」sheet 已删除（2026-11-15 用户决定）：与技能 build_filing_table.py
+# 生成的「填单用」完全重叠，按天口径只维护技能脚本一份。
 
 
 def _summarize_invoice_item(filename: str, results: list[dict]) -> dict:
@@ -701,11 +608,23 @@ def _summarize_invoice_item(filename: str, results: list[dict]) -> dict:
     else:
         date_text = dates[0] if dates else ''
     first = results[0] if results else {}
+    # 行程时间/城市/路线：多笔行程单取首末时间跨度，单笔直接取；
+    # 填单差补小时数与 BPM 表单的起止信息从这里抄。
+    times = sorted(r['time'] for r in results if r.get('time'))
+    if not times:
+        time_text = ''
+    elif len(times) == 1:
+        time_text = times[0]
+    else:
+        time_text = f'{times[0]} ~ {times[-1]}'
     return {
         'file': filename,
         'type': first.get('invoice_type') or '',
         'category': first.get('category') or '',
         'date': date_text,
+        'time': time_text,
+        'city': ' '.join(sorted({r.get('city') for r in results if r.get('city')})),
+        'route': '；'.join(r.get('route') for r in results if r.get('route')),
         'amount': round(amount, 2),
         'tax': round(tax, 2),
     }
@@ -718,7 +637,10 @@ def _build_detail_sheet(wb, items: list[dict]) -> None:
     以前需逐张打开 PDF 确认票种；这里一次列清。
     """
     ws = wb.create_sheet('票据明细')
-    headers = ['文件名', '票据类型', '类别', '归集日期', '金额', '税额', '价税合计']
+    headers = [
+        '文件名', '票据类型', '类别', '归集日期', '时间', '城市', '路线',
+        '金额', '税额', '价税合计',
+    ]
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=h)
         cell.fill = _HEADER_FILL
@@ -739,6 +661,9 @@ def _build_detail_sheet(wb, items: list[dict]) -> None:
             item.get('type') or '未识别',
             category_label.get(item.get('category', ''), item.get('category', '')),
             item.get('date', ''),
+            item.get('time', ''),
+            item.get('city', ''),
+            item.get('route', ''),
             amount,
             tax if tax > 0 else None,
             round(amount + tax, 2),
@@ -747,7 +672,7 @@ def _build_detail_sheet(wb, items: list[dict]) -> None:
             cell = ws.cell(row=i, column=col, value=val)
             cell.font = _DATA_FONT
             cell.border = _THIN_BORDER
-            if col >= 5:
+            if col >= 8:
                 cell.alignment = _NUM_ALIGN
                 cell.number_format = '0.00'
             else:
@@ -759,7 +684,7 @@ def _build_detail_sheet(wb, items: list[dict]) -> None:
     cell.font = _TOTAL_FONT
     cell.alignment = _DATA_ALIGN
     cell.border = _THIN_BORDER
-    for col, val in [(5, total_amount), (6, total_tax), (7, total_amount + total_tax)]:
+    for col, val in [(8, total_amount), (9, total_tax), (10, total_amount + total_tax)]:
         cell = ws.cell(row=total_row, column=col, value=round(val, 2))
         cell.fill = _TOTAL_FILL
         cell.font = _TOTAL_FONT
@@ -767,7 +692,7 @@ def _build_detail_sheet(wb, items: list[dict]) -> None:
         cell.border = _THIN_BORDER
         cell.number_format = '0.00'
 
-    for col, width in zip('ABCDEFG', (46, 16, 8, 26, 12, 10, 12)):
+    for col, width in zip('ABCDEFGHIJ', (46, 16, 8, 26, 14, 14, 30, 12, 10, 12)):
         ws.column_dimensions[col].width = width
 
     notes = [
@@ -781,6 +706,57 @@ def _build_detail_sheet(wb, items: list[dict]) -> None:
     for j, note in enumerate(notes):
         cell = ws.cell(row=note_row + j, column=1, value=note)
         cell.font = _NOTE_FONT
+
+
+def _build_day_trips_sheet(wb, trips: list[dict]) -> None:
+    """追加「按日行程」工作表：一天一行，当天首末行程时间与起止地点。
+
+    数据源是逐笔行程（含高铁发车时间），供填单差补小时数与 BPM 表单的
+    开始/结束时间地点直接抄写。单点时间（高铁）首末相同，不虚构到达时间。
+    """
+    by_date: dict[str, list[dict]] = {}
+    for t in trips:
+        if t.get('date') and t.get('time'):
+            by_date.setdefault(t['date'], []).append(t)
+    if not by_date:
+        return
+
+    def minutes(hhmm: str) -> int:
+        h, m = hhmm.split(':')
+        return int(h) * 60 + int(m)
+
+    ws = wb.create_sheet('按日行程')
+    headers = ['日期', '首行程时间', '末行程时间', '首行程起点', '末行程终点']
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.fill = _HEADER_FILL
+        cell.font = _HEADER_FONT
+        cell.alignment = _HEADER_ALIGN
+        cell.border = _THIN_BORDER
+
+    for i, d in enumerate(sorted(by_date), 2):
+        day_trips = sorted(by_date[d], key=lambda t: minutes(t['time']))
+        first, last = day_trips[0], day_trips[-1]
+        start_place = ''
+        if first.get('route'):
+            token = first['route'].split()[0]
+            start_place = token.split('|')[0] if '|' in token else token
+        end_place = ''
+        if last.get('route'):
+            token = last['route'].split()[-1]
+            end_place = token.split('|')[-1] if '|' in token else token
+        values = [d, first['time'], last['time'], start_place, end_place]
+        for col, val in enumerate(values, 1):
+            cell = ws.cell(row=i, column=col, value=val)
+            cell.font = _DATA_FONT
+            cell.border = _THIN_BORDER
+            if col in (2, 3):
+                cell.alignment = _DATA_ALIGN
+            else:
+                cell.alignment = _DATA_ALIGN
+
+    for col, width in zip('ABCDE', (14, 12, 12, 24, 24)):
+        ws.column_dimensions[col].width = width
 
 
 def generate_expense_summary(
@@ -849,6 +825,7 @@ def generate_expense_summary(
         parsed_count = 0
         skipped_count = 0
         invoice_items: list[dict] = []
+        all_trips: list[dict] = []   # 逐笔 (date, time, route) → 按日行程
 
         for filename in pdf_files:
             if filename in skip_set:
@@ -863,6 +840,12 @@ def generate_expense_summary(
             invoice_items.append(_summarize_invoice_item(filename, results))
 
             for result in results:
+                if result.get('time'):
+                    all_trips.append({
+                        'date': result['date'],
+                        'time': result['time'],
+                        'route': result.get('route') or '',
+                    })
                 date = result['date']
                 if result['transport_amount'] is not None:
                     kind = result.get('transport_kind') or 'rail'
@@ -903,6 +886,7 @@ def generate_expense_summary(
 
         # 生成 Excel
         wb = _build_workbook(rows, invoice_items)
+        _build_day_trips_sheet(wb, all_trips)
         excel_path = os.path.join(output_dir, '费用汇总.xlsx')
         wb.save(excel_path)
         logger.info(
