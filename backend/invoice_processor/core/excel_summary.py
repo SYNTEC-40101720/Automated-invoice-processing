@@ -9,6 +9,7 @@ from collections import defaultdict
 from datetime import datetime
 
 import openpyxl
+from openpyxl.packaging.core import DocumentProperties
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 logger = logging.getLogger(__name__)
@@ -464,6 +465,11 @@ def _build_workbook(
     invoice_items: 票据明细（一张票一行），有则追加「票据明细」工作表
     """
     wb = openpyxl.Workbook()
+    # 文档属性统一为本项目标识：openpyxl 默认 creator 会留下第三方工具痕迹
+    wb.properties = DocumentProperties(
+        creator='SYNTEC', lastModifiedBy='SYNTEC',
+        title='费用汇总', created=datetime.now(),
+    )
     ws = wb.active
     ws.title = '费用汇总'
 
